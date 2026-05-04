@@ -25,7 +25,6 @@ function fmtDateShort(d: string) {
 }
 
 export default function PhysioReportPage() {
-  const { profile } = useAuth()
   const currentDate = new Date()
   const currentYear = currentDate.getFullYear()
   const currentMonth = currentDate.getMonth() + 1
@@ -96,7 +95,7 @@ export default function PhysioReportPage() {
       return
     }
 
-    const slots = (data ?? []) as SlotData[]
+    const slots = (data ?? []) as any as SlotData[]
     setRawSlots(slots)
     setLoading(false)
     setGenerated(true)

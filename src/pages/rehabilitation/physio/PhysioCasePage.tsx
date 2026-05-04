@@ -125,7 +125,7 @@ export default function PhysioCasePage() {
       .eq('case_id', caseId)
       .order('slot_date', { ascending: true })
       .order('time_slot')
-    setCaseSlots(data ?? [])
+    setCaseSlots((data as any) ?? [])
     setCaseLoading(false)
   }
 
@@ -269,7 +269,7 @@ export default function PhysioCasePage() {
                     <td className="px-4 py-3 font-semibold text-[#111]">{caseStats[c.id]?.count ?? 0}</td>
                     <td className="px-4 py-3">
                       {caseStats[c.id]?.latestPain !== null && caseStats[c.id]?.latestPain !== undefined ? (
-                        <span className={`inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full ${getPainColor(caseStats[c.id].latestPain)}`}>
+                        <span className={`inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full ${getPainColor(caseStats[c.id].latestPain!)}`}>
                           {caseStats[c.id].latestPain} / 10
                         </span>
                       ) : (
