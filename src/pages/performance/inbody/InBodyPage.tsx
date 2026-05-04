@@ -409,8 +409,6 @@ export default function InBodyPage() {
                       <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#888' }} tickLine={false} axisLine={false} />
                       <YAxis tick={{ fontSize: 10, fill: '#888' }} tickLine={false} axisLine={false} unit=" kg" />
                       <Tooltip
-                        formatter={(v: any) => `${v} kg`}
-                        labelFormatter={() => ''}
                         contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #eee' }}
                       />
                       <Legend formatter={(v: string) => v === 'smm' ? 'Jisim Otot' : 'Lemak Badan'} iconType="square" iconSize={10} wrapperStyle={{ fontSize: 11 }} />
