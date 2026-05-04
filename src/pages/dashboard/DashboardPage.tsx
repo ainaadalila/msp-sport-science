@@ -27,12 +27,42 @@ const alertIconColor: Record<string, string> = {
 }
 
 const quickLinks = [
-  { label: 'Profil Atlet', sub: 'Daftar & urus atlet', href: '/athletes', icon: '👤' },
-  { label: 'Ujian Kecergasan', sub: 'Rekod keputusan ujian', href: '/fitness/testing', icon: '📊' },
-  { label: 'Penilaian InBody', sub: 'Rekod komposisi badan', href: '/performance/inbody', icon: '⚖️' },
-  { label: 'Pengurusan Suplemen', sub: 'Urus inventori & permohonan', href: '/performance/supplement', icon: '💊' },
-  { label: 'Saringan Fisioterapi', sub: 'Tempah & urus sesi', href: '/rehabilitation/physio', icon: '🏥' },
-  { label: 'Laporan', sub: 'Jana & eksport laporan', href: '/reports', icon: '📋' },
+  {
+    label: 'Profil Atlet',
+    sub: 'Daftar & urus atlet',
+    href: '/athletes',
+    icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>,
+  },
+  {
+    label: 'Ujian Kecergasan',
+    sub: 'Rekod keputusan ujian',
+    href: '/fitness/testing',
+    icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
+  },
+  {
+    label: 'Penilaian InBody',
+    sub: 'Rekod komposisi badan',
+    href: '/performance/inbody',
+    icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="1"/><path d="M12 1v6m0 6v6M4.22 4.22l4.24 4.24m2.12 2.12l4.24 4.24M1 12h6m6 0h6m-16.78 7.78l4.24-4.24m2.12-2.12l4.24-4.24"/></svg>,
+  },
+  {
+    label: 'Pengurusan Suplemen',
+    sub: 'Urus inventori & permohonan',
+    href: '/performance/supplement',
+    icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/></svg>,
+  },
+  {
+    label: 'Saringan Fisioterapi',
+    sub: 'Tempah & urus sesi',
+    href: '/rehabilitation/physio',
+    icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm5-9h-1v2h1V4zm0 15h-1v2h1v-2z"/></svg>,
+  },
+  {
+    label: 'Laporan',
+    sub: 'Jana & eksport laporan',
+    href: '/reports',
+    icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="9" y1="9" x2="15" y2="9"/><line x1="9" y1="15" x2="15" y2="15"/></svg>,
+  },
 ]
 
 function formatAction(action: string) {
@@ -251,7 +281,7 @@ export default function DashboardPage() {
                   to={link.href}
                   className="flex flex-col gap-1 px-3 py-2.5 rounded-lg border border-gray-100 hover:border-[#F56A00] hover:bg-[rgba(245,106,0,0.04)] transition"
                 >
-                  <span className="text-base">{link.icon}</span>
+                  <div className="text-[#F56A00] opacity-60">{link.icon}</div>
                   <span className="text-[11px] font-semibold text-[#111] leading-tight">{link.label}</span>
                   <span className="text-[10px] text-[#888] leading-tight">{link.sub}</span>
                 </Link>
