@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
-import { Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
+import { AthletesTableSkeleton } from '../../components/Skeleton'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { logAction } from '../../lib/audit'
@@ -45,11 +46,45 @@ const emptyForm: FormState = {
   photo_url: null,
 }
 
-const statusLabel: Record<string, string> = { active: 'AKTIF', rest: 'REHAT', injured: 'CEDERA' }
-const statusStyle: Record<string, string> = {
-  active: 'bg-green-50 text-[#3A9E6A] border border-green-200',
-  rest: 'bg-gray-100 text-[#888] border border-gray-200',
-  injured: 'bg-red-50 text-[#D44040] border border-red-200',
+const statusConfig: Record<string, { label: string; cls: string; icon: React.ReactNode }> = {
+  active: {
+    label: 'AKTIF',
+    cls: 'bg-green-50 text-[#3A9E6A] border border-green-200',
+    icon: (
+      <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5">
+        <polyline points="20 6 9 17 4 12" />
+      </svg>
+    ),
+  },
+  rest: {
+    label: 'REHAT',
+    cls: 'bg-gray-100 text-[#888] border border-gray-200',
+    icon: (
+      <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5">
+        <line x1="5" y1="12" x2="19" y2="12" />
+      </svg>
+    ),
+  },
+  injured: {
+    label: 'CEDERA',
+    cls: 'bg-red-50 text-[#D44040] border border-red-200',
+    icon: (
+      <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5">
+        <line x1="12" y1="5" x2="12" y2="19" />
+        <line x1="5" y1="12" x2="19" y2="12" />
+      </svg>
+    ),
+  },
+}
+
+function StatusBadge({ status }: { status: 'active' | 'rest' | 'injured' }) {
+  const cfg = statusConfig[status]
+  return (
+    <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${cfg.cls}`}>
+      {cfg.icon}
+      {cfg.label}
+    </span>
+  )
 }
 
 function formatIC(value: string) {
@@ -83,6 +118,7 @@ function initials(name: string) {
 export default function AthletesPage() {
   const { profile } = useAuth()
   const isAdmin = profile?.role === 'superadmin' || profile?.role === 'admin'
+  const navigate = useNavigate()
 
   const [athletes, setAthletes] = useState<Athlete[]>([])
   const [loading, setLoading] = useState(true)
@@ -289,12 +325,53 @@ export default function AthletesPage() {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        {loading ? (
-          <div className="py-16 text-center text-[#888] text-sm">Memuatkan...</div>
-        ) : filtered.length === 0 ? (
-          <div className="py-16 text-center text-[#888] text-sm">
-            {athletes.length === 0 ? 'Tiada atlet didaftarkan lagi.' : 'Tiada rekod sepadan carian.'}
+      {loading && <AthletesTableSkeleton />}
+      {!loading && (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          {filtered.length === 0 ? (
+          <div className="py-12 flex flex-col items-center gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-[rgba(245,106,0,0.1)] flex items-center justify-center">
+              {athletes.length === 0 ? (
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#F56A00" strokeWidth="1.6">
+                  <circle cx="12" cy="8" r="4"/>
+                  <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+                  <line x1="19" y1="8" x2="19" y2="14"/>
+                  <line x1="16" y1="11" x2="22" y2="11"/>
+                </svg>
+              ) : (
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#F56A00" strokeWidth="1.6">
+                  <circle cx="11" cy="11" r="8"/>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+              )}
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-semibold text-[#111] mb-1.5">
+                {athletes.length === 0 ? 'Tiada atlet didaftarkan lagi' : 'Tiada rekod sepadan carian'}
+              </p>
+              <p className="text-[12px] text-[#888] leading-relaxed">
+                {athletes.length === 0
+                  ? 'Mulakan dengan mendaftarkan atlet pertama anda.'
+                  : 'Cuba ubah kata carian atau tetapan penapis anda.'
+                }
+              </p>
+            </div>
+            {athletes.length === 0 && isAdmin && (
+              <button
+                onClick={openAdd}
+                className="bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold px-5 py-2 rounded-lg transition"
+              >
+                + Tambah Atlet Pertama
+              </button>
+            )}
+            {athletes.length > 0 && (
+              <button
+                onClick={() => { setSearch(''); setFilterStatus(''); setFilterSport('') }}
+                className="text-sm text-[#F56A00] hover:underline font-medium"
+              >
+                Kosongkan carian
+              </button>
+            )}
           </div>
         ) : (
           <table className="w-full text-sm">
@@ -307,12 +384,16 @@ export default function AthletesPage() {
             </thead>
             <tbody>
               {filtered.map(a => (
-                <tr key={a.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
+                <tr
+                  key={a.id}
+                  onClick={() => navigate(`/athletes/${a.id}`)}
+                  className="border-b border-gray-50 last:border-0 hover:bg-gray-50 cursor-pointer group"
+                >
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-3">
                       <Avatar name={a.name} url={a.photo_url} size={32} />
                       <div>
-                        <Link to={`/athletes/${a.id}`} className="font-medium text-[#111] hover:text-[#F56A00] transition">{a.name}</Link>
+                        <span className="font-medium text-[#111] group-hover:text-[#F56A00] transition">{a.name}</span>
                         {a.date_of_birth && <p className="text-[11px] text-[#888] mt-0.5">{fmtDate(a.date_of_birth)}</p>}
                       </div>
                     </div>
@@ -322,24 +403,34 @@ export default function AthletesPage() {
                   <td className="px-5 py-3 text-[#444]">{a.sport}</td>
                   <td className="px-5 py-3 text-[#888]">{a.category ?? '—'}</td>
                   <td className="px-5 py-3">
-                    <span className={`inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full ${statusStyle[a.status]}`}>
-                      {statusLabel[a.status]}
-                    </span>
+                    <StatusBadge status={a.status} />
                   </td>
                   <td className="px-5 py-3">
-                    {isAdmin && (
-                      <div className="flex gap-3 justify-end">
-                        <button onClick={() => openEdit(a)} className="text-xs text-[#F56A00] hover:underline font-medium">Edit</button>
-                        <button onClick={() => setConfirmDelete(a)} className="text-xs text-[#D44040] hover:underline font-medium">Padam</button>
-                      </div>
-                    )}
+                    <div className="flex gap-3 justify-end items-center">
+                      {isAdmin && (
+                        <>
+                          <button
+                            onClick={e => { e.stopPropagation(); openEdit(a) }}
+                            className="text-xs text-[#F56A00] hover:underline font-medium opacity-0 group-hover:opacity-100 transition"
+                          >Edit</button>
+                          <button
+                            onClick={e => { e.stopPropagation(); setConfirmDelete(a) }}
+                            className="text-xs text-[#D44040] hover:underline font-medium opacity-0 group-hover:opacity-100 transition"
+                          >Padam</button>
+                        </>
+                      )}
+                      <svg className="w-3.5 h-3.5 text-[#bbb] group-hover:text-[#F56A00] transition shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <polyline points="9 18 15 12 9 6"/>
+                      </svg>
+                    </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
-      </div>
+        </div>
+      )}
 
       {/* Add / Edit Modal */}
       {modalOpen && (
