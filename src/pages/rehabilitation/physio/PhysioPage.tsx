@@ -305,7 +305,7 @@ export default function PhysioPage() {
     setAssessmentSaving(false)
     setAssessmentModalOpen(false)
     if (detailSlot?.id === assessmentEditing?.id) {
-      const updated = await supabase.from('physio_slots').select('*').eq('id', assessmentEditing.id).single()
+      const updated = await supabase.from('physio_slots').select('*').eq('id', assessmentEditing!.id).single()
       if (updated.data) setDetailSlot(updated.data)
     }
     fetchAll()

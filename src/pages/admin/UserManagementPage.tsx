@@ -86,7 +86,7 @@ export default function UserManagementPage() {
       return
     }
     setCreating(true)
-    const { data, error } = await adminClient.auth.admin.createUser({
+    const { error } = await adminClient.auth.admin.createUser({
       email: createForm.email.trim(),
       password: createForm.password,
       email_confirm: true,
