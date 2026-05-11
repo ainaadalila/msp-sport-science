@@ -284,7 +284,7 @@ export default function InBodyPage() {
             className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${
               activeTab === t ? 'bg-white text-[#111] shadow-sm' : 'text-[#888] hover:text-[#444]'
             }`}>
-            {t === 'jadual' ? 'Semua Rekod' : 'Profil Atlet'}
+            {t === 'jadual' ? 'Semua Rekod' : 'Profil InBody'}
           </button>
         ))}
       </div>
@@ -338,7 +338,15 @@ export default function InBodyPage() {
                 return (
                   <tr key={r.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
                     <td className="px-4 py-3 font-mono text-[12px] text-[#444] whitespace-nowrap">{fmtDate(r.recorded_date)}</td>
-                    <td className="px-4 py-3 font-medium text-[#111]">{r.athlete?.name ?? '—'}</td>
+                    <td className="px-4 py-3 font-medium">
+                      {r.athlete?.name ? (
+                        <button onClick={() => { setActiveTab('profil'); setProfilAthlete(r.athlete_id) }} className="text-[#F56A00] hover:underline font-medium">
+                          {r.athlete.name}
+                        </button>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-[#888]">{r.athlete?.sport ?? '—'}</td>
                     <td className="px-4 py-3 text-[#444]">{n(r.weight, ' kg')}</td>
                     <td className="px-4 py-3 text-[#444]">{n(r.bmi)}</td>
@@ -392,7 +400,7 @@ export default function InBodyPage() {
                   { label: 'BMI',              val: n(latestRecord.bmi),           color: 'text-[#3A7EC8]' },
                   { label: 'Lemak Badan',      val: n(latestRecord.fat_pct, '%'),  color: 'text-[#D44040]' },
                 ].map(({ label, val, color }) => (
-                  <div key={label} className="bg-white rounded-xl border border-gray-200 px-5 py-4">
+                  <div key={label} className="bg-white rounded-xl border border-gray-200 border-t-4 border-t-[#F56A00] px-5 py-4">
                     <p className="text-[10px] font-semibold uppercase tracking-widest text-[#888] mb-1">{label}</p>
                     <p className={`text-3xl font-bold font-mono ${color}`}>{val}</p>
                   </div>
@@ -401,7 +409,7 @@ export default function InBodyPage() {
 
               {/* C+D. Chart | Gauge+Norms */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                <div className="bg-white rounded-xl border border-gray-200 p-5">
+                <div className="bg-white rounded-xl border border-gray-200 border-t-4 border-t-[#F56A00] p-5">
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-[#888] mb-4">Komposisi Badan (Trend)</p>
                   <ResponsiveContainer width="100%" height={220}>
                     <BarChart data={chartData} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>

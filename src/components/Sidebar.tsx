@@ -64,13 +64,14 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="w-[240px] bg-white border-r border-gray-200 flex flex-col h-full shrink-0">
+    <aside className="w-[280px] bg-white border-r border-gray-200 flex flex-col h-full shrink-0">
 
       {/* Logo */}
-      <div className="h-[60px] flex items-center gap-3 px-4 border-b border-gray-200 shrink-0">
-        <img src="/logo_msp.png" alt="MSP" className="w-9 h-9 rounded-full object-cover shrink-0" />
-        <div className="leading-tight min-w-0">
-          <span className="block font-bold text-[#F56A00] text-[11px] tracking-widest uppercase truncate">Majlis Sukan Pahang</span>
+      <div className="flex items-center gap-4 py-4 px-4 border-b border-gray-200 shrink-0">
+        <img src="/logo_msp.png" alt="MSP" className="w-14 h-14 rounded-full object-cover shrink-0" />
+        <div>
+          <span className="block font-bold text-[#F56A00] text-[11px] tracking-widest uppercase whitespace-nowrap">Majlis Sukan Pahang</span>
+          <span className="block text-[9px] text-[#888] tracking-wide mt-0.5 whitespace-nowrap">Sport Science Department</span>
         </div>
       </div>
 

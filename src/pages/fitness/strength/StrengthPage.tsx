@@ -276,7 +276,7 @@ export default function StrengthPage() {
               { label: 'Tidak Hadir', value: summary.absent, color: 'text-[#D44040]' },
               { label: 'MC', value: summary.mc, color: 'text-[#3A7EC8]' },
             ].map(s => (
-              <div key={s.label} className="bg-white rounded-xl border border-gray-200 px-4 py-3">
+              <div key={s.label} className="bg-white rounded-xl border border-gray-200 border-t-4 border-t-[#F56A00] px-4 py-3">
                 <p className="text-[10px] font-semibold uppercase tracking-widest text-[#888] mb-1">{s.label}</p>
                 <p className={`text-2xl font-bold font-mono ${s.color}`}>{s.value}</p>
               </div>

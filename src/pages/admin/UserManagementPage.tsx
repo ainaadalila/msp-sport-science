@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
+import { adminClient } from '../../lib/adminClient'
 import { useAuth } from '../../context/AuthContext'
 
 interface UserProfile {
@@ -39,6 +40,12 @@ export default function UserManagementPage() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
+  const [createOpen, setCreateOpen] = useState(false)
+  const [createForm, setCreateForm] = useState({ email: '', full_name: '', password: '', role: 'admin' as Role, showPw: false })
+  const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
+  const [createSuccess, setCreateSuccess] = useState(false)
+
   useEffect(() => { fetchUsers() }, [])
 
   async function fetchUsers() {
@@ -68,6 +75,36 @@ export default function UserManagementPage() {
     fetchUsers()
   }
 
+  async function handleCreate() {
+    setCreateError(null)
+    if (!createForm.email.trim() || !createForm.full_name.trim() || !createForm.password) {
+      setCreateError('Sila isi semua medan.')
+      return
+    }
+    if (createForm.password.length < 8) {
+      setCreateError('Kata laluan mestilah sekurang-kurangnya 8 aksara.')
+      return
+    }
+    setCreating(true)
+    const { data, error } = await adminClient.auth.admin.createUser({
+      email: createForm.email.trim(),
+      password: createForm.password,
+      email_confirm: true,
+      user_metadata: {
+        full_name: createForm.full_name.trim().toUpperCase(),
+        role: createForm.role,
+      },
+    })
+    if (error) {
+      setCreateError(error.message)
+      setCreating(false)
+      return
+    }
+    setCreating(false)
+    setCreateSuccess(true)
+    fetchUsers()
+  }
+
   const filtered = users.filter(u => {
     const q = search.toLowerCase()
     const matchSearch = !q || (u.full_name ?? '').toLowerCase().includes(q)
@@ -85,11 +122,14 @@ export default function UserManagementPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <p className="text-[12px] text-[#888]">{users.length} pengguna berdaftar</p>
-      </div>
-
-      {/* Info banner */}
-      <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-[13px] text-[#3A7EC8]">
-        Pengguna baharu perlu mendaftar melalui halaman Log Masuk. Selepas mendaftar, tetapkan peranan mereka di sini.
+        {isSuperAdmin && (
+          <button
+            onClick={() => setCreateOpen(true)}
+            className="flex items-center gap-1.5 px-4 py-2 bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold rounded-lg transition"
+          >
+            <span className="text-base leading-none">+</span> Buat Pengguna
+          </button>
+        )}
       </div>
 
       {/* Role summary */}
@@ -209,6 +249,69 @@ export default function UserManagementPage() {
                 {saving ? 'Menyimpan...' : 'Simpan'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create User Modal */}
+      {createOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
+            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="font-bold text-[#111]">Buat Pengguna Baharu</h3>
+              <button onClick={() => { setCreateOpen(false); setCreateForm({ email: '', full_name: '', password: '', role: 'admin', showPw: false }); setCreateError(null); setCreateSuccess(false) }}
+                className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              {createSuccess ? (
+                <div className="px-4 py-3 bg-green-50 border border-green-200 rounded-lg text-[13px] text-green-700">
+                  Pengguna berjaya dicipta.
+                </div>
+              ) : (
+                <>
+                  {createError && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-600">{createError}</div>}
+                  <div>
+                    <label className={labelCls}>E-mel</label>
+                    <input type="email" value={createForm.email} onChange={e => setCreateForm(f => ({ ...f, email: e.target.value }))} className={inputCls} placeholder="nama@msp.gov.my" />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Nama Penuh</label>
+                    <input value={createForm.full_name} onChange={e => setCreateForm(f => ({ ...f, full_name: e.target.value.toUpperCase() }))} className={inputCls} placeholder="NAMA PENGGUNA" />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Kata Laluan</label>
+                    <div className="relative">
+                      <input
+                        type={createForm.showPw ? 'text' : 'password'}
+                        value={createForm.password}
+                        onChange={e => setCreateForm(f => ({ ...f, password: e.target.value }))}
+                        className={inputCls + ' pr-10'}
+                        placeholder="Min. 8 aksara"
+                      />
+                      <button type="button" onClick={() => setCreateForm(f => ({ ...f, showPw: !f.showPw }))}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[#888] hover:text-[#111] text-xs">
+                        {createForm.showPw ? 'Sembunyi' : 'Tunjuk'}
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Peranan</label>
+                    <select value={createForm.role} onChange={e => setCreateForm(f => ({ ...f, role: e.target.value as Role }))} className={inputCls}>
+                      {ROLES.map(r => <option key={r} value={r}>{roleLabel[r]}</option>)}
+                    </select>
+                  </div>
+                </>
+              )}
+            </div>
+            {!createSuccess && (
+              <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+                <button onClick={() => { setCreateOpen(false); setCreateForm({ email: '', full_name: '', password: '', role: 'admin', showPw: false }); setCreateError(null); setCreateSuccess(false) }} className="px-4 py-2 text-sm text-[#888] hover:text-[#111] transition">Batal</button>
+                <button onClick={handleCreate} disabled={creating}
+                  className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
+                  {creating ? 'Mencipta...' : 'Buat Pengguna'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
