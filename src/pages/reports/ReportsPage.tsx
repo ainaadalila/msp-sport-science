@@ -82,7 +82,7 @@ function StatCard({ label, value, color = 'default' }: StatCard) {
     orange: 'text-[#F56A00]',
   }[color]
   return (
-    <div className="bg-white rounded-xl border border-gray-200 px-5 py-4">
+    <div className="bg-white rounded-xl border border-gray-200 border-t-4 border-t-[#F56A00] px-5 py-4">
       <p className="text-[11px] font-semibold uppercase tracking-widest text-[#888] mb-2">{label}</p>
       <p className={`text-3xl font-bold font-mono ${colorClass} mb-1`}>{value}</p>
     </div>
@@ -375,7 +375,7 @@ export default function ReportsPage() {
 
         {/* Filters + preview */}
         <div className="space-y-4">
-          <div className="bg-white rounded-xl border border-gray-200 px-5 py-4 space-y-4">
+          <div className="bg-white rounded-xl border border-gray-200 border-t-4 border-t-[#F56A00] px-5 py-4 space-y-4">
             <div className="flex items-center justify-between">
               <p className="text-sm font-semibold text-[#111]">{config.label}</p>
               {generated && <span className="text-[11px] text-[#888]">{data.length} rekod dijana</span>}

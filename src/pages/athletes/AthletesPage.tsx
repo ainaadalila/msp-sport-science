@@ -259,14 +259,14 @@ export default function AthletesPage() {
       {!loading && athletes.length > 0 && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Jumlah Sukan */}
-          <div className="bg-white rounded-xl border border-gray-200 px-5 py-4">
+          <div className="bg-white rounded-xl border border-gray-200 border-t-4 border-t-[#F56A00] px-5 py-4">
             <p className="text-[11px] font-semibold uppercase tracking-widest text-[#888] mb-2">Jumlah Sukan</p>
             <p className="text-3xl font-bold font-mono text-[#111] mb-1">{totalSports}</p>
             <p className="text-[11px] text-[#888]">Sukan aktif dalam sistem</p>
           </div>
 
           {/* Jumlah Atlet — with gender breakdown */}
-          <div className="bg-white rounded-xl border border-gray-200 px-5 py-4">
+          <div className="bg-white rounded-xl border border-gray-200 border-t-4 border-t-[#F56A00] px-5 py-4">
             <p className="text-[11px] font-semibold uppercase tracking-widest text-[#888] mb-2">Jumlah Atlet</p>
             <p className="text-3xl font-bold font-mono text-[#111] mb-2">{athletes.length}</p>
             <div className="flex items-center gap-3 mb-1">
@@ -284,7 +284,7 @@ export default function AthletesPage() {
           </div>
 
           {/* Atlet Aktif */}
-          <div className="bg-white rounded-xl border border-gray-200 px-5 py-4">
+          <div className="bg-white rounded-xl border border-gray-200 border-t-4 border-t-[#F56A00] px-5 py-4">
             <p className="text-[11px] font-semibold uppercase tracking-widest text-[#888] mb-2">Atlet Aktif</p>
             <p className="text-3xl font-bold font-mono text-[#3A9E6A] mb-1">{activeAthletes}</p>
             <p className="text-[11px] text-[#888]">
@@ -293,7 +293,7 @@ export default function AthletesPage() {
           </div>
 
           {/* Kecederaan */}
-          <div className="bg-white rounded-xl border border-gray-200 px-5 py-4">
+          <div className="bg-white rounded-xl border border-gray-200 border-t-4 border-t-[#F56A00] px-5 py-4">
             <p className="text-[11px] font-semibold uppercase tracking-widest text-[#888] mb-2">Kecederaan</p>
             <p className={`text-3xl font-bold font-mono mb-1 ${injuredAthletes > 0 ? 'text-[#D44040]' : 'text-[#111]'}`}>{injuredAthletes}</p>
             <p className="text-[11px] text-[#888]">Atlet berstatus cedera</p>

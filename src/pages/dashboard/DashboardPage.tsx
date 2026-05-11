@@ -187,7 +187,7 @@ export default function DashboardPage() {
           <Link
             key={card.label}
             to={card.href}
-            className="bg-white rounded-xl border border-gray-200 px-5 py-4 hover:border-[#F56A00] hover:shadow-sm transition"
+            className="bg-white rounded-xl border border-gray-200 border-t-4 border-t-[#F56A00] px-5 py-4 hover:border-[#F56A00] hover:shadow-sm transition"
           >
             <p className="text-[11px] font-semibold uppercase tracking-widest text-[#888] mb-2">
               {card.label}

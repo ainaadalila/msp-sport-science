@@ -350,7 +350,7 @@ function SummaryCard({
   children?: React.ReactNode
 }) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 p-5">
+    <div className="bg-white rounded-2xl border border-gray-200 border-t-4 border-t-[#F56A00] p-5">
       <div className="flex items-start justify-between">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-widest text-[#888]">{title}</p>

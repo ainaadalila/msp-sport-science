@@ -3,6 +3,7 @@ import { AuthProvider } from './context/AuthContext'
 import { ProtectedRoute } from './components/ProtectedRoute'
 
 import LoginPage from './pages/LoginPage'
+import ResetPasswordPage from './pages/auth/ResetPasswordPage'
 import Layout from './components/Layout'
 
 import DashboardPage from './pages/dashboard/DashboardPage'
@@ -24,6 +25,7 @@ export default function App() {
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route
             path="/"
             element={

@@ -33,26 +33,6 @@ interface PhysioSlot {
   athlete?: { name: string; sport: string } | null
 }
 
-type FormState = {
-  slot_date: string
-  time_slot: string
-  athlete_id: string
-  diagnosis: string
-  date_of_injury: string
-  referred_by: string
-  chief_complaint: string
-  injury_type: string
-  session_type: 'standard' | 'manual' | 'injury' | ''
-  assessment_notes: string
-  rehab_plan: string
-  progress_notes: string
-  pain_scale: string
-  target_muscle: string
-  treatment_type: string
-  attendance_status: 'scheduled' | 'arrived' | 'completed' | 'no_show' | ''
-  case_id: string
-}
-
 interface PhysioCase {
   id: string
   athlete_id: string | null
@@ -60,6 +40,29 @@ interface PhysioCase {
   injury_type: string | null
   status: 'active' | 'closed' | 'referred'
   athlete?: { name: string; sport: string } | null
+}
+
+type BookingFormState = {
+  slot_date: string
+  time_slot: string
+  athlete_id: string
+  diagnosis: string
+  date_of_injury: string
+  referred_by: string
+  session_type: 'standard' | 'manual' | 'injury' | ''
+  case_id: string
+}
+
+type AssessmentFormState = {
+  chief_complaint: string
+  injury_type: string
+  assessment_notes: string
+  rehab_plan: string
+  progress_notes: string
+  pain_scale: string
+  target_muscle: string
+  treatment_type: string
+  attendance_status: 'scheduled' | 'arrived' | 'completed' | 'no_show'
 }
 
 type Tab = 'schedule' | 'records'
@@ -110,19 +113,23 @@ function getWeekDays(weekStart: Date): Date[] {
 }
 
 function toDateStr(d: Date): string {
-  return d.toISOString().slice(0, 10)
+  return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-')
 }
 
-const emptyForm: FormState = {
+const emptyBookingForm: BookingFormState = {
   slot_date: new Date().toISOString().slice(0, 10),
   time_slot: '08:00',
   athlete_id: '',
   diagnosis: '',
   date_of_injury: '',
   referred_by: '',
+  session_type: '',
+  case_id: '',
+}
+
+const emptyAssessmentForm: AssessmentFormState = {
   chief_complaint: '',
   injury_type: '',
-  session_type: '',
   assessment_notes: '',
   rehab_plan: '',
   progress_notes: '',
@@ -130,7 +137,6 @@ const emptyForm: FormState = {
   target_muscle: '',
   treatment_type: '',
   attendance_status: 'scheduled',
-  case_id: '',
 }
 
 export default function PhysioPage() {
@@ -148,13 +154,22 @@ export default function PhysioPage() {
   const [filterAthlete, setFilterAthlete] = useState('')
   const [filterSession, setFilterSession] = useState('')
 
-  const [modalOpen, setModalOpen] = useState(false)
+  const [bookingModalOpen, setBookingModalOpen] = useState(false)
+  const [assessmentModalOpen, setAssessmentModalOpen] = useState(false)
   const [detailSlot, setDetailSlot] = useState<PhysioSlot | null>(null)
-  const [editing, setEditing] = useState<PhysioSlot | null>(null)
-  const [form, setForm] = useState<FormState>(emptyForm)
+  const [detailView, setDetailView] = useState<'booking' | 'full'>('booking')
+
+  const [bookingEditing, setBookingEditing] = useState<PhysioSlot | null>(null)
+  const [bookingForm, setBookingForm] = useState<BookingFormState>(emptyBookingForm)
   const [formSport, setFormSport] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [bookingSaving, setBookingSaving] = useState(false)
+  const [bookingError, setBookingError] = useState<string | null>(null)
+
+  const [assessmentEditing, setAssessmentEditing] = useState<PhysioSlot | null>(null)
+  const [assessmentForm, setAssessmentForm] = useState<AssessmentFormState>(emptyAssessmentForm)
+  const [assessmentSaving, setAssessmentSaving] = useState(false)
+  const [assessmentError, setAssessmentError] = useState<string | null>(null)
+
   const [confirmDelete, setConfirmDelete] = useState<PhysioSlot | null>(null)
 
   useEffect(() => { fetchAll() }, [])
@@ -178,30 +193,40 @@ export default function PhysioPage() {
     setLoading(false)
   }
 
-  function openAdd(prefillDate?: string, prefillTime?: string) {
-    setEditing(null)
-    setForm({
-      ...emptyForm,
+  function openBookingAdd(prefillDate?: string, prefillTime?: string) {
+    setBookingEditing(null)
+    setBookingForm({
+      ...emptyBookingForm,
       slot_date: prefillDate ?? new Date().toISOString().slice(0, 10),
       time_slot: prefillTime ?? '08:00',
     })
     setFormSport('')
-    setError(null)
-    setModalOpen(true)
+    setBookingError(null)
+    setBookingModalOpen(true)
   }
 
-  function openEdit(s: PhysioSlot) {
-    setEditing(s)
-    setForm({
+  function openBookingEdit(s: PhysioSlot) {
+    setBookingEditing(s)
+    setBookingForm({
       slot_date: s.slot_date,
       time_slot: s.time_slot,
       athlete_id: s.athlete_id ?? '',
       diagnosis: s.diagnosis ?? '',
       date_of_injury: s.date_of_injury ?? '',
       referred_by: s.referred_by ?? '',
+      session_type: s.session_type ?? '',
+      case_id: s.case_id ?? '',
+    })
+    setFormSport(s.athlete?.sport ?? '')
+    setBookingError(null)
+    setBookingModalOpen(true)
+  }
+
+  function openAssessmentEdit(s: PhysioSlot) {
+    setAssessmentEditing(s)
+    setAssessmentForm({
       chief_complaint: s.chief_complaint ?? '',
       injury_type: s.injury_type ?? '',
-      session_type: s.session_type ?? '',
       assessment_notes: s.assessment_notes ?? '',
       rehab_plan: s.rehab_plan ?? '',
       progress_notes: s.progress_notes ?? '',
@@ -209,58 +234,80 @@ export default function PhysioPage() {
       target_muscle: s.target_muscle ?? '',
       treatment_type: s.treatment_type ?? '',
       attendance_status: s.attendance_status ?? 'scheduled',
-      case_id: s.case_id ?? '',
     })
-    setFormSport(s.athlete?.sport ?? '')
-    setError(null)
-    setModalOpen(true)
+    setAssessmentError(null)
+    setAssessmentModalOpen(true)
   }
 
-  function setField<K extends keyof FormState>(key: K, val: FormState[K]) {
-    setForm(f => ({ ...f, [key]: val }))
+  function setBookingField<K extends keyof BookingFormState>(key: K, val: BookingFormState[K]) {
+    setBookingForm(f => ({ ...f, [key]: val }))
   }
 
-  async function handleSave() {
-    if (!form.slot_date || !form.time_slot) {
-      setError('Tarikh dan masa slot wajib diisi.')
+  function setAssessmentField<K extends keyof AssessmentFormState>(key: K, val: AssessmentFormState[K]) {
+    setAssessmentForm(f => ({ ...f, [key]: val }))
+  }
+
+  async function handleBookingSave() {
+    if (!bookingForm.slot_date || !bookingForm.time_slot) {
+      setBookingError('Tarikh dan masa slot wajib diisi.')
       return
     }
-    setSaving(true)
-    setError(null)
+    setBookingSaving(true)
+    setBookingError(null)
 
     const payload = {
-      slot_date: form.slot_date,
-      time_slot: form.time_slot,
-      athlete_id: form.athlete_id || null,
-      diagnosis: form.diagnosis || null,
-      date_of_injury: form.date_of_injury || null,
-      referred_by: form.referred_by || null,
-      chief_complaint: form.chief_complaint || null,
-      injury_type: form.injury_type || null,
-      session_type: form.session_type || null,
-      assessment_notes: form.assessment_notes || null,
-      rehab_plan: form.rehab_plan || null,
-      progress_notes: form.progress_notes || null,
-      pain_scale: form.pain_scale !== '' ? parseInt(form.pain_scale, 10) : null,
-      target_muscle: form.target_muscle || null,
-      treatment_type: form.treatment_type || null,
-      attendance_status: form.attendance_status || 'scheduled',
-      case_id: form.case_id || null,
+      slot_date: bookingForm.slot_date,
+      time_slot: bookingForm.time_slot,
+      athlete_id: bookingForm.athlete_id || null,
+      diagnosis: bookingForm.diagnosis || null,
+      date_of_injury: bookingForm.date_of_injury || null,
+      referred_by: bookingForm.referred_by || null,
+      session_type: bookingForm.session_type || null,
+      case_id: bookingForm.case_id || null,
       physiotherapist_id: profile?.id,
     }
 
-    if (editing) {
-      const { error } = await supabase.from('physio_slots').update(payload).eq('id', editing.id)
-      if (error) { setError(error.message); setSaving(false); return }
-      await logAction(profile!.id, 'update_physio_slot', 'physio_slots', editing.id)
+    if (bookingEditing) {
+      const { error } = await supabase.from('physio_slots').update(payload).eq('id', bookingEditing.id)
+      if (error) { setBookingError(error.message); setBookingSaving(false); return }
+      await logAction(profile!.id, 'update_physio_slot', 'physio_slots', bookingEditing.id)
     } else {
       const { data, error } = await supabase.from('physio_slots').insert(payload).select('id').single()
-      if (error) { setError(error.message); setSaving(false); return }
+      if (error) { setBookingError(error.message); setBookingSaving(false); return }
       await logAction(profile!.id, 'create_physio_slot', 'physio_slots', data.id)
     }
 
-    setSaving(false)
-    setModalOpen(false)
+    setBookingSaving(false)
+    setBookingModalOpen(false)
+    fetchAll()
+  }
+
+  async function handleAssessmentSave() {
+    setAssessmentSaving(true)
+    setAssessmentError(null)
+
+    const payload = {
+      chief_complaint: assessmentForm.chief_complaint || null,
+      injury_type: assessmentForm.injury_type || null,
+      assessment_notes: assessmentForm.assessment_notes || null,
+      rehab_plan: assessmentForm.rehab_plan || null,
+      progress_notes: assessmentForm.progress_notes || null,
+      pain_scale: assessmentForm.pain_scale !== '' ? parseInt(assessmentForm.pain_scale, 10) : null,
+      target_muscle: assessmentForm.target_muscle || null,
+      treatment_type: assessmentForm.treatment_type || null,
+      attendance_status: assessmentForm.attendance_status || 'scheduled',
+    }
+
+    const { error } = await supabase.from('physio_slots').update(payload).eq('id', assessmentEditing!.id)
+    if (error) { setAssessmentError(error.message); setAssessmentSaving(false); return }
+    await logAction(profile!.id, 'update_physio_slot', 'physio_slots', assessmentEditing!.id)
+
+    setAssessmentSaving(false)
+    setAssessmentModalOpen(false)
+    if (detailSlot?.id === assessmentEditing?.id) {
+      const updated = await supabase.from('physio_slots').select('*').eq('id', assessmentEditing.id).single()
+      if (updated.data) setDetailSlot(updated.data)
+    }
     fetchAll()
   }
 
@@ -276,11 +323,12 @@ export default function PhysioPage() {
     if (s.attendance_status !== 'scheduled') return
     await supabase.from('physio_slots').update({ attendance_status: 'arrived' }).eq('id', s.id)
     await logAction(profile!.id, 'mark_arrived_physio_slot', 'physio_slots', s.id)
-    setDetailSlot(prev => prev ? { ...prev, attendance_status: 'arrived' } : null)
+    const updated = await supabase.from('physio_slots').select('*').eq('id', s.id).single()
+    if (updated.data) setDetailSlot(updated.data)
     fetchAll()
   }
 
-  // Schedule view: weekly slot map [date][time] -> PhysioSlot
+  // Schedule view: weekly slot map
   const weekDays = getWeekDays(weekStart)
   const weekSlotMap: Record<string, Record<string, PhysioSlot>> = {}
   slots.forEach(s => {
@@ -308,7 +356,7 @@ export default function PhysioPage() {
       <div className="flex items-center justify-between">
         <p className="text-[12px] text-[#888]">{slots.length} rekod slot</p>
         {canEdit && (
-          <button onClick={() => openAdd()} className="bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
+          <button onClick={() => openBookingAdd()} className="bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
             + Tempah Slot
           </button>
         )}
@@ -396,7 +444,7 @@ export default function PhysioPage() {
                         <td key={dateStr} className={`px-1.5 py-1.5 align-top border-l border-gray-100 ${isToday ? 'bg-[rgba(245,106,0,0.025)]' : ''}`}>
                           {booked ? (
                             <button
-                              onClick={() => setDetailSlot(booked)}
+                              onClick={() => { setDetailSlot(booked); setDetailView('booking') }}
                               className={`w-full text-left rounded-lg px-2 py-1.5 border text-[11px] transition hover:opacity-80 ${booked.session_type ? sessionStyle[booked.session_type] : 'bg-gray-50 text-[#444] border-gray-200'}`}
                             >
                               <p className="font-mono font-semibold text-[10px] opacity-60">{booked.time_slot}</p>
@@ -410,7 +458,7 @@ export default function PhysioPage() {
                             </button>
                           ) : canEdit ? (
                             <button
-                              onClick={() => openAdd(dateStr, time)}
+                              onClick={() => openBookingAdd(dateStr, time)}
                               className="w-full h-full min-h-[48px] rounded-lg border border-dashed border-transparent hover:border-[#F56A00] hover:bg-orange-50/40 text-transparent hover:text-[#F56A00] text-[11px] transition flex items-center justify-center"
                             >
                               +
@@ -494,10 +542,11 @@ export default function PhysioPage() {
                       </td>
                       <td className="px-4 py-3 text-[#888]">{s.injury_type ?? '—'}</td>
                       <td className="px-4 py-3">
-                        <div className="flex gap-3 justify-end">
-                          <button onClick={() => setDetailSlot(s)} className="text-xs text-[#3A7EC8] hover:underline font-medium">Lihat</button>
-                          {canEdit && <button onClick={() => openEdit(s)} className="text-xs text-[#F56A00] hover:underline font-medium">Edit</button>}
-                          {isAdmin && <button onClick={() => setConfirmDelete(s)} className="text-xs text-[#D44040] hover:underline font-medium">Padam</button>}
+                        <div className="flex gap-2 justify-end text-xs">
+                          <button onClick={() => { setDetailSlot(s); setDetailView('booking') }} className="text-[#3A7EC8] hover:underline font-medium">Lihat</button>
+                          <button onClick={() => { setDetailSlot(s); setDetailView('full') }} className="text-[#F56A00] hover:underline font-medium">Catatan</button>
+                          {canEdit && <button onClick={() => openBookingEdit(s)} className="text-[#555] hover:underline font-medium">Edit</button>}
+                          {isAdmin && <button onClick={() => setConfirmDelete(s)} className="text-[#D44040] hover:underline font-medium">Padam</button>}
                         </div>
                       </td>
                     </tr>
@@ -509,111 +558,112 @@ export default function PhysioPage() {
         </div>
       )}
 
-      {/* Add / Edit Modal */}
-      {modalOpen && (
+      {/* Booking Modal */}
+      {bookingModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
             <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between shrink-0">
-              <h3 className="font-bold text-[#111]">{editing ? 'Edit Slot Fisioterapi' : 'Rekod Slot Baharu'}</h3>
-              <button onClick={() => setModalOpen(false)} className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
+              <h3 className="font-bold text-[#111]">{bookingEditing ? 'Edit Slot Fisioterapi' : 'Rekod Slot Baharu'}</h3>
+              <button onClick={() => setBookingModalOpen(false)} className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
             </div>
-            <div className="px-6 py-5 overflow-y-auto space-y-6">
-              {error && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-600">{error}</div>}
+            <div className="px-6 py-5 overflow-y-auto space-y-4">
+              {bookingError && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-600">{bookingError}</div>}
 
-              {/* SCHEDULING SECTION */}
               <div className="space-y-3">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-[#888]">Jadual Slot</p>
                 <div className="grid grid-cols-2 gap-4">
                   <Field label="Tarikh" required>
-                    <input type="date" value={form.slot_date} onChange={e => setField('slot_date', e.target.value)} className={inputCls} />
+                    <input type="date" value={bookingForm.slot_date} onChange={e => setBookingField('slot_date', e.target.value)} className={inputCls} />
                   </Field>
                   <Field label="Masa Slot" required>
-                    <select value={form.time_slot} onChange={e => setField('time_slot', e.target.value)} className={inputCls}>
+                    <select value={bookingForm.time_slot} onChange={e => setBookingField('time_slot', e.target.value)} className={inputCls}>
                       {TIME_SLOTS.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
                   </Field>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <Field label="Sukan">
-                    <select value={formSport} onChange={e => { setFormSport(e.target.value); setField('athlete_id', '') }} className={inputCls}>
+                    <select value={formSport} onChange={e => { setFormSport(e.target.value); setBookingField('athlete_id', '') }} className={inputCls}>
                       <option value="">— Semua Sukan —</option>
                       {allSports.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </Field>
                   <Field label="Atlet" required>
-                    <select value={form.athlete_id} onChange={e => setField('athlete_id', e.target.value)} className={inputCls}>
+                    <select value={bookingForm.athlete_id} onChange={e => setBookingField('athlete_id', e.target.value)} className={inputCls}>
                       <option value="">— Pilih atlet —</option>
                       {modalAthletes.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                     </select>
                   </Field>
                 </div>
                 <Field label="Kes (Opsional)">
-                  <select value={form.case_id} onChange={e => setField('case_id', e.target.value)} className={inputCls}>
+                  <select value={bookingForm.case_id} onChange={e => setBookingField('case_id', e.target.value)} className={inputCls}>
                     <option value="">— Tanpa kes —</option>
                     {cases.map(c => <option key={c.id} value={c.id}>{c.athlete?.name}{c.injury_type ? ` - ${c.injury_type}` : ''} - {new Date(c.open_date + 'T00:00:00').toLocaleDateString('ms-MY', { day: 'numeric', month: 'short', year: '2-digit' })}</option>)}
                   </select>
                 </Field>
-              </div>
-
-              {/* ASSESSMENT SECTION */}
-              <div className="space-y-3 border-t border-gray-100 pt-4">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-[#888]">Saringan Fisioterapi</p>
                 <Field label="Diagnosis">
-                  <input value={form.diagnosis} onChange={e => setField('diagnosis', e.target.value.toUpperCase())} className={inputCls} placeholder="cth. STRAIN HAMSTRING" />
+                  <input value={bookingForm.diagnosis} onChange={e => setBookingField('diagnosis', e.target.value.toUpperCase())} className={inputCls} placeholder="cth. STRAIN HAMSTRING" />
                 </Field>
                 <div className="grid grid-cols-2 gap-4">
                   <Field label="Tarikh Kecederaan">
-                    <input type="date" value={form.date_of_injury} onChange={e => setField('date_of_injury', e.target.value)} className={inputCls} />
+                    <input type="date" value={bookingForm.date_of_injury} onChange={e => setBookingField('date_of_injury', e.target.value)} className={inputCls} />
                   </Field>
                   <Field label="Dirujuk Oleh">
-                    <input value={form.referred_by} onChange={e => setField('referred_by', e.target.value.toUpperCase())} className={inputCls} placeholder="cth. DOKTOR" />
+                    <input value={bookingForm.referred_by} onChange={e => setBookingField('referred_by', e.target.value.toUpperCase())} className={inputCls} placeholder="cth. DOKTOR" />
                   </Field>
                 </div>
-                <Field label="Keluhan Utama (COC)">
-                  <textarea value={form.chief_complaint} onChange={e => setField('chief_complaint', e.target.value.toUpperCase())} className={`${inputCls} resize-none`} rows={2} placeholder="HURAIAN KELUHAN UTAMA..." />
-                </Field>
-                <Field label="Jenis Kecederaan">
-                  <input value={form.injury_type} onChange={e => setField('injury_type', e.target.value.toUpperCase())} className={inputCls} placeholder="cth. LIGAMEN LUTUT" />
-                </Field>
-              </div>
-
-              {/* SESSION & NOTES SECTION */}
-              <div className="space-y-3 border-t border-gray-100 pt-4">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-[#888]">Sesi & Catatan</p>
                 <Field label="Jenis Sesi">
-                  <select value={form.session_type} onChange={e => setField('session_type', e.target.value as FormState['session_type'])} className={inputCls}>
+                  <select value={bookingForm.session_type} onChange={e => setBookingField('session_type', e.target.value as BookingFormState['session_type'])} className={inputCls}>
                     <option value="">— Pilih —</option>
                     <option value="standard">PENILAIAN</option>
                     <option value="manual">SUSULAN</option>
                     <option value="injury">KRISIS</option>
                   </select>
                 </Field>
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 shrink-0">
+              <button onClick={() => setBookingModalOpen(false)} className="px-4 py-2 text-sm text-[#888] hover:text-[#111] transition">Batal</button>
+              <button onClick={handleBookingSave} disabled={bookingSaving} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
+                {bookingSaving ? 'Menyimpan...' : 'Simpan'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Assessment Modal */}
+      {assessmentModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between shrink-0">
+              <h3 className="font-bold text-[#111]">Catatan Sesi</h3>
+              <button onClick={() => setAssessmentModalOpen(false)} className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
+            </div>
+            <div className="px-6 py-5 overflow-y-auto space-y-4">
+              {assessmentError && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-600">{assessmentError}</div>}
+
+              <div className="space-y-3">
+                <Field label="Keluhan Utama (COC)">
+                  <textarea value={assessmentForm.chief_complaint} onChange={e => setAssessmentField('chief_complaint', e.target.value.toUpperCase())} className={`${inputCls} resize-none`} rows={2} placeholder="HURAIAN KELUHAN UTAMA..." />
+                </Field>
+                <Field label="Jenis Kecederaan">
+                  <input value={assessmentForm.injury_type} onChange={e => setAssessmentField('injury_type', e.target.value.toUpperCase())} className={inputCls} placeholder="cth. LIGAMEN LUTUT" />
+                </Field>
                 <Field label="Nota Penilaian">
-                  <textarea value={form.assessment_notes} onChange={e => setField('assessment_notes', e.target.value.toUpperCase())} className={`${inputCls} resize-none`} rows={2} placeholder="DAPATAN SARINGAN..." />
+                  <textarea value={assessmentForm.assessment_notes} onChange={e => setAssessmentField('assessment_notes', e.target.value.toUpperCase())} className={`${inputCls} resize-none`} rows={2} placeholder="DAPATAN SARINGAN..." />
                 </Field>
                 <Field label="Pelan Rehabilitasi">
-                  <textarea value={form.rehab_plan} onChange={e => setField('rehab_plan', e.target.value.toUpperCase())} className={`${inputCls} resize-none`} rows={2} placeholder="PELAN RAWATAN & LATIHAN..." />
+                  <textarea value={assessmentForm.rehab_plan} onChange={e => setAssessmentField('rehab_plan', e.target.value.toUpperCase())} className={`${inputCls} resize-none`} rows={2} placeholder="PELAN RAWATAN & LATIHAN..." />
                 </Field>
                 <Field label="Nota Kemajuan">
-                  <textarea value={form.progress_notes} onChange={e => setField('progress_notes', e.target.value.toUpperCase())} className={`${inputCls} resize-none`} rows={2} placeholder="PERKEMBANGAN SEMASA..." />
+                  <textarea value={assessmentForm.progress_notes} onChange={e => setAssessmentField('progress_notes', e.target.value.toUpperCase())} className={`${inputCls} resize-none`} rows={2} placeholder="PERKEMBANGAN SEMASA..." />
                 </Field>
-              </div>
-
-              {/* TREATMENT & ATTENDANCE SECTION */}
-              <div className="space-y-3 border-t border-gray-100 pt-4">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-[#888]">Rawatan & Kehadiran</p>
                 <div className="grid grid-cols-2 gap-4">
                   <Field label="Skala Kesakitan (0–10)">
-                    <input
-                      type="number" min={0} max={10}
-                      value={form.pain_scale}
-                      onChange={e => setField('pain_scale', e.target.value)}
-                      className={inputCls}
-                      placeholder="0–10"
-                    />
+                    <input type="number" min={0} max={10} value={assessmentForm.pain_scale} onChange={e => setAssessmentField('pain_scale', e.target.value)} className={inputCls} placeholder="0–10" />
                   </Field>
                   <Field label="Status Kehadiran">
-                    <select value={form.attendance_status} onChange={e => setField('attendance_status', e.target.value as FormState['attendance_status'])} className={inputCls}>
+                    <select value={assessmentForm.attendance_status} onChange={e => setAssessmentField('attendance_status', e.target.value as AssessmentFormState['attendance_status'])} className={inputCls}>
                       <option value="scheduled">Dijadual</option>
                       <option value="arrived">Hadir</option>
                       <option value="completed">Selesai</option>
@@ -622,24 +672,24 @@ export default function PhysioPage() {
                   </Field>
                 </div>
                 <Field label="Otot Sasaran">
-                  <input value={form.target_muscle} onChange={e => setField('target_muscle', e.target.value.toUpperCase())} className={inputCls} placeholder="cth. HAMSTRING, QUADRICEPS" />
+                  <input value={assessmentForm.target_muscle} onChange={e => setAssessmentField('target_muscle', e.target.value.toUpperCase())} className={inputCls} placeholder="cth. HAMSTRING, QUADRICEPS" />
                 </Field>
                 <Field label="Jenis Rawatan">
-                  <input value={form.treatment_type} onChange={e => setField('treatment_type', e.target.value.toUpperCase())} className={inputCls} placeholder="cth. ULTRASOUND, TENS, MANUAL THERAPY" />
+                  <input value={assessmentForm.treatment_type} onChange={e => setAssessmentField('treatment_type', e.target.value.toUpperCase())} className={inputCls} placeholder="cth. ULTRASOUND, TENS, MANUAL THERAPY" />
                 </Field>
               </div>
             </div>
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 shrink-0">
-              <button onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm text-[#888] hover:text-[#111] transition">Batal</button>
-              <button onClick={handleSave} disabled={saving} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
-                {saving ? 'Menyimpan...' : 'Simpan'}
+              <button onClick={() => setAssessmentModalOpen(false)} className="px-4 py-2 text-sm text-[#888] hover:text-[#111] transition">Batal</button>
+              <button onClick={handleAssessmentSave} disabled={assessmentSaving} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
+                {assessmentSaving ? 'Menyimpan...' : 'Simpan'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Detail Modal */}
+      {/* View Modal */}
       {detailSlot && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
@@ -651,75 +701,120 @@ export default function PhysioPage() {
               <button onClick={() => setDetailSlot(null)} className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
             </div>
             <div className="px-6 py-5 overflow-y-auto space-y-5">
-              {/* Assessment Section */}
-              <div className="space-y-3">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-[#888]">Saringan Fisioterapi</p>
-                <div className="space-y-2">
-                  {[
-                    ['Diagnosis', detailSlot.diagnosis],
-                    ['Tarikh Kecederaan', detailSlot.date_of_injury ? new Date(detailSlot.date_of_injury + 'T00:00:00').toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric' }) : null],
-                    ['Dirujuk Oleh', detailSlot.referred_by],
-                    ['Jenis Kecederaan', detailSlot.injury_type],
-                  ].map(([label, val]) => (
-                    <div key={label as string} className="flex justify-between">
-                      <p className="text-[10px] text-[#888]">{label}</p>
-                      <p className="text-sm font-medium text-[#111]">{val ?? '—'}</p>
+              {detailView === 'booking' ? (
+                // Modal 1: Booking View
+                <div className="space-y-3">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-[#888]">Maklumat Tempahan</p>
+                  <div className="space-y-2">
+                    {[
+                      ['Diagnosis', detailSlot.diagnosis],
+                      ['Tarikh Kecederaan', detailSlot.date_of_injury ? fmtDate(detailSlot.date_of_injury) : null],
+                      ['Dirujuk Oleh', detailSlot.referred_by],
+                      ['Kes', detailSlot.case_id ? cases.find(c => c.id === detailSlot.case_id)?.athlete?.name : null],
+                      ['Jenis Sesi', detailSlot.session_type ? sessionLabel[detailSlot.session_type] : null],
+                    ].map(([label, val]) => (
+                      <div key={label as string} className="flex justify-between">
+                        <p className="text-[10px] text-[#888]">{label}</p>
+                        <p className="text-sm font-medium text-[#111]">{val ?? '—'}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                // Modal 2: Full Session View
+                <>
+                  {/* Booking Summary */}
+                  <div className="bg-[#F5F5F7] rounded-lg px-4 py-3 space-y-1.5">
+                    <p className="text-[11px] font-bold text-[#888]">TEMPAHAN</p>
+                    <div className="text-sm text-[#444] space-y-0.5">
+                      <p><span className="text-[#888]">Diagnosis:</span> {detailSlot.diagnosis || '—'}</p>
+                      <p><span className="text-[#888]">Tarikh Kecederaan:</span> {detailSlot.date_of_injury ? fmtDate(detailSlot.date_of_injury) : '—'}</p>
+                      <p><span className="text-[#888]">Dirujuk Oleh:</span> {detailSlot.referred_by || '—'}</p>
+                      <p><span className="text-[#888]">Jenis Sesi:</span> {detailSlot.session_type ? sessionLabel[detailSlot.session_type] : '—'}</p>
                     </div>
-                  ))}
-                </div>
-                <div className="bg-gray-50 rounded-lg px-3 py-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#888] mb-1">Keluhan Utama (COC)</p>
-                  <p className="text-sm text-[#444] whitespace-pre-wrap">{detailSlot.chief_complaint || '—'}</p>
-                </div>
-              </div>
+                  </div>
 
-              {/* Session & Notes Section */}
-              <div className="space-y-3 border-t border-gray-100 pt-3">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-[#888]">Sesi & Catatan</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-[#F5F5F7] rounded-lg px-4 py-3">
-                    <p className="text-[10px] text-[#888] mb-0.5">Jenis Sesi</p>
-                    <p className="text-sm font-medium text-[#111]">{detailSlot.session_type ? sessionLabel[detailSlot.session_type] : '—'}</p>
+                  {/* Assessment Details */}
+                  <div className="space-y-3">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-[#888]">Catatan Sesi</p>
+                    {[
+                      ['Keluhan Utama (COC)', detailSlot.chief_complaint],
+                      ['Jenis Kecederaan', detailSlot.injury_type],
+                    ].map(([label, val]) => (
+                      <div key={label as string}>
+                        <p className="text-[10px] text-[#888] mb-1">{label}</p>
+                        <p className="text-sm text-[#444] bg-gray-50 rounded px-3 py-2">{val || '—'}</p>
+                      </div>
+                    ))}
+                    {[
+                      ['Nota Penilaian', detailSlot.assessment_notes],
+                      ['Pelan Rehabilitasi', detailSlot.rehab_plan],
+                      ['Nota Kemajuan', detailSlot.progress_notes],
+                    ].map(([label, val]) => (
+                      val && (
+                        <div key={label as string}>
+                          <p className="text-[10px] text-[#888] mb-1 font-semibold">{label}</p>
+                          <p className="text-sm text-[#444] bg-gray-50 rounded px-3 py-2 whitespace-pre-wrap">{val}</p>
+                        </div>
+                      )
+                    ))}
+                    <div className="grid grid-cols-2 gap-3">
+                      {detailSlot.pain_scale !== null && (
+                        <div className="bg-[#F5F5F7] rounded px-3 py-2">
+                          <p className="text-[10px] text-[#888] mb-0.5">Skala Kesakitan</p>
+                          <p className="text-sm font-bold text-[#111]">{detailSlot.pain_scale} / 10</p>
+                        </div>
+                      )}
+                      <div className="bg-[#F5F5F7] rounded px-3 py-2">
+                        <p className="text-[10px] text-[#888] mb-0.5">Status Kehadiran</p>
+                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full inline-block ${attendanceStyle[detailSlot.attendance_status ?? 'scheduled']}`}>
+                          {attendanceLabel[detailSlot.attendance_status ?? 'scheduled']}
+                        </span>
+                      </div>
+                    </div>
+                    {detailSlot.target_muscle && (
+                      <div>
+                        <p className="text-[10px] text-[#888] mb-1">Otot Sasaran</p>
+                        <p className="text-sm text-[#444] bg-gray-50 rounded px-3 py-2">{detailSlot.target_muscle}</p>
+                      </div>
+                    )}
+                    {detailSlot.treatment_type && (
+                      <div>
+                        <p className="text-[10px] text-[#888] mb-1">Jenis Rawatan</p>
+                        <p className="text-sm text-[#444] bg-gray-50 rounded px-3 py-2">{detailSlot.treatment_type}</p>
+                      </div>
+                    )}
                   </div>
-                  <div className="bg-[#F5F5F7] rounded-lg px-4 py-3">
-                    <p className="text-[10px] text-[#888] mb-0.5">Status Kehadiran</p>
-                    <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full inline-block ${attendanceStyle[detailSlot.attendance_status ?? 'scheduled']}`}>
-                      {attendanceLabel[detailSlot.attendance_status ?? 'scheduled']}
-                    </span>
-                  </div>
-                </div>
-                {detailSlot.pain_scale !== null && (
-                  <div className="bg-[#F5F5F7] rounded-lg px-4 py-3">
-                    <p className="text-[10px] text-[#888] mb-0.5">Skala Kesakitan (VAS)</p>
-                    <p className="text-sm font-bold text-[#111]">{detailSlot.pain_scale} / 10</p>
-                  </div>
-                )}
-                {[
-                  ['Nota Penilaian', detailSlot.assessment_notes],
-                  ['Pelan Rehabilitasi', detailSlot.rehab_plan],
-                  ['Nota Kemajuan', detailSlot.progress_notes],
-                ].map(([label, val]) => (
-                  <div key={label as string} className="bg-gray-50 rounded-lg px-3 py-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-widest text-[#888] mb-1">{label}</p>
-                    <p className="text-sm text-[#444] whitespace-pre-wrap">{val || '—'}</p>
-                  </div>
-                ))}
-              </div>
+                </>
+              )}
             </div>
-            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 shrink-0">
-              {isAdmin && (
-                <button onClick={() => { setConfirmDelete(detailSlot); setDetailSlot(null) }} className="px-4 py-2 text-sm text-[#D44040] border border-red-200 rounded-lg hover:bg-red-50 transition">Padam</button>
-              )}
-              {canEdit && detailSlot.attendance_status === 'scheduled' && (
-                <button
-                  onClick={() => handleMarkArrived(detailSlot)}
-                  className="px-4 py-2 text-sm font-semibold text-white bg-[#3A7EC8] hover:bg-blue-700 rounded-lg transition"
-                >
-                  Tandai Hadir
-                </button>
-              )}
-              {canEdit && (
-                <button onClick={() => { openEdit(detailSlot); setDetailSlot(null) }} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold rounded-lg transition">Edit</button>
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 shrink-0 flex-wrap">
+              {detailView === 'booking' ? (
+                <>
+                  {isAdmin && (
+                    <button onClick={() => { setConfirmDelete(detailSlot); setDetailSlot(null) }} className="px-4 py-2 text-sm text-[#D44040] border border-red-200 rounded-lg hover:bg-red-50 transition">Padam</button>
+                  )}
+                  {canEdit && detailSlot.attendance_status === 'scheduled' && (
+                    <button onClick={() => handleMarkArrived(detailSlot)} className="px-4 py-2 text-sm font-semibold text-white bg-[#3A7EC8] hover:bg-blue-700 rounded-lg transition">
+                      Tandai Hadir
+                    </button>
+                  )}
+                  <button onClick={() => setDetailView('full')} className="px-4 py-2 text-sm font-semibold bg-[#F5F5F7] text-[#111] hover:bg-gray-100 rounded-lg transition">
+                    Catatan Sesi
+                  </button>
+                  {canEdit && (
+                    <button onClick={() => { openBookingEdit(detailSlot); setDetailSlot(null) }} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold rounded-lg transition">Edit</button>
+                  )}
+                </>
+              ) : (
+                <>
+                  <button onClick={() => setDetailView('booking')} className="px-4 py-2 text-sm font-semibold bg-[#F5F5F7] text-[#111] hover:bg-gray-100 rounded-lg transition">
+                    Kembali
+                  </button>
+                  {canEdit && (
+                    <button onClick={() => { openAssessmentEdit(detailSlot); setDetailSlot(null) }} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold rounded-lg transition">Edit Catatan</button>
+                  )}
+                </>
               )}
             </div>
           </div>

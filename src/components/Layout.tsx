@@ -27,6 +27,11 @@ export default function Layout() {
   const [alerts, setAlerts] = useState<AlertCounts>({ injured: 0, pendingSupplements: 0 })
   const [notifOpen, setNotifOpen] = useState(false)
   const [userOpen, setUserOpen] = useState(false)
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false)
+  const [cpForm, setCpForm] = useState({ password: '', confirm: '', showPw: false })
+  const [cpLoading, setCpLoading] = useState(false)
+  const [cpError, setCpError] = useState<string | null>(null)
+  const [cpSuccess, setCpSuccess] = useState(false)
   const notifRef = useRef<HTMLDivElement>(null)
   const userRef = useRef<HTMLDivElement>(null)
 
@@ -58,6 +63,26 @@ export default function Layout() {
     setUserOpen(false)
     await signOut()
     navigate('/login')
+  }
+
+  async function handleChangePassword() {
+    setCpError(null)
+    if (cpForm.password.length < 8) {
+      setCpError('Kata laluan mestilah sekurang-kurangnya 8 aksara.')
+      return
+    }
+    if (cpForm.password !== cpForm.confirm) {
+      setCpError('Kata laluan tidak sepadan.')
+      return
+    }
+    setCpLoading(true)
+    const { error } = await supabase.auth.updateUser({ password: cpForm.password })
+    setCpLoading(false)
+    if (error) {
+      setCpError(error.message)
+      return
+    }
+    setCpSuccess(true)
   }
 
   const initials = profile?.full_name
@@ -165,6 +190,12 @@ export default function Layout() {
                     <p className="text-[11px] text-[#888] capitalize mt-0.5">{profile?.role}</p>
                   </div>
                   <button
+                    onClick={() => { setUserOpen(false); setChangePasswordOpen(true) }}
+                    className="w-full text-left px-4 py-3 text-[13px] text-[#888] hover:text-[#111] hover:bg-gray-50 transition border-b border-gray-50"
+                  >
+                    Tukar Kata Laluan
+                  </button>
+                  <button
                     onClick={handleSignOut}
                     className="w-full text-left px-4 py-3 text-[13px] text-[#888] hover:text-[#D44040] hover:bg-gray-50 transition"
                   >
@@ -180,6 +211,61 @@ export default function Layout() {
           <Outlet />
         </main>
       </div>
+
+      {changePasswordOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
+            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="font-bold text-[#111]">Tukar Kata Laluan</h3>
+              <button onClick={() => { setChangePasswordOpen(false); setCpForm({ password: '', confirm: '', showPw: false }); setCpError(null); setCpSuccess(false) }}
+                className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              {cpError && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-600">{cpError}</div>}
+              {cpSuccess && <div className="px-4 py-3 bg-green-50 border border-green-200 rounded-lg text-[13px] text-green-700">Kata laluan berjaya dikemas kini.</div>}
+
+              <div>
+                <label className="block text-[10px] font-semibold uppercase tracking-widest text-[#888] mb-1.5">Kata Laluan Baharu</label>
+                <div className="relative">
+                  <input
+                    type={cpForm.showPw ? 'text' : 'password'}
+                    value={cpForm.password}
+                    onChange={e => setCpForm(f => ({ ...f, password: e.target.value }))}
+                    placeholder="Min. 8 aksara"
+                    className="w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2.5 pr-10 text-sm text-[#111] outline-none transition focus:border-[#F56A00] focus:bg-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setCpForm(f => ({ ...f, showPw: !f.showPw }))}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#888] hover:text-[#111] text-[11px] font-medium"
+                  >
+                    {cpForm.showPw ? 'Sembunyi' : 'Tunjuk'}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-semibold uppercase tracking-widest text-[#888] mb-1.5">Sahkan Kata Laluan</label>
+                <input
+                  type={cpForm.showPw ? 'text' : 'password'}
+                  value={cpForm.confirm}
+                  onChange={e => setCpForm(f => ({ ...f, confirm: e.target.value }))}
+                  placeholder="••••••••"
+                  className="w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2.5 text-sm text-[#111] outline-none transition focus:border-[#F56A00] focus:bg-white"
+                />
+              </div>
+            </div>
+            {!cpSuccess && (
+              <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+                <button onClick={() => { setChangePasswordOpen(false); setCpForm({ password: '', confirm: '', showPw: false }); setCpError(null); setCpSuccess(false) }} className="px-4 py-2 text-sm text-[#888] hover:text-[#111] transition">Batal</button>
+                <button onClick={handleChangePassword} disabled={cpLoading || cpSuccess} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
+                  {cpLoading ? 'Menyimpan...' : 'Simpan'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { supabase } from '../lib/supabase'
 
 export default function LoginPage() {
   const { signIn, loading: authLoading } = useAuth()
@@ -10,6 +11,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+
+  const [forgotOpen, setForgotOpen] = useState(false)
+  const [forgotEmail, setForgotEmail] = useState('')
+  const [forgotLoading, setForgotLoading] = useState(false)
+  const [forgotError, setForgotError] = useState<string | null>(null)
+  const [forgotSuccess, setForgotSuccess] = useState(false)
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -22,6 +29,24 @@ export default function LoginPage() {
     } else {
       navigate('/')
     }
+  }
+
+  async function handleForgotPassword() {
+    setForgotError(null)
+    if (!forgotEmail.trim()) {
+      setForgotError('Sila masukkan e-mel anda.')
+      return
+    }
+    setForgotLoading(true)
+    const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail.trim(), {
+      redirectTo: window.location.origin + '/reset-password',
+    })
+    setForgotLoading(false)
+    if (error) {
+      setForgotError(error.message)
+      return
+    }
+    setForgotSuccess(true)
   }
 
   return (
@@ -104,9 +129,13 @@ export default function LoginPage() {
               required
               className="w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3.5 py-3 text-sm text-[#111] placeholder-[#bbb] outline-none transition focus:border-[#F56A00] focus:bg-white focus:shadow-[0_0_0_3px_rgba(245,106,0,0.08)]"
             />
-            <a href="#" className="block text-right text-xs text-[#F56A00] font-medium mt-1.5 hover:underline">
+            <button
+              type="button"
+              onClick={() => setForgotOpen(true)}
+              className="block text-right text-xs text-[#F56A00] font-medium mt-1.5 hover:underline w-full"
+            >
               Lupa kata laluan?
-            </a>
+            </button>
           </div>
 
           <button
@@ -118,30 +147,51 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div className="flex items-center gap-3 my-6">
-          <div className="flex-1 h-px bg-[#E8E8E8]" />
-          <span className="text-[11px] text-[#bbb] whitespace-nowrap">atau</span>
-          <div className="flex-1 h-px bg-[#E8E8E8]" />
-        </div>
-
-        <button
-          type="button"
-          className="w-full flex items-center justify-center gap-2 border border-[#E8E8E8] rounded-lg py-3 text-[13px] font-medium text-[#444] hover:border-[#F56A00] hover:text-[#F56A00] transition"
-          onClick={() => alert('SSO Kerajaan tidak tersedia buat masa ini.')}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <rect x="3" y="11" width="18" height="11" rx="2" />
-            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-          </svg>
-          Log Masuk dengan SSO Kerajaan
-        </button>
-
         <p className="mt-9 text-[11px] text-[#bbb] text-center leading-relaxed">
           Sistem ini hanya untuk kakitangan MSP Pahang yang diberi kebenaran.<br />
           Sebarang masalah?{' '}
           <a href="#" className="text-[#F56A00] hover:underline">Hubungi Pentadbir</a>
         </p>
       </div>
+
+      {forgotOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
+            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="font-bold text-[#111]">Lupa Kata Laluan</h3>
+              <button onClick={() => { setForgotOpen(false); setForgotEmail(''); setForgotError(null); setForgotSuccess(false) }}
+                className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              {forgotSuccess ? (
+                <div className="px-4 py-3 bg-green-50 border border-green-200 rounded-lg text-[13px] text-green-700">
+                  E-mel set semula kata laluan telah dihantar. Sila semak peti masuk anda.
+                </div>
+              ) : (
+                <>
+                  {forgotError && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-600">{forgotError}</div>}
+                  <p className="text-[13px] text-[#888]">Masukkan e-mel anda dan kami akan menghantar pautan untuk menetapkan semula kata laluan.</p>
+                  <div>
+                    <label className="block text-[10px] font-semibold uppercase tracking-widest text-[#888] mb-1.5">E-mel</label>
+                    <input type="email" value={forgotEmail} onChange={e => setForgotEmail(e.target.value)}
+                      placeholder="nama@msp.gov.my"
+                      className="w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3.5 py-3 text-sm text-[#111] placeholder-[#bbb] outline-none transition focus:border-[#F56A00] focus:bg-white" />
+                  </div>
+                </>
+              )}
+            </div>
+            {!forgotSuccess && (
+              <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+                <button onClick={() => setForgotOpen(false)} className="px-4 py-2 text-sm text-[#888] hover:text-[#111] transition">Batal</button>
+                <button onClick={handleForgotPassword} disabled={forgotLoading}
+                  className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
+                  {forgotLoading ? 'Menghantar...' : 'Hantar'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
