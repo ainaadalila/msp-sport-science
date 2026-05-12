@@ -77,102 +77,102 @@ ON CONFLICT DO NOTHING;
 -- NORMS FOR TESTS (CORRECTED - PDF VERIFIED)
 -- =============================================================
 
--- MUSCULAR ENDURANCE NORMS
+-- MUSCULAR ENDURANCE NORMS (CORRECTED - PDF VERIFIED)
 -- Push Up Men: GOOD >40, AVERAGE 21-39, POOR <20
 INSERT INTO fitness_test_norms (test_id, gender, good_min, average_min, average_max, poor_max, rating_direction)
-SELECT id, 'M', 41, 21, 39, 20, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Push Up' ON CONFLICT DO NOTHING;
+SELECT id, 'M', 40, 21, 39, 20, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Push Up' ON CONFLICT DO NOTHING;
 
 -- Push Up Women: GOOD >36, AVERAGE 12-35, POOR <11
 INSERT INTO fitness_test_norms (test_id, gender, good_min, average_min, average_max, poor_max, rating_direction)
-SELECT id, 'F', 37, 12, 35, 11, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Push Up' ON CONFLICT DO NOTHING;
+SELECT id, 'F', 36, 12, 35, 11, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Push Up' ON CONFLICT DO NOTHING;
 
 -- Squat Men: GOOD >45, AVERAGE 29-44, POOR <28
 INSERT INTO fitness_test_norms (test_id, gender, good_min, average_min, average_max, poor_max, rating_direction)
-SELECT id, 'M', 46, 29, 44, 28, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Squat' ON CONFLICT DO NOTHING;
+SELECT id, 'M', 45, 29, 44, 28, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Squat' ON CONFLICT DO NOTHING;
 
 -- Squat Women: GOOD >39, AVERAGE 21-38, POOR <20
 INSERT INTO fitness_test_norms (test_id, gender, good_min, average_min, average_max, poor_max, rating_direction)
-SELECT id, 'F', 40, 21, 38, 20, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Squat' ON CONFLICT DO NOTHING;
+SELECT id, 'F', 39, 21, 38, 20, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Squat' ON CONFLICT DO NOTHING;
 
 -- Sit Up Men: GOOD >40, AVERAGE 21-39, POOR <20
 INSERT INTO fitness_test_norms (test_id, gender, good_min, average_min, average_max, poor_max, rating_direction)
-SELECT id, 'M', 41, 21, 39, 20, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Sit Up' ON CONFLICT DO NOTHING;
+SELECT id, 'M', 40, 21, 39, 20, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Sit Up' ON CONFLICT DO NOTHING;
 
 -- Sit Up Women: GOOD >40, AVERAGE 21-39, POOR <20
 INSERT INTO fitness_test_norms (test_id, gender, good_min, average_min, average_max, poor_max, rating_direction)
-SELECT id, 'F', 41, 21, 39, 20, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Sit Up' ON CONFLICT DO NOTHING;
+SELECT id, 'F', 40, 21, 39, 20, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Sit Up' ON CONFLICT DO NOTHING;
 
 -- Plank Test (both): GOOD >6m (360s), AVERAGE 2m-6m (120-360s), POOR <2m (<120s)
 INSERT INTO fitness_test_norms (test_id, gender, good_min, average_min, average_max, poor_max, rating_direction)
-SELECT id, 'both', 361, 120, 360, 119, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Plank' ON CONFLICT DO NOTHING;
+SELECT id, 'both', 360, 120, 360, 119, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Plank' ON CONFLICT DO NOTHING;
 
 -- Pull Up Men: GOOD >13, AVERAGE 7-12, POOR <6
 INSERT INTO fitness_test_norms (test_id, gender, good_min, average_min, average_max, poor_max, rating_direction)
-SELECT id, 'M', 14, 7, 12, 6, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Pull Up' ON CONFLICT DO NOTHING;
+SELECT id, 'M', 13, 7, 12, 6, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Pull Up' ON CONFLICT DO NOTHING;
 
 -- Pull Up Women: GOOD >9, AVERAGE 4-8, POOR <3
 INSERT INTO fitness_test_norms (test_id, gender, good_min, average_min, average_max, poor_max, rating_direction)
-SELECT id, 'F', 10, 4, 8, 3, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Pull Up' ON CONFLICT DO NOTHING;
+SELECT id, 'F', 9, 4, 8, 3, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Pull Up' ON CONFLICT DO NOTHING;
 
--- POWER NORMS
+-- POWER NORMS (CORRECTED - PDF VERIFIED)
 -- Standing Broad Jump Men: GOOD >250M, AVERAGE 210-249M, POOR <209M
 INSERT INTO fitness_test_norms (test_id, gender, good_min, average_min, average_max, poor_max, rating_direction)
-SELECT id, 'M', 251, 210, 249, 209, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Standing Broad Jump' ON CONFLICT DO NOTHING;
+SELECT id, 'M', 250, 210, 249, 209, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Standing Broad Jump' ON CONFLICT DO NOTHING;
 
 -- Standing Broad Jump Women: GOOD >200M, AVERAGE 161-199M, POOR <160M
 INSERT INTO fitness_test_norms (test_id, gender, good_min, average_min, average_max, poor_max, rating_direction)
-SELECT id, 'F', 201, 161, 199, 160, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Standing Broad Jump' ON CONFLICT DO NOTHING;
+SELECT id, 'F', 200, 161, 199, 160, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Standing Broad Jump' ON CONFLICT DO NOTHING;
 
 -- Counter Movement Jump Men: GOOD >42CM, AVERAGE 38-41CM, POOR <37CM
 INSERT INTO fitness_test_norms (test_id, gender, good_min, average_min, average_max, poor_max, rating_direction)
-SELECT id, 'M', 43, 38, 41, 37, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Counter Movement Jump' ON CONFLICT DO NOTHING;
+SELECT id, 'M', 42, 38, 41, 37, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Counter Movement Jump' ON CONFLICT DO NOTHING;
 
 -- Counter Movement Jump Women: GOOD >41CM, AVERAGE 37-40CM, POOR <36CM
 INSERT INTO fitness_test_norms (test_id, gender, good_min, average_min, average_max, poor_max, rating_direction)
-SELECT id, 'F', 42, 37, 40, 36, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Counter Movement Jump' ON CONFLICT DO NOTHING;
+SELECT id, 'F', 41, 37, 40, 36, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Counter Movement Jump' ON CONFLICT DO NOTHING;
 
 -- Seated Medicine Ball Throw Men: GOOD >3.25M, AVERAGE 1.76-3.24M, POOR <1.75M
 INSERT INTO fitness_test_norms (test_id, gender, good_min, average_min, average_max, poor_max, rating_direction)
-SELECT id, 'M', 3.26, 1.76, 3.24, 1.75, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Seated Medicine Ball Throw' ON CONFLICT DO NOTHING;
+SELECT id, 'M', 3.25, 1.76, 3.24, 1.75, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Seated Medicine Ball Throw' ON CONFLICT DO NOTHING;
 
 -- Seated Medicine Ball Throw Women: GOOD >3.75M, AVERAGE 1.86-3.74M, POOR <1.85M
 INSERT INTO fitness_test_norms (test_id, gender, good_min, average_min, average_max, poor_max, rating_direction)
-SELECT id, 'F', 3.76, 1.86, 3.74, 1.85, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Seated Medicine Ball Throw' ON CONFLICT DO NOTHING;
+SELECT id, 'F', 3.75, 1.86, 3.74, 1.85, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Seated Medicine Ball Throw' ON CONFLICT DO NOTHING;
 
--- STRENGTH NORMS
+-- STRENGTH NORMS (CORRECTED - PDF VERIFIED)
 -- Back Strength Men: GOOD >170KG, AVERAGE 135-169KG, POOR <134KG
 INSERT INTO fitness_test_norms (test_id, gender, good_min, average_min, average_max, poor_max, rating_direction)
-SELECT id, 'M', 171, 135, 169, 134, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Back Strength' ON CONFLICT DO NOTHING;
+SELECT id, 'M', 170, 135, 169, 134, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Back Strength' ON CONFLICT DO NOTHING;
 
 -- Back Strength Women: GOOD >150KG, AVERAGE 120-149KG, POOR <119KG
 INSERT INTO fitness_test_norms (test_id, gender, good_min, average_min, average_max, poor_max, rating_direction)
-SELECT id, 'F', 151, 120, 149, 119, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Back Strength' ON CONFLICT DO NOTHING;
+SELECT id, 'F', 150, 120, 149, 119, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Back Strength' ON CONFLICT DO NOTHING;
 
 -- Handgrip Strength Men: GOOD >55.5Kg, AVERAGE 35.7Kg-55.4Kg, POOR <35.6Kg
 INSERT INTO fitness_test_norms (test_id, gender, good_min, average_min, average_max, poor_max, rating_direction)
-SELECT id, 'M', 55.6, 35.7, 55.4, 35.6, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Handgrip Strength' ON CONFLICT DO NOTHING;
+SELECT id, 'M', 55.5, 35.7, 55.4, 35.6, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Handgrip Strength' ON CONFLICT DO NOTHING;
 
 -- Handgrip Strength Women: GOOD >31Kg, AVERAGE 19.2Kg-30.9Kg, POOR <19.1Kg
 INSERT INTO fitness_test_norms (test_id, gender, good_min, average_min, average_max, poor_max, rating_direction)
-SELECT id, 'F', 31.1, 19.2, 30.9, 19.1, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Handgrip Strength' ON CONFLICT DO NOTHING;
+SELECT id, 'F', 31, 19.2, 30.9, 19.1, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Handgrip Strength' ON CONFLICT DO NOTHING;
 
--- FLEXIBILITY NORMS
+-- FLEXIBILITY NORMS (CORRECTED - PDF VERIFIED)
 -- Sit and Reach Men: GOOD >39CM, AVERAGE 25-38CM, POOR <24CM
 INSERT INTO fitness_test_norms (test_id, gender, good_min, average_min, average_max, poor_max, rating_direction)
-SELECT id, 'M', 40, 25, 38, 24, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Sit and Reach' ON CONFLICT DO NOTHING;
+SELECT id, 'M', 39, 25, 38, 24, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Sit and Reach' ON CONFLICT DO NOTHING;
 
 -- Sit and Reach Women: GOOD >41CM, AVERAGE 28-40CM, POOR <27CM
 INSERT INTO fitness_test_norms (test_id, gender, good_min, average_min, average_max, poor_max, rating_direction)
-SELECT id, 'F', 42, 28, 40, 27, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Sit and Reach' ON CONFLICT DO NOTHING;
+SELECT id, 'F', 41, 28, 40, 27, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Sit and Reach' ON CONFLICT DO NOTHING;
 
--- AGILITY NORMS
--- T-Test Men: GOOD <9.50, AVERAGE 9.51-10.52, POOR >10.52
+-- AGILITY NORMS (CORRECTED - PDF VERIFIED)
+-- T-Test Men: GOOD <9.5, AVERAGE 9.51-10.52, POOR >10.52
 INSERT INTO fitness_test_norms (test_id, gender, good_max, average_min, average_max, poor_min, rating_direction)
-SELECT id, 'M', 9.49, 9.51, 10.52, 10.53, 'lower_is_better' FROM fitness_test_definitions WHERE test_name = 'T-Test' ON CONFLICT DO NOTHING;
+SELECT id, 'M', 9.5, 9.51, 10.52, 10.53, 'lower_is_better' FROM fitness_test_definitions WHERE test_name = 'T-Test' ON CONFLICT DO NOTHING;
 
--- T-Test Women: GOOD <10.50, AVERAGE 10.51-11.50, POOR >11.50
+-- T-Test Women: GOOD <10.5, AVERAGE 10.51-11.50, POOR >11.50
 INSERT INTO fitness_test_norms (test_id, gender, good_max, average_min, average_max, poor_min, rating_direction)
-SELECT id, 'F', 10.49, 10.51, 11.50, 11.51, 'lower_is_better' FROM fitness_test_definitions WHERE test_name = 'T-Test' ON CONFLICT DO NOTHING;
+SELECT id, 'F', 10.5, 10.51, 11.50, 11.51, 'lower_is_better' FROM fitness_test_definitions WHERE test_name = 'T-Test' ON CONFLICT DO NOTHING;
 
 -- Hexagon Agility Men: GOOD <11.2S, AVERAGE 11.3S-17.7S, POOR >17.8S
 INSERT INTO fitness_test_norms (test_id, gender, good_max, average_min, average_max, poor_min, rating_direction)
@@ -226,11 +226,11 @@ SELECT id, 'F', 2261, 820, 2260, 819, 'higher_is_better' FROM fitness_test_defin
 
 -- Intermittent Recovery Level 2 Men: GOOD >21.6, AVERAGE 20.1-21.6, POOR <20.1
 INSERT INTO fitness_test_norms (test_id, gender, good_min, average_min, average_max, poor_max, rating_direction)
-SELECT id, 'M', 21.7, 20.1, 21.6, 20.0, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Intermittent Recovery Test Level 2' ON CONFLICT DO NOTHING;
+SELECT id, 'M', 21.6, 20.1, 21.6, 20.0, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Intermittent Recovery Test Level 2' ON CONFLICT DO NOTHING;
 
 -- Intermittent Recovery Level 2 Women: GOOD >21.1, AVERAGE 19.2-20.1, POOR <19.2
 INSERT INTO fitness_test_norms (test_id, gender, good_min, average_min, average_max, poor_max, rating_direction)
-SELECT id, 'F', 21.2, 19.2, 20.1, 19.1, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Intermittent Recovery Test Level 2' ON CONFLICT DO NOTHING;
+SELECT id, 'F', 21.1, 19.2, 20.1, 19.1, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Intermittent Recovery Test Level 2' ON CONFLICT DO NOTHING;
 
 -- 24km Run Test Men: GOOD <9m45s (585s), AVERAGE 9m46s-14m (586-840s), POOR >14m01s (841s)
 INSERT INTO fitness_test_norms (test_id, gender, good_max, average_min, average_max, poor_min, rating_direction)
@@ -240,24 +240,24 @@ SELECT id, 'M', 585, 586, 840, 841, 'lower_is_better' FROM fitness_test_definiti
 INSERT INTO fitness_test_norms (test_id, gender, good_max, average_min, average_max, poor_min, rating_direction)
 SELECT id, 'F', 750, 751, 1110, 1111, 'lower_is_better' FROM fitness_test_definitions WHERE test_name = '24km Run Test' ON CONFLICT DO NOTHING;
 
--- COORDINATION NORMS
+-- COORDINATION NORMS (CORRECTED - PDF VERIFIED)
 -- Alternate Hand Wall Toss: GOOD >35, AVERAGE 16-34, POOR <15
 INSERT INTO fitness_test_norms (test_id, gender, good_min, average_min, average_max, poor_max, rating_direction)
-SELECT id, 'both', 36, 16, 34, 15, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Alternate Hand Wall Toss' ON CONFLICT DO NOTHING;
+SELECT id, 'both', 35, 16, 34, 15, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Alternate Hand Wall Toss' ON CONFLICT DO NOTHING;
 
--- BALANCE NORMS
+-- BALANCE NORMS (CORRECTED - PDF VERIFIED)
 -- Stock Balance Test: GOOD >50s, AVERAGE 25s-49s, POOR <24s
 INSERT INTO fitness_test_norms (test_id, gender, good_min, average_min, average_max, poor_max, rating_direction)
-SELECT id, 'both', 51, 25, 49, 24, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Stock Balance Test' ON CONFLICT DO NOTHING;
+SELECT id, 'both', 50, 25, 49, 24, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Stock Balance Test' ON CONFLICT DO NOTHING;
 
--- MARTIAL ARTS NORMS
+-- MARTIAL ARTS NORMS (CORRECTED - PDF VERIFIED)
 -- Cross Punch Power Men: GOOD >9500, AVERAGE 1500-9500, POOR <1500
 INSERT INTO fitness_test_norms (test_id, gender, good_min, average_min, average_max, poor_max, rating_direction)
-SELECT id, 'M', 9501, 1500, 9500, 1499, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Cross Punch Power' ON CONFLICT DO NOTHING;
+SELECT id, 'M', 9500, 1500, 9500, 1499, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Cross Punch Power' ON CONFLICT DO NOTHING;
 
 -- Cross Punch Power Women: GOOD >7500, AVERAGE 1200-7500, POOR <1200
 INSERT INTO fitness_test_norms (test_id, gender, good_min, average_min, average_max, poor_max, rating_direction)
-SELECT id, 'F', 7501, 1200, 7500, 1199, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Cross Punch Power' ON CONFLICT DO NOTHING;
+SELECT id, 'F', 7500, 1200, 7500, 1199, 'higher_is_better' FROM fitness_test_definitions WHERE test_name = 'Cross Punch Power' ON CONFLICT DO NOTHING;
 
 -- Cross Punch Speed Men: GOOD <0.50, AVERAGE 0.51-0.74, POOR >0.75
 INSERT INTO fitness_test_norms (test_id, gender, good_max, average_min, average_max, poor_min, rating_direction)

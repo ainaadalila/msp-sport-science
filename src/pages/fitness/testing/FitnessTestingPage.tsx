@@ -173,11 +173,11 @@ export default function FitnessTestingPage() {
     const { rating_direction } = norm
 
     if (rating_direction === 'higher_is_better') {
-      if (norm.good_min !== undefined && norm.good_min !== null && value >= norm.good_min) return 'baik'
+      if (norm.good_min !== undefined && norm.good_min !== null && value > norm.good_min) return 'baik'
       if (norm.average_min !== undefined && norm.average_min !== null && value >= norm.average_min) return 'sederhana'
       return 'lemah'
     } else {
-      if (norm.good_max !== undefined && norm.good_max !== null && value <= norm.good_max) return 'baik'
+      if (norm.good_max !== undefined && norm.good_max !== null && value < norm.good_max) return 'baik'
       if (norm.average_max !== undefined && norm.average_max !== null && value <= norm.average_max) return 'sederhana'
       return 'lemah'
     }
