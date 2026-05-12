@@ -476,9 +476,10 @@ export default function FitnessTestingPage() {
                   })
                 })
 
-                // If no test selected, select the first one
+                // If no test selected, select the first one with results
                 const testsArray = Array.from(allTests.values())
-                const currentTestId = selectedTestId || testsArray[0]?.test_id
+                const defaultTestId = testsArray[0]?.test_id
+                const currentTestId = selectedTestId || defaultTestId
                 const currentTest = allTests.get(currentTestId)
 
                 // Get all results for the selected test across sessions
