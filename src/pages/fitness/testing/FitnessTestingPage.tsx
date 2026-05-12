@@ -375,7 +375,7 @@ export default function FitnessTestingPage() {
             </div>
           </div>
 
-          <div className="overflow-x-auto max-h-96 overflow-y-auto">
+          <div className="overflow-x-auto max-h-[calc(100vh-320px)] overflow-y-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 sticky top-0">
                 <tr className="border-b border-gray-200">

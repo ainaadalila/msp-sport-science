@@ -155,132 +155,132 @@ ON CONFLICT DO NOTHING;
 -- =============================================================
 INSERT INTO fitness_test_sessions (athlete_id, session, year, recorded_date, recorded_by, is_draft) VALUES
 -- Amir Karim - Basketball
-((SELECT id FROM athletes WHERE name = 'Amir Karim'), 'Fasa 1', 2026, '2026-04-10', '99999999-0000-0000-0000-000000000001', false),
-((SELECT id FROM athletes WHERE name = 'Amir Karim'), 'Fasa 2', 2026, '2026-05-10', '99999999-0000-0000-0000-000000000001', false),
+((SELECT id FROM athletes WHERE name = 'Amir Karim'), 'Fasa 1', 2026, '2026-04-10', '51bcd0e4-b3b3-43d6-ae76-e952881b0f7d', false),
+((SELECT id FROM athletes WHERE name = 'Amir Karim'), 'Fasa 2', 2026, '2026-05-10', '51bcd0e4-b3b3-43d6-ae76-e952881b0f7d', false),
 -- Zara Mohd - Basketball
-((SELECT id FROM athletes WHERE name = 'Zara Mohd'), 'Fasa 1', 2026, '2026-04-12', '99999999-0000-0000-0000-000000000001', false),
-((SELECT id FROM athletes WHERE name = 'Zara Mohd'), 'Fasa 2', 2026, '2026-05-12', '99999999-0000-0000-0000-000000000001', false),
+((SELECT id FROM athletes WHERE name = 'Zara Mohd'), 'Fasa 1', 2026, '2026-04-12', '51bcd0e4-b3b3-43d6-ae76-e952881b0f7d', false),
+((SELECT id FROM athletes WHERE name = 'Zara Mohd'), 'Fasa 2', 2026, '2026-05-12', '51bcd0e4-b3b3-43d6-ae76-e952881b0f7d', false),
 -- Hafiz Azhar - Badminton
-((SELECT id FROM athletes WHERE name = 'Hafiz Azhar'), 'Fasa 1', 2026, '2026-04-15', '99999999-0000-0000-0000-000000000001', false),
-((SELECT id FROM athletes WHERE name = 'Hafiz Azhar'), 'Fasa 2', 2026, '2026-05-15', '99999999-0000-0000-0000-000000000001', false),
+((SELECT id FROM athletes WHERE name = 'Hafiz Azhar'), 'Fasa 1', 2026, '2026-04-15', '51bcd0e4-b3b3-43d6-ae76-e952881b0f7d', false),
+((SELECT id FROM athletes WHERE name = 'Hafiz Azhar'), 'Fasa 2', 2026, '2026-05-15', '51bcd0e4-b3b3-43d6-ae76-e952881b0f7d', false),
 -- Nur Amira - Badminton
-((SELECT id FROM athletes WHERE name = 'Nur Amira'), 'Fasa 1', 2026, '2026-04-18', '99999999-0000-0000-0000-000000000001', false),
-((SELECT id FROM athletes WHERE name = 'Nur Amira'), 'Fasa 2', 2026, '2026-05-18', '99999999-0000-0000-0000-000000000001', false),
+((SELECT id FROM athletes WHERE name = 'Nur Amira'), 'Fasa 1', 2026, '2026-04-18', '51bcd0e4-b3b3-43d6-ae76-e952881b0f7d', false),
+((SELECT id FROM athletes WHERE name = 'Nur Amira'), 'Fasa 2', 2026, '2026-05-18', '51bcd0e4-b3b3-43d6-ae76-e952881b0f7d', false),
 -- Aziz Malik - Martial Arts
-((SELECT id FROM athletes WHERE name = 'Aziz Malik'), 'Fasa 1', 2026, '2026-04-20', '99999999-0000-0000-0000-000000000001', false),
-((SELECT id FROM athletes WHERE name = 'Aziz Malik'), 'Fasa 2', 2026, '2026-05-20', '99999999-0000-0000-0000-000000000001', false),
+((SELECT id FROM athletes WHERE name = 'Aziz Malik'), 'Fasa 1', 2026, '2026-04-20', '51bcd0e4-b3b3-43d6-ae76-e952881b0f7d', false),
+((SELECT id FROM athletes WHERE name = 'Aziz Malik'), 'Fasa 2', 2026, '2026-05-20', '51bcd0e4-b3b3-43d6-ae76-e952881b0f7d', false),
 -- Ricky Santos - Football
-((SELECT id FROM athletes WHERE name = 'Ricky Santos'), 'Fasa 1', 2026, '2026-04-22', '99999999-0000-0000-0000-000000000001', false),
-((SELECT id FROM athletes WHERE name = 'Ricky Santos'), 'Fasa 2', 2026, '2026-05-22', '99999999-0000-0000-0000-000000000001', false),
+((SELECT id FROM athletes WHERE name = 'Ricky Santos'), 'Fasa 1', 2026, '2026-04-22', '51bcd0e4-b3b3-43d6-ae76-e952881b0f7d', false),
+((SELECT id FROM athletes WHERE name = 'Ricky Santos'), 'Fasa 2', 2026, '2026-05-22', '51bcd0e4-b3b3-43d6-ae76-e952881b0f7d', false),
 -- Lina Ahmad - Football
-((SELECT id FROM athletes WHERE name = 'Lina Ahmad'), 'Fasa 1', 2026, '2026-04-25', '99999999-0000-0000-0000-000000000001', false),
-((SELECT id FROM athletes WHERE name = 'Lina Ahmad'), 'Fasa 2', 2026, '2026-05-25', '99999999-0000-0000-0000-000000000001', false),
+((SELECT id FROM athletes WHERE name = 'Lina Ahmad'), 'Fasa 1', 2026, '2026-04-25', '51bcd0e4-b3b3-43d6-ae76-e952881b0f7d', false),
+((SELECT id FROM athletes WHERE name = 'Lina Ahmad'), 'Fasa 2', 2026, '2026-05-25', '51bcd0e4-b3b3-43d6-ae76-e952881b0f7d', false),
 -- Budi Santoso - Volleyball
-((SELECT id FROM athletes WHERE name = 'Budi Santoso'), 'Fasa 1', 2026, '2026-04-28', '99999999-0000-0000-0000-000000000001', false),
-((SELECT id FROM athletes WHERE name = 'Budi Santoso'), 'Fasa 2', 2026, '2026-05-28', '99999999-0000-0000-0000-000000000001', false),
+((SELECT id FROM athletes WHERE name = 'Budi Santoso'), 'Fasa 1', 2026, '2026-04-28', '51bcd0e4-b3b3-43d6-ae76-e952881b0f7d', false),
+((SELECT id FROM athletes WHERE name = 'Budi Santoso'), 'Fasa 2', 2026, '2026-05-28', '51bcd0e4-b3b3-43d6-ae76-e952881b0f7d', false),
 -- Maya Hassan - Volleyball
-((SELECT id FROM athletes WHERE name = 'Maya Hassan'), 'Fasa 1', 2026, '2026-04-30', '99999999-0000-0000-0000-000000000001', false)
+((SELECT id FROM athletes WHERE name = 'Maya Hassan'), 'Fasa 1', 2026, '2026-04-30', '51bcd0e4-b3b3-43d6-ae76-e952881b0f7d', false)
 ON CONFLICT (athlete_id, session, year) DO NOTHING;
 
 -- Insert fitness test results for each athlete
 -- Amir Karim - Fasa 1
 INSERT INTO fitness_test_results (session_id, test_id, result_value, rating, notes) VALUES
 ((SELECT id FROM fitness_test_sessions WHERE athlete_id = (SELECT id FROM athletes WHERE name = 'Amir Karim') AND session = 'Fasa 1' LIMIT 1),
- (SELECT id FROM fitness_test_definitions WHERE test_name = 'Push Up'), 45, 'good', 'Good form throughout'),
+ (SELECT id FROM fitness_test_definitions WHERE test_name = 'Push Up'), 45, 'baik', 'Good form throughout'),
 ((SELECT id FROM fitness_test_sessions WHERE athlete_id = (SELECT id FROM athletes WHERE name = 'Amir Karim') AND session = 'Fasa 1' LIMIT 1),
- (SELECT id FROM fitness_test_definitions WHERE test_name = 'Squat'), 50, 'good', 'Excellent depth and control'),
+ (SELECT id FROM fitness_test_definitions WHERE test_name = 'Squat'), 50, 'baik', 'Excellent depth and control'),
 ((SELECT id FROM fitness_test_sessions WHERE athlete_id = (SELECT id FROM athletes WHERE name = 'Amir Karim') AND session = 'Fasa 1' LIMIT 1),
- (SELECT id FROM fitness_test_definitions WHERE test_name = 'Sit Up'), 52, 'good', 'Strong core'),
+ (SELECT id FROM fitness_test_definitions WHERE test_name = 'Sit Up'), 52, 'baik', 'Strong core'),
 ((SELECT id FROM fitness_test_sessions WHERE athlete_id = (SELECT id FROM athletes WHERE name = 'Amir Karim') AND session = 'Fasa 1' LIMIT 1),
- (SELECT id FROM fitness_test_definitions WHERE test_name = 'Plank'), 75, 'good', 'Steady hold, good form'),
+ (SELECT id FROM fitness_test_definitions WHERE test_name = 'Plank'), 75, 'baik', 'Steady hold, good form'),
 ((SELECT id FROM fitness_test_sessions WHERE athlete_id = (SELECT id FROM athletes WHERE name = 'Amir Karim') AND session = 'Fasa 1' LIMIT 1),
- (SELECT id FROM fitness_test_definitions WHERE test_name = 'Pull Up'), 12, 'good', 'Full range of motion'),
+ (SELECT id FROM fitness_test_definitions WHERE test_name = 'Pull Up'), 12, 'baik', 'Full range of motion'),
 ((SELECT id FROM fitness_test_sessions WHERE athlete_id = (SELECT id FROM athletes WHERE name = 'Amir Karim') AND session = 'Fasa 1' LIMIT 1),
- (SELECT id FROM fitness_test_definitions WHERE test_name = 'Standing Broad Jump'), 235, 'good', 'Powerful jump'),
+ (SELECT id FROM fitness_test_definitions WHERE test_name = 'Standing Broad Jump'), 235, 'baik', 'Powerful jump'),
 ((SELECT id FROM fitness_test_sessions WHERE athlete_id = (SELECT id FROM athletes WHERE name = 'Amir Karim') AND session = 'Fasa 1' LIMIT 1),
- (SELECT id FROM fitness_test_definitions WHERE test_name = 'Counter Movement Jump'), 58, 'good', 'Excellent vertical'),
+ (SELECT id FROM fitness_test_definitions WHERE test_name = 'Counter Movement Jump'), 58, 'baik', 'Excellent vertical'),
 ((SELECT id FROM fitness_test_sessions WHERE athlete_id = (SELECT id FROM athletes WHERE name = 'Amir Karim') AND session = 'Fasa 1' LIMIT 1),
- (SELECT id FROM fitness_test_definitions WHERE test_name = 'Seated Medicine Ball Throw'), 8.5, 'average', 'Good distance'),
+ (SELECT id FROM fitness_test_definitions WHERE test_name = 'Seated Medicine Ball Throw'), 8.5, 'sederhana', 'Good distance'),
 ((SELECT id FROM fitness_test_sessions WHERE athlete_id = (SELECT id FROM athletes WHERE name = 'Amir Karim') AND session = 'Fasa 1' LIMIT 1),
- (SELECT id FROM fitness_test_definitions WHERE test_name = 'Back Strength'), 85, 'good', 'Strong back'),
+ (SELECT id FROM fitness_test_definitions WHERE test_name = 'Back Strength'), 85, 'baik', 'Strong back'),
 ((SELECT id FROM fitness_test_sessions WHERE athlete_id = (SELECT id FROM athletes WHERE name = 'Amir Karim') AND session = 'Fasa 1' LIMIT 1),
- (SELECT id FROM fitness_test_definitions WHERE test_name = 'Handgrip Strength'), 48, 'good', 'Strong grip');
+ (SELECT id FROM fitness_test_definitions WHERE test_name = 'Handgrip Strength'), 48, 'baik', 'Strong grip');
 
 -- Amir Karim - Fasa 2 (improvements)
 INSERT INTO fitness_test_results (session_id, test_id, result_value, rating, notes) VALUES
 ((SELECT id FROM fitness_test_sessions WHERE athlete_id = (SELECT id FROM athletes WHERE name = 'Amir Karim') AND session = 'Fasa 2' LIMIT 1),
- (SELECT id FROM fitness_test_definitions WHERE test_name = 'Push Up'), 48, 'good', 'Improved endurance'),
+ (SELECT id FROM fitness_test_definitions WHERE test_name = 'Push Up'), 48, 'baik', 'Improved endurance'),
 ((SELECT id FROM fitness_test_sessions WHERE athlete_id = (SELECT id FROM athletes WHERE name = 'Amir Karim') AND session = 'Fasa 2' LIMIT 1),
- (SELECT id FROM fitness_test_definitions WHERE test_name = 'Squat'), 55, 'good', 'Better strength'),
+ (SELECT id FROM fitness_test_definitions WHERE test_name = 'Squat'), 55, 'baik', 'Better strength'),
 ((SELECT id FROM fitness_test_sessions WHERE athlete_id = (SELECT id FROM athletes WHERE name = 'Amir Karim') AND session = 'Fasa 2' LIMIT 1),
- (SELECT id FROM fitness_test_definitions WHERE test_name = 'Counter Movement Jump'), 62, 'good', 'Noticeable improvement'),
+ (SELECT id FROM fitness_test_definitions WHERE test_name = 'Counter Movement Jump'), 62, 'baik', 'Noticeable improvement'),
 ((SELECT id FROM fitness_test_sessions WHERE athlete_id = (SELECT id FROM athletes WHERE name = 'Amir Karim') AND session = 'Fasa 2' LIMIT 1),
- (SELECT id FROM fitness_test_definitions WHERE test_name = 'Back Strength'), 88, 'good', 'Stronger');
+ (SELECT id FROM fitness_test_definitions WHERE test_name = 'Back Strength'), 88, 'baik', 'Stronger');
 
 -- Zara Mohd - Fasa 1
 INSERT INTO fitness_test_results (session_id, test_id, result_value, rating, notes) VALUES
 ((SELECT id FROM fitness_test_sessions WHERE athlete_id = (SELECT id FROM athletes WHERE name = 'Zara Mohd') AND session = 'Fasa 1' LIMIT 1),
- (SELECT id FROM fitness_test_definitions WHERE test_name = 'Push Up'), 28, 'average', 'Modified push-ups'),
+ (SELECT id FROM fitness_test_definitions WHERE test_name = 'Push Up'), 28, 'sederhana', 'Modified push-ups'),
 ((SELECT id FROM fitness_test_sessions WHERE athlete_id = (SELECT id FROM athletes WHERE name = 'Zara Mohd') AND session = 'Fasa 1' LIMIT 1),
- (SELECT id FROM fitness_test_definitions WHERE test_name = 'Sit Up'), 45, 'good', 'Good core strength'),
+ (SELECT id FROM fitness_test_definitions WHERE test_name = 'Sit Up'), 45, 'baik', 'Good core strength'),
 ((SELECT id FROM fitness_test_sessions WHERE athlete_id = (SELECT id FROM athletes WHERE name = 'Zara Mohd') AND session = 'Fasa 1' LIMIT 1),
- (SELECT id FROM fitness_test_definitions WHERE test_name = 'Standing Broad Jump'), 195, 'average', 'Good form'),
+ (SELECT id FROM fitness_test_definitions WHERE test_name = 'Standing Broad Jump'), 195, 'sederhana', 'Good form'),
 ((SELECT id FROM fitness_test_sessions WHERE athlete_id = (SELECT id FROM athletes WHERE name = 'Zara Mohd') AND session = 'Fasa 1' LIMIT 1),
- (SELECT id FROM fitness_test_definitions WHERE test_name = 'Counter Movement Jump'), 48, 'average', 'Decent jump height'),
+ (SELECT id FROM fitness_test_definitions WHERE test_name = 'Counter Movement Jump'), 48, 'sederhana', 'Decent jump height'),
 ((SELECT id FROM fitness_test_sessions WHERE athlete_id = (SELECT id FROM athletes WHERE name = 'Zara Mohd') AND session = 'Fasa 1' LIMIT 1),
- (SELECT id FROM fitness_test_definitions WHERE test_name = 'Handgrip Strength'), 38, 'average', 'Fair grip');
+ (SELECT id FROM fitness_test_definitions WHERE test_name = 'Handgrip Strength'), 38, 'sederhana', 'Fair grip');
 
 -- Hafiz Azhar - Fasa 1
 INSERT INTO fitness_test_results (session_id, test_id, result_value, rating, notes) VALUES
 ((SELECT id FROM fitness_test_sessions WHERE athlete_id = (SELECT id FROM athletes WHERE name = 'Hafiz Azhar') AND session = 'Fasa 1' LIMIT 1),
- (SELECT id FROM fitness_test_definitions WHERE test_name = 'Push Up'), 42, 'good', 'Excellent form'),
+ (SELECT id FROM fitness_test_definitions WHERE test_name = 'Push Up'), 42, 'baik', 'Excellent form'),
 ((SELECT id FROM fitness_test_sessions WHERE athlete_id = (SELECT id FROM athletes WHERE name = 'Hafiz Azhar') AND session = 'Fasa 1' LIMIT 1),
- (SELECT id FROM fitness_test_definitions WHERE test_name = 'T-Test'), 9.2, 'good', 'Fast agility'),
+ (SELECT id FROM fitness_test_definitions WHERE test_name = 'T-Test'), 9.2, 'baik', 'Fast agility'),
 ((SELECT id FROM fitness_test_sessions WHERE athlete_id = (SELECT id FROM athletes WHERE name = 'Hafiz Azhar') AND session = 'Fasa 1' LIMIT 1),
- (SELECT id FROM fitness_test_definitions WHERE test_name = 'Hexagon Agility'), 10.8, 'good', 'Quick footwork'),
+ (SELECT id FROM fitness_test_definitions WHERE test_name = 'Hexagon Agility'), 10.8, 'baik', 'Quick footwork'),
 ((SELECT id FROM fitness_test_sessions WHERE athlete_id = (SELECT id FROM athletes WHERE name = 'Hafiz Azhar') AND session = 'Fasa 1' LIMIT 1),
- (SELECT id FROM fitness_test_definitions WHERE test_name = '20m Sprint'), 2.65, 'good', 'Good speed'),
+ (SELECT id FROM fitness_test_definitions WHERE test_name = '20m Sprint'), 2.65, 'baik', 'Good speed'),
 ((SELECT id FROM fitness_test_sessions WHERE athlete_id = (SELECT id FROM athletes WHERE name = 'Hafiz Azhar') AND session = 'Fasa 1' LIMIT 1),
- (SELECT id FROM fitness_test_definitions WHERE test_name = 'Sit and Reach'), 32, 'good', 'Good flexibility');
+ (SELECT id FROM fitness_test_definitions WHERE test_name = 'Sit and Reach'), 32, 'baik', 'Good flexibility');
 
 -- Aziz Malik - Fasa 1 (Martial Arts)
 INSERT INTO fitness_test_results (session_id, test_id, result_value, rating, notes) VALUES
 ((SELECT id FROM fitness_test_sessions WHERE athlete_id = (SELECT id FROM athletes WHERE name = 'Aziz Malik') AND session = 'Fasa 1' LIMIT 1),
- (SELECT id FROM fitness_test_definitions WHERE test_name = 'Push Up'), 48, 'good', 'Explosive power'),
+ (SELECT id FROM fitness_test_definitions WHERE test_name = 'Push Up'), 48, 'baik', 'Explosive power'),
 ((SELECT id FROM fitness_test_sessions WHERE athlete_id = (SELECT id FROM athletes WHERE name = 'Aziz Malik') AND session = 'Fasa 1' LIMIT 1),
- (SELECT id FROM fitness_test_definitions WHERE test_name = 'Squat'), 58, 'good', 'Great leg strength'),
+ (SELECT id FROM fitness_test_definitions WHERE test_name = 'Squat'), 58, 'baik', 'Great leg strength'),
 ((SELECT id FROM fitness_test_sessions WHERE athlete_id = (SELECT id FROM athletes WHERE name = 'Aziz Malik') AND session = 'Fasa 1' LIMIT 1),
- (SELECT id FROM fitness_test_definitions WHERE test_name = 'Back Strength'), 92, 'good', 'Excellent strength'),
+ (SELECT id FROM fitness_test_definitions WHERE test_name = 'Back Strength'), 92, 'baik', 'Excellent strength'),
 ((SELECT id FROM fitness_test_sessions WHERE athlete_id = (SELECT id FROM athletes WHERE name = 'Aziz Malik') AND session = 'Fasa 1' LIMIT 1),
- (SELECT id FROM fitness_test_definitions WHERE test_name = '20m Sprint'), 2.55, 'good', 'Very fast'),
+ (SELECT id FROM fitness_test_definitions WHERE test_name = '20m Sprint'), 2.55, 'baik', 'Very fast'),
 ((SELECT id FROM fitness_test_sessions WHERE athlete_id = (SELECT id FROM athletes WHERE name = 'Aziz Malik') AND session = 'Fasa 1' LIMIT 1),
- (SELECT id FROM fitness_test_definitions WHERE test_name = 'Handgrip Strength'), 52, 'good', 'Powerful grip');
+ (SELECT id FROM fitness_test_definitions WHERE test_name = 'Handgrip Strength'), 52, 'baik', 'Powerful grip');
 
 -- Ricky Santos - Fasa 1 (Football)
 INSERT INTO fitness_test_results (session_id, test_id, result_value, rating, notes) VALUES
 ((SELECT id FROM fitness_test_sessions WHERE athlete_id = (SELECT id FROM athletes WHERE name = 'Ricky Santos') AND session = 'Fasa 1' LIMIT 1),
- (SELECT id FROM fitness_test_definitions WHERE test_name = '20m Sprint'), 2.8, 'good', 'Good speed for forwards'),
+ (SELECT id FROM fitness_test_definitions WHERE test_name = '20m Sprint'), 2.8, 'baik', 'Good speed for forwards'),
 ((SELECT id FROM fitness_test_sessions WHERE athlete_id = (SELECT id FROM athletes WHERE name = 'Ricky Santos') AND session = 'Fasa 1' LIMIT 1),
- (SELECT id FROM fitness_test_definitions WHERE test_name = '40m Sprint'), 5.2, 'good', 'Sustained speed'),
+ (SELECT id FROM fitness_test_definitions WHERE test_name = '40m Sprint'), 5.2, 'baik', 'Sustained speed'),
 ((SELECT id FROM fitness_test_sessions WHERE athlete_id = (SELECT id FROM athletes WHERE name = 'Ricky Santos') AND session = 'Fasa 1' LIMIT 1),
- (SELECT id FROM fitness_test_definitions WHERE test_name = 'Hexagon Agility'), 11.5, 'average', 'Good for football'),
+ (SELECT id FROM fitness_test_definitions WHERE test_name = 'Hexagon Agility'), 11.5, 'sederhana', 'Good for football'),
 ((SELECT id FROM fitness_test_sessions WHERE athlete_id = (SELECT id FROM athletes WHERE name = 'Ricky Santos') AND session = 'Fasa 1' LIMIT 1),
- (SELECT id FROM fitness_test_definitions WHERE test_name = 'Standing Broad Jump'), 245, 'good', 'Explosive power'),
+ (SELECT id FROM fitness_test_definitions WHERE test_name = 'Standing Broad Jump'), 245, 'baik', 'Explosive power'),
 ((SELECT id FROM fitness_test_sessions WHERE athlete_id = (SELECT id FROM athletes WHERE name = 'Ricky Santos') AND session = 'Fasa 1' LIMIT 1),
- (SELECT id FROM fitness_test_definitions WHERE test_name = 'Bleep Test'), 2400, 'good', 'Good cardiovascular fitness');
+ (SELECT id FROM fitness_test_definitions WHERE test_name = 'Bleep Test'), 2400, 'baik', 'Good cardiovascular fitness');
 
 -- Budi Santoso - Fasa 1 (Volleyball)
 INSERT INTO fitness_test_results (session_id, test_id, result_value, rating, notes) VALUES
 ((SELECT id FROM fitness_test_sessions WHERE athlete_id = (SELECT id FROM athletes WHERE name = 'Budi Santoso') AND session = 'Fasa 1' LIMIT 1),
- (SELECT id FROM fitness_test_definitions WHERE test_name = 'Counter Movement Jump'), 68, 'good', 'Excellent vertical for volleyball'),
+ (SELECT id FROM fitness_test_definitions WHERE test_name = 'Counter Movement Jump'), 68, 'baik', 'Excellent vertical for volleyball'),
 ((SELECT id FROM fitness_test_sessions WHERE athlete_id = (SELECT id FROM athletes WHERE name = 'Budi Santoso') AND session = 'Fasa 1' LIMIT 1),
- (SELECT id FROM fitness_test_definitions WHERE test_name = 'Standing Broad Jump'), 260, 'good', 'Powerful'),
+ (SELECT id FROM fitness_test_definitions WHERE test_name = 'Standing Broad Jump'), 260, 'baik', 'Powerful'),
 ((SELECT id FROM fitness_test_sessions WHERE athlete_id = (SELECT id FROM athletes WHERE name = 'Budi Santoso') AND session = 'Fasa 1' LIMIT 1),
- (SELECT id FROM fitness_test_definitions WHERE test_name = 'Back Strength'), 95, 'good', 'Very strong'),
+ (SELECT id FROM fitness_test_definitions WHERE test_name = 'Back Strength'), 95, 'baik', 'Very strong'),
 ((SELECT id FROM fitness_test_sessions WHERE athlete_id = (SELECT id FROM athletes WHERE name = 'Budi Santoso') AND session = 'Fasa 1' LIMIT 1),
- (SELECT id FROM fitness_test_definitions WHERE test_name = '20m Sprint'), 2.75, 'good', 'Quick movements'),
+ (SELECT id FROM fitness_test_definitions WHERE test_name = '20m Sprint'), 2.75, 'baik', 'Quick movements'),
 ((SELECT id FROM fitness_test_sessions WHERE athlete_id = (SELECT id FROM athletes WHERE name = 'Budi Santoso') AND session = 'Fasa 1' LIMIT 1),
- (SELECT id FROM fitness_test_definitions WHERE test_name = 'Bleep Test'), 2650, 'good', 'Excellent endurance')
+ (SELECT id FROM fitness_test_definitions WHERE test_name = 'Bleep Test'), 2650, 'baik', 'Excellent endurance')
 ON CONFLICT DO NOTHING;
 
 
@@ -300,23 +300,24 @@ ON CONFLICT DO NOTHING;
 
 
 -- =============================================================
--- 10. INSERT SUPPLEMENT REQUESTS
+-- 10. INSERT SUPPLEMENT REQUESTS (Sport-based)
 -- =============================================================
-INSERT INTO supplement_requests (athlete_id, supplement_id, quantity, request_date, status, requested_by, reviewed_by, sport, approved_quantity) VALUES
--- Amir Karim requests Whey Protein
-((SELECT id FROM athletes WHERE name = 'Amir Karim'), (SELECT id FROM supplements WHERE name = 'Whey Protein Powder'), 5, '2026-05-01', 'approved', NULL, NULL, 'Basketball', 5),
--- Zara Mohd requests BCAA
-((SELECT id FROM athletes WHERE name = 'Zara Mohd'), (SELECT id FROM supplements WHERE name = 'BCAA Amino Acids'), 2, '2026-05-02', 'approved', NULL, NULL, 'Basketball', 2),
--- Hafiz Azhar requests Electrolyte
-((SELECT id FROM athletes WHERE name = 'Hafiz Azhar'), (SELECT id FROM supplements WHERE name = 'Electrolyte Drink Mix'), 3, '2026-05-03', 'pending', NULL, NULL, 'Badminton', NULL),
--- Aziz Malik requests Creatine
-((SELECT id FROM athletes WHERE name = 'Aziz Malik'), (SELECT id FROM supplements WHERE name = 'Creatine Monohydrate'), 2, '2026-05-04', 'approved', NULL, NULL, 'Martial Arts', 2),
--- Budi Santoso requests Whey Protein
-((SELECT id FROM athletes WHERE name = 'Budi Santoso'), (SELECT id FROM supplements WHERE name = 'Whey Protein Powder'), 8, '2026-05-05', 'approved', NULL, NULL, 'Volleyball', 8),
--- Ricky Santos requests Vitamin D
-((SELECT id FROM athletes WHERE name = 'Ricky Santos'), (SELECT id FROM supplements WHERE name = 'Vitamin D3'), 30, '2026-05-06', 'pending', NULL, NULL, 'Football', NULL),
--- Lina Ahmad requests Fish Oil
-((SELECT id FROM athletes WHERE name = 'Lina Ahmad'), (SELECT id FROM supplements WHERE name = 'Fish Oil Omega-3'), 1, '2026-05-01', 'pending', NULL, NULL, 'Football', NULL)
+INSERT INTO supplement_requests (sport, supplement_id, quantity, request_date, status, requested_by, reviewed_by) VALUES
+-- Basketball requests
+('Basketball', (SELECT id FROM supplements WHERE name = 'Whey Protein Powder' LIMIT 1), 15, '2026-05-01', 'approved', NULL, NULL),
+('Basketball', (SELECT id FROM supplements WHERE name = 'BCAA Amino Acids' LIMIT 1), 5, '2026-05-02', 'approved', NULL, NULL),
+-- Badminton requests
+('Badminton', (SELECT id FROM supplements WHERE name = 'Electrolyte Drink Mix' LIMIT 1), 8, '2026-05-03', 'pending', NULL, NULL),
+('Badminton', (SELECT id FROM supplements WHERE name = 'Vitamin D3' LIMIT 1), 50, '2026-05-04', 'approved', NULL, NULL),
+-- Martial Arts requests
+('Martial Arts', (SELECT id FROM supplements WHERE name = 'Creatine Monohydrate' LIMIT 1), 5, '2026-05-05', 'approved', NULL, NULL),
+('Martial Arts', (SELECT id FROM supplements WHERE name = 'Fish Oil Omega-3' LIMIT 1), 10, '2026-05-06', 'pending', NULL, NULL),
+-- Football requests
+('Football', (SELECT id FROM supplements WHERE name = 'Whey Protein Powder' LIMIT 1), 20, '2026-05-07', 'pending', NULL, NULL),
+('Football', (SELECT id FROM supplements WHERE name = 'Magnesium Supplement' LIMIT 1), 100, '2026-05-08', 'approved', NULL, NULL),
+-- Volleyball requests
+('Volleyball', (SELECT id FROM supplements WHERE name = 'Whey Protein Powder' LIMIT 1), 25, '2026-05-09', 'approved', NULL, NULL),
+('Volleyball', (SELECT id FROM supplements WHERE name = 'Multivitamin' LIMIT 1), 75, '2026-05-10', 'pending', NULL, NULL)
 ON CONFLICT DO NOTHING;
 
 

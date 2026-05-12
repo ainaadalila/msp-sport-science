@@ -13,7 +13,7 @@ interface Supplement {
 
 interface SupplementRequest {
   id: string
-  sport: string | null
+  sport: string
   supplement_id: string
   quantity: number
   request_date: string
@@ -102,7 +102,7 @@ export default function SupplementPage() {
     const [supRes, reqRes, athRes] = await Promise.all([
       supabase.from('supplements').select('*').order('name'),
       supabase.from('supplement_requests')
-        .select('*, supplement:supplements(name, unit)')
+        .select('*, supplement:supplement_id(name, unit)')
         .order('created_at', { ascending: false }),
       supabase.from('athletes').select('id, name, sport').order('name'),
     ])
@@ -345,7 +345,7 @@ export default function SupplementPage() {
                   {filteredReqs.map(r => (
                     <tr key={r.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
                       <td className="px-5 py-3 font-mono text-[12px] text-[#444] whitespace-nowrap">{fmtDate(r.request_date)}</td>
-                      <td className="px-5 py-3 font-medium text-[#111]">{r.sport ?? '—'}</td>
+                      <td className="px-5 py-3 font-medium text-[#111]">{r.sport}</td>
                       <td className="px-5 py-3 text-[#444]">{r.supplement?.name ?? '—'}</td>
                       <td className="px-5 py-3 text-[#444]">{r.quantity} {r.supplement?.unit ?? ''}</td>
                       <td className="px-5 py-3">
