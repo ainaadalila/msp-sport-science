@@ -505,6 +505,75 @@ export default function FitnessTestingPage() {
 
                 return (
                   <>
+                    {/* Comparison Table - First */}
+                    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                      <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
+                        <p className="text-sm font-semibold text-[#111]">Perbandingan Semua Ujian</p>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-gray-200 bg-gray-50">
+                              <th className="text-left px-4 py-2 font-semibold text-[#111]">UJIAN</th>
+                              <th className="text-right px-4 py-2 font-semibold text-[#888] text-xs">SESI LEPAS</th>
+                              <th className="text-right px-4 py-2 font-semibold text-[#888] text-xs">SESI TERKINI</th>
+                              <th className="text-right px-4 py-2 font-semibold text-[#888] text-xs">PERUBAHAN</th>
+                              <th className="text-right px-4 py-2 font-semibold text-[#888] text-xs">UNIT</th>
+                              <th className="text-right px-4 py-2 font-semibold text-[#888] text-xs">TAHAP</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {testsArray.slice(0, 10).map(test => {
+                              const history = sessionsWithResults
+                                .map(s => {
+                                  const result = s.results.find(r => r.test_id === test.test_id)
+                                  return result ? { session: s.session, result } : null
+                                })
+                                .filter((x): x is { session: FitnessTestSession; result: SessionResult } => x !== null)
+                                .reverse()
+
+                              const latest = history[history.length - 1]?.result
+                              const previous = history[history.length - 2]?.result
+                              const change = latest && previous ? latest.result_value - previous.result_value : null
+
+                              return (
+                                <tr key={test.test_id} className="border-b border-gray-100 hover:bg-gray-50 transition">
+                                  <td className="px-4 py-3 font-semibold text-[#111]">{test.test_name}</td>
+                                  <td className="px-4 py-3 text-right text-[#888]">{previous?.result_value || '-'}</td>
+                                  <td className="px-4 py-3 text-right font-semibold text-[#111]">{latest?.result_value || '-'}</td>
+                                  <td className="px-4 py-3 text-right">
+                                    {change !== null ? (
+                                      <span className={change > 0 ? 'text-green-600' : change < 0 ? 'text-red-600' : 'text-gray-600'}>
+                                        {change > 0 ? '↑' : change < 0 ? '↓' : '—'} {Math.abs(change).toFixed(2)}
+                                      </span>
+                                    ) : (
+                                      '-'
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-3 text-right text-[#888]">{test.unit}</td>
+                                  <td className="px-4 py-3 text-right">
+                                    {latest?.rating && (
+                                      <span
+                                        className={`inline-block text-xs font-bold px-2 py-1 rounded-full ${
+                                          latest.rating === 'baik'
+                                            ? 'bg-green-100 text-green-700'
+                                            : latest.rating === 'sederhana'
+                                              ? 'bg-yellow-100 text-yellow-700'
+                                              : 'bg-red-100 text-red-700'
+                                        }`}
+                                      >
+                                        {latest.rating === 'baik' ? 'BAIK' : latest.rating === 'sederhana' ? 'SEDERHANA' : 'LEMAH'}
+                                      </span>
+                                    )}
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
                     {/* Test Selector */}
                     <div className="bg-white rounded-xl border border-gray-200 p-4">
                       <label className="block text-[10px] font-bold uppercase tracking-widest text-[#888] mb-2">Pilih Ujian</label>
@@ -651,75 +720,6 @@ export default function FitnessTestingPage() {
                         </div>
                       </>
                     )}
-
-                    {/* Comparison Table */}
-                    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                      <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
-                        <p className="text-sm font-semibold text-[#111]">Perbandingan Semua Ujian</p>
-                      </div>
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="border-b border-gray-200 bg-gray-50">
-                              <th className="text-left px-4 py-2 font-semibold text-[#111]">UJIAN</th>
-                              <th className="text-right px-4 py-2 font-semibold text-[#888] text-xs">SESI LEPAS</th>
-                              <th className="text-right px-4 py-2 font-semibold text-[#888] text-xs">SESI TERKINI</th>
-                              <th className="text-right px-4 py-2 font-semibold text-[#888] text-xs">PERUBAHAN</th>
-                              <th className="text-right px-4 py-2 font-semibold text-[#888] text-xs">UNIT</th>
-                              <th className="text-right px-4 py-2 font-semibold text-[#888] text-xs">TAHAP</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {testsArray.slice(0, 10).map(test => {
-                              const history = sessionsWithResults
-                                .map(s => {
-                                  const result = s.results.find(r => r.test_id === test.test_id)
-                                  return result ? { session: s.session, result } : null
-                                })
-                                .filter((x): x is { session: FitnessTestSession; result: SessionResult } => x !== null)
-                                .reverse()
-
-                              const latest = history[history.length - 1]?.result
-                              const previous = history[history.length - 2]?.result
-                              const change = latest && previous ? latest.result_value - previous.result_value : null
-
-                              return (
-                                <tr key={test.test_id} className="border-b border-gray-100 hover:bg-gray-50 transition">
-                                  <td className="px-4 py-3 font-semibold text-[#111]">{test.test_name}</td>
-                                  <td className="px-4 py-3 text-right text-[#888]">{previous?.result_value || '-'}</td>
-                                  <td className="px-4 py-3 text-right font-semibold text-[#111]">{latest?.result_value || '-'}</td>
-                                  <td className="px-4 py-3 text-right">
-                                    {change !== null ? (
-                                      <span className={change > 0 ? 'text-green-600' : change < 0 ? 'text-red-600' : 'text-gray-600'}>
-                                        {change > 0 ? '↑' : change < 0 ? '↓' : '—'} {Math.abs(change).toFixed(2)}
-                                      </span>
-                                    ) : (
-                                      '-'
-                                    )}
-                                  </td>
-                                  <td className="px-4 py-3 text-right text-[#888]">{test.unit}</td>
-                                  <td className="px-4 py-3 text-right">
-                                    {latest?.rating && (
-                                      <span
-                                        className={`inline-block text-xs font-bold px-2 py-1 rounded-full ${
-                                          latest.rating === 'baik'
-                                            ? 'bg-green-100 text-green-700'
-                                            : latest.rating === 'sederhana'
-                                              ? 'bg-yellow-100 text-yellow-700'
-                                              : 'bg-red-100 text-red-700'
-                                        }`}
-                                      >
-                                        {latest.rating === 'baik' ? 'BAIK' : latest.rating === 'sederhana' ? 'SEDERHANA' : 'LEMAH'}
-                                      </span>
-                                    )}
-                                  </td>
-                                </tr>
-                              )
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
 
                     {/* Record New Test Button */}
                     <button
