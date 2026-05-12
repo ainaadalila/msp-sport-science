@@ -10,7 +10,7 @@ interface NavItem {
 
 const expandableGroups: Record<string, NavItem[]> = {
   kecergasan: [
-    { label: 'Kekuatan & Kondisioning', path: '/fitness/strength' },
+    { label: 'Strength & Conditioning', path: '/fitness/strength' },
     { label: 'Ujian Kecergasan', path: '/fitness/testing' },
     { label: 'Konfigurasi Ujian', path: '/fitness/config' },
   ],

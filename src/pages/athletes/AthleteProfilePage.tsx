@@ -261,7 +261,7 @@ export default function AthleteProfilePage() {
 
         {/* S&C Attendance */}
         <SummaryCard
-          title="Kekuatan & Kondisioning"
+          title="Strength & Conditioning"
           date={scRecords[0]?.session_date ? fmtDate(scRecords[0].session_date) : null}
           empty={scRecords.length === 0}
           linkTo="/fitness/strength"
