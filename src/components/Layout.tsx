@@ -7,7 +7,7 @@ import { useAuth } from '../context/AuthContext'
 const routeMeta: Record<string, { title: string; parent?: string }> = {
   '/':                            { title: 'Dashboard' },
   '/athletes':                    { title: 'Profil Atlet', parent: 'Dashboard' },
-  '/fitness/strength':            { title: 'Kekuatan & Kondisioning', parent: 'Sains Sukan' },
+  '/fitness/strength':            { title: 'Strength & Conditioning', parent: 'Sains Sukan' },
   '/fitness/testing':             { title: 'Ujian Kecergasan', parent: 'Sains Sukan' },
   '/fitness/config':              { title: 'Konfigurasi Ujian', parent: 'Sains Sukan' },
   '/performance/inbody':          { title: 'Penilaian InBody', parent: 'Sains Sukan' },

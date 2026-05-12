@@ -26,16 +26,17 @@ interface InBodyRecord {
 }
 
 interface FitnessTest {
+  id: string
   session: string
   year: number
-  sprint_20m: number | null
-  bleep_test: number | null
-  yoyo_test: number | null
-  push_up: number | null
-  sit_up: number | null
-  standing_broad_jump: number | null
-  counter_movement_jump: number | null
-  handgrip: number | null
+  recorded_date: string
+}
+
+interface FitnessTestResult {
+  test_id: string
+  result_value: number
+  rating: 'baik' | 'sederhana' | 'lemah' | 'tidak_dinilai'
+  test_name: string
 }
 
 interface SCRecord {
@@ -53,7 +54,7 @@ interface SupRequest {
   id: string
   status: string
   quantity: number
-  supplement?: { name: string; unit: string }[]
+  supplements?: Array<{ name: string; unit: string }>
 }
 
 const statusLabel: Record<string, string> = { active: 'Aktif', rest: 'Rehat', injured: 'Cedera' }
@@ -106,6 +107,7 @@ export default function AthleteProfilePage() {
   const [athlete, setAthlete] = useState<Athlete | null>(null)
   const [inbody, setInbody] = useState<InBodyRecord | null>(null)
   const [fitness, setFitness] = useState<FitnessTest | null>(null)
+  const [fitnessResults, setFitnessResults] = useState<FitnessTestResult[]>([])
   const [scRecords, setScRecords] = useState<SCRecord[]>([])
   const [physio, setPhysio] = useState<PhysioSlot | null>(null)
   const [supRequests, setSupRequests] = useState<SupRequest[]>([])
@@ -117,12 +119,12 @@ export default function AthleteProfilePage() {
 
   async function fetchAll(athleteId: string) {
     setLoading(true)
-    const [athRes, inbodyRes, fitnessRes, scRes, physioRes] = await Promise.all([
+    const [athRes, inbodyRes, fitnessSessionRes, scRes, physioRes] = await Promise.all([
       supabase.from('athletes').select('*').eq('id', athleteId).single(),
       supabase.from('inbody_records').select('recorded_date, weight, smm, bmi, fat_pct, inbody_score')
         .eq('athlete_id', athleteId).order('recorded_date', { ascending: false }).limit(1).single(),
-      supabase.from('fitness_tests').select('session, year, sprint_20m, bleep_test, yoyo_test, push_up, sit_up, standing_broad_jump, counter_movement_jump, handgrip')
-        .eq('athlete_id', athleteId).order('year', { ascending: false }).order('session', { ascending: false }).limit(1).single(),
+      supabase.from('fitness_test_sessions').select('id, session, year, recorded_date')
+        .eq('athlete_id', athleteId).order('recorded_date', { ascending: false }).limit(1).single(),
       supabase.from('strength_conditioning').select('session_date, attendance')
         .eq('athlete_id', athleteId).order('session_date', { ascending: false }).limit(20),
       supabase.from('physio_slots').select('slot_date, session_type, injury_type')
@@ -132,19 +134,50 @@ export default function AthleteProfilePage() {
     if (!athRes.data) { navigate('/athletes', { replace: true }); return }
     setAthlete(athRes.data)
     setInbody(inbodyRes.data ?? null)
-    setFitness(fitnessRes.data ?? null)
+    setFitness(fitnessSessionRes.data ?? null)
     setScRecords(scRes.data ?? [])
     setPhysio(physioRes.data ?? null)
 
+    // Fetch fitness test results for the latest session
+    if (fitnessSessionRes.data?.id) {
+      const resultsRes = await supabase
+        .from('fitness_test_results')
+        .select('test_id, result_value, rating, test:test_id(test_name)')
+        .eq('session_id', fitnessSessionRes.data.id)
+        .order('test_id')
+      const results = (resultsRes.data ?? []).map(r => ({
+        test_id: r.test_id,
+        result_value: r.result_value,
+        rating: r.rating,
+        test_name: (r.test as any)?.test_name || 'Test',
+      })) as FitnessTestResult[]
+      setFitnessResults(results)
+    }
+
     // Supplement requests for this athlete's sport
     if (athRes.data.sport) {
-      const { data } = await supabase
+      const { data: reqData } = await supabase
         .from('supplement_requests')
-        .select('id, status, quantity, supplement:supplements(name, unit)')
+        .select('id, status, quantity, supplement_id')
         .eq('sport', athRes.data.sport)
+        .eq('status', 'approved')
         .order('created_at', { ascending: false })
         .limit(5)
-      setSupRequests(data ?? [])
+
+      if (reqData && reqData.length > 0) {
+        const supIds = reqData.map(r => r.supplement_id)
+        const { data: supData } = await supabase
+          .from('supplements')
+          .select('id, name, unit')
+          .in('id', supIds)
+
+        const supMap = new Map(supData?.map(s => [s.id, s]) ?? [])
+        const enriched = reqData.map(r => ({
+          ...r,
+          supplements: [supMap.get(r.supplement_id)].filter(Boolean)
+        }))
+        setSupRequests(enriched as SupRequest[])
+      }
     }
 
     setLoading(false)
@@ -243,17 +276,10 @@ export default function AthleteProfilePage() {
           empty={!fitness}
           linkTo="/fitness/testing"
         >
-          {fitness && (
+          {fitness && fitnessResults.length > 0 && (
             <div className="grid grid-cols-2 gap-3 mt-3">
-              {[
-                { label: 'Sprint 20m', value: fitness.sprint_20m != null ? `${fitness.sprint_20m}s` : '—' },
-                { label: 'Bleep Test', value: fitness.bleep_test != null ? `${fitness.bleep_test}` : '—' },
-                { label: 'Push Up', value: fitness.push_up != null ? `${fitness.push_up}` : '—' },
-                { label: 'Sit Up', value: fitness.sit_up != null ? `${fitness.sit_up}` : '—' },
-                { label: 'SBJ', value: fitness.standing_broad_jump != null ? `${fitness.standing_broad_jump} cm` : '—' },
-                { label: 'CMJ', value: fitness.counter_movement_jump != null ? `${fitness.counter_movement_jump} cm` : '—' },
-              ].map(f => (
-                <Stat key={f.label} label={f.label} value={f.value} />
+              {fitnessResults.slice(0, 6).map(result => (
+                <Stat key={result.test_id} label={result.test_name} value={`${result.result_value}`} />
               ))}
             </div>
           )}
@@ -261,7 +287,7 @@ export default function AthleteProfilePage() {
 
         {/* S&C Attendance */}
         <SummaryCard
-          title="Kekuatan & Kondisioning"
+          title="Strength & Conditioning"
           date={scRecords[0]?.session_date ? fmtDate(scRecords[0].session_date) : null}
           empty={scRecords.length === 0}
           linkTo="/fitness/strength"
@@ -322,7 +348,7 @@ export default function AthleteProfilePage() {
           <div className="space-y-1.5">
             {supRequests.map(r => (
               <div key={r.id} className="flex items-center justify-between text-sm">
-                <span className="text-[#444]">{r.supplement?.[0]?.name ?? '—'} <span className="text-[#888]">× {r.quantity} {r.supplement?.[0]?.unit ?? ''}</span></span>
+                <span className="text-[#444]">{r.supplements?.[0]?.name ?? '—'} <span className="text-[#888]">× {r.quantity} {r.supplements?.[0]?.unit ?? ''}</span></span>
                 <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
                   r.status === 'approved' ? 'bg-green-50 text-[#3A9E6A] border border-green-200'
                   : r.status === 'rejected' ? 'bg-red-50 text-[#D44040] border border-red-200'
