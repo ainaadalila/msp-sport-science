@@ -144,6 +144,7 @@ function computeStats(
 }
 
 export default function ReportsPage() {
+  const readOnly = isReadOnlyMode()
   const [active, setActive] = useState<ReportType>('fitness')
   const [loading, setLoading] = useState(false)
   const [data, setData] = useState<Record<string, unknown>[]>([])
@@ -349,6 +350,7 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-4">
+      <ReadOnlyBanner />
       <p className="text-[12px] text-[#888]">Jana dan eksport laporan mengikut modul</p>
 
       <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-4">

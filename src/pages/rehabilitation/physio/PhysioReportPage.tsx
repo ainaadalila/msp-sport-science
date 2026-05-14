@@ -26,6 +26,7 @@ function fmtDateShort(d: string) {
 }
 
 export default function PhysioReportPage() {
+  const readOnly = isReadOnlyMode()
   const currentDate = new Date()
   const currentYear = currentDate.getFullYear()
   const currentMonth = currentDate.getMonth() + 1
@@ -137,6 +138,7 @@ export default function PhysioReportPage() {
 
   return (
     <div className="space-y-4">
+      <ReadOnlyBanner />
 
       {/* Header */}
       <div className="flex items-center justify-between">
