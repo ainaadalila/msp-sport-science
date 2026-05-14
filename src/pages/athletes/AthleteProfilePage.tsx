@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { ReadOnlyBanner } from '../../components/ReadOnlyBanner'
+import { isReadOnlyMode } from '../../lib/readOnlyMode'
 
 interface Athlete {
   id: string
@@ -102,6 +104,7 @@ function Avatar({ name, url, size }: { name: string; url: string | null; size: n
 export default function AthleteProfilePage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const readOnly = isReadOnlyMode()
 
   const [athlete, setAthlete] = useState<Athlete | null>(null)
   const [inbody, setInbody] = useState<InBodyRecord | null>(null)
@@ -166,6 +169,7 @@ export default function AthleteProfilePage() {
 
   return (
     <div className="space-y-5 max-w-4xl">
+      <ReadOnlyBanner />
 
       {/* Back */}
       <button onClick={() => navigate('/athletes')} className="text-sm text-[#888] hover:text-[#F56A00] transition flex items-center gap-1">
