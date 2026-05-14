@@ -169,6 +169,7 @@ export default function AthletesPage() {
       weight: a.weight,
       height: a.height,
       photo_url: a.photo_url,
+      is_elite: a.is_elite,
     })
     setError(null)
     setModalOpen(true)
@@ -204,6 +205,7 @@ export default function AthletesPage() {
       weight: form.weight,
       height: form.height,
       photo_url: form.photo_url,
+      is_elite: form.is_elite,
     }
 
     if (editing) {
