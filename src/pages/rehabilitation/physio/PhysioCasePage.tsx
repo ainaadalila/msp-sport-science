@@ -222,12 +222,13 @@ export default function PhysioCasePage() {
 
   return (
     <div className="space-y-4">
+      <ReadOnlyBanner />
 
       {/* Header */}
       <div className="flex items-center justify-between">
         <p className="text-[12px] text-[#888]">{cases.length} kes</p>
         {canEdit && (
-          <button onClick={() => { setCreateModal(true); setCreateFormSport('') }} className="bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
+          <button onClick={() => { setCreateModal(true); setCreateFormSport('') }} disabled={readOnly} className="bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
             + Kes Baharu
           </button>
         )}
