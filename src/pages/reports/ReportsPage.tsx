@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { ReportSkeleton } from '../../components/Skeleton'
+import { ReadOnlyBanner } from '../../components/ReadOnlyBanner'
+import { isReadOnlyMode } from '../../lib/readOnlyMode'
 
 type ReportType = 'fitness' | 'inbody' | 'attendance' | 'supplement' | 'physio'
 
