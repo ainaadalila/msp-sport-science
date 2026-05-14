@@ -17,6 +17,7 @@ interface Athlete {
   weight: number | null
   height: number | null
   photo_url: string | null
+  is_elite: boolean
   created_at: string
 }
 
@@ -31,6 +32,7 @@ interface FormState {
   weight: number | null
   height: number | null
   photo_url: string | null
+  is_elite: boolean
 }
 
 const emptyForm: FormState = {
@@ -44,6 +46,7 @@ const emptyForm: FormState = {
   weight: null,
   height: null,
   photo_url: null,
+  is_elite: false,
 }
 
 const statusConfig: Record<string, { label: string; cls: string; icon: React.ReactNode }> = {
@@ -125,6 +128,7 @@ export default function AthletesPage() {
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [filterSport, setFilterSport] = useState('')
+  const [filterElite, setFilterElite] = useState(false)
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Athlete | null>(null)
@@ -233,7 +237,8 @@ export default function AthletesPage() {
     const matchSearch = !q || a.name.toLowerCase().includes(q) || a.ic_number.includes(q) || a.sport.toLowerCase().includes(q)
     const matchStatus = !filterStatus || a.status === filterStatus
     const matchSport = !filterSport || a.sport === filterSport
-    return matchSearch && matchStatus && matchSport
+    const matchElite = !filterElite || a.is_elite
+    return matchSearch && matchStatus && matchSport && matchElite
   })
 
   const totalSports = new Set(athletes.map(a => a.sport)).size
@@ -322,6 +327,12 @@ export default function AthletesPage() {
           onChange={e => setSearch(e.target.value)}
           className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-[#111] placeholder-[#bbb] outline-none focus:border-[#F56A00] w-64"
         />
+        <button
+          onClick={() => setFilterElite(v => !v)}
+          className={`px-3 py-2 text-xs font-semibold rounded-lg border transition ${filterElite ? 'bg-yellow-400 border-yellow-400 text-white' : 'bg-white border-gray-200 text-[#888] hover:border-[#F56A00]'}`}
+        >
+          Atlet Elit
+        </button>
       </div>
 
       {/* Table */}
@@ -377,7 +388,7 @@ export default function AthletesPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100">
-                {['Atlet', 'No. IC', 'Jantina', 'Sukan', 'Kategori/Acara', 'Status', ''].map(h => (
+                {['Atlet', 'No. IC', 'Jantina', 'Sukan', 'Kategori/Acara', 'Status', 'Atlet Elit', ''].map(h => (
                   <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-wider text-[#888] px-5 py-3">{h}</th>
                 ))}
               </tr>
@@ -404,6 +415,13 @@ export default function AthletesPage() {
                   <td className="px-5 py-3 text-[#888]">{a.category ?? '—'}</td>
                   <td className="px-5 py-3">
                     <StatusBadge status={a.status} />
+                  </td>
+                  <td className="px-5 py-3">
+                    {a.is_elite && (
+                      <span className="inline-block text-[11px] font-bold px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-600 border border-yellow-200">
+                        ATLET ELIT
+                      </span>
+                    )}
                   </td>
                   <td className="px-5 py-3">
                     <div className="flex gap-3 justify-end items-center">
@@ -508,6 +526,19 @@ export default function AthletesPage() {
                 <Field label="Tinggi (cm)">
                   <input type="number" step="0.1" value={form.height ?? ''} onChange={e => setForm(f => ({ ...f, height: e.target.value ? +e.target.value : null }))} className={inputCls} placeholder="0.0" />
                 </Field>
+                <div className="col-span-2 flex items-center justify-between bg-[#F5F5F7] rounded-lg px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium text-[#111]">Atlet Elit</p>
+                    <p className="text-[11px] text-[#888]">Tandakan jika atlet ini merupakan atlet elit</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, is_elite: !f.is_elite }))}
+                    className={`relative w-11 h-6 rounded-full transition ${form.is_elite ? 'bg-[#F56A00]' : 'bg-gray-300'}`}
+                  >
+                    <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${form.is_elite ? 'left-5' : 'left-0.5'}`} />
+                  </button>
+                </div>
               </div>
             </div>
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
