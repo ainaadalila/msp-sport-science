@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
 import { logAction } from '../../../lib/audit'
+import { ReadOnlyBanner } from '../../../components/ReadOnlyBanner'
+import { isReadOnlyMode } from '../../../lib/readOnlyMode'
 
 interface Athlete { id: string; name: string; sport: string }
 interface Coach { id: string; full_name: string }
@@ -64,6 +66,7 @@ export default function StrengthPage() {
   const { profile } = useAuth()
   const isAdmin = profile?.role === 'superadmin' || profile?.role === 'admin'
   const isCoach = profile?.role === 'coach'
+  const readOnly = isReadOnlyMode()
 
   const [activeTab, setActiveTab] = useState<'kehadiran' | 'program' | 'jadual'>('jadual')
   const [loading, setLoading] = useState(true)
@@ -242,6 +245,7 @@ export default function StrengthPage() {
 
   return (
     <div className="space-y-4">
+      <ReadOnlyBanner />
 
       {/* Tabs */}
       <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
@@ -544,7 +548,7 @@ export default function StrengthPage() {
             </div>
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
               <button onClick={() => setAttendanceModalOpen(false)} className="px-4 py-2 text-sm text-[#888] hover:text-[#111] transition">Batal</button>
-              <button onClick={handleSaveAttendance} disabled={saving} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
+              <button onClick={handleSaveAttendance} disabled={saving || readOnly} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
                 {saving ? 'Menyimpan...' : 'Simpan'}
               </button>
             </div>
@@ -590,7 +594,7 @@ export default function StrengthPage() {
             </div>
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
               <button onClick={() => setProgramModalOpen(false)} className="px-4 py-2 text-sm text-[#888] hover:text-[#111] transition">Batal</button>
-              <button onClick={handleSaveProgram} disabled={saving} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
+              <button onClick={handleSaveProgram} disabled={saving || readOnly} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
                 {saving ? 'Menyimpan...' : 'Simpan'}
               </button>
             </div>
@@ -646,7 +650,7 @@ export default function StrengthPage() {
             </div>
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
               <button onClick={() => setAssignmentModalOpen(false)} className="px-4 py-2 text-sm text-[#888] hover:text-[#111] transition">Batal</button>
-              <button onClick={handleSaveAssignment} disabled={saving} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
+              <button onClick={handleSaveAssignment} disabled={saving || readOnly} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
                 {saving ? 'Menyimpan...' : 'Simpan'}
               </button>
             </div>

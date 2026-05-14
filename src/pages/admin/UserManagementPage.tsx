@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
+import { ReadOnlyBanner } from '../../components/ReadOnlyBanner'
+import { isReadOnlyMode } from '../../lib/readOnlyMode'
 
 interface UserProfile {
   id: string
@@ -28,6 +30,7 @@ const roleStyle: Record<string, string> = {
 export default function UserManagementPage() {
   const { profile: currentUser } = useAuth()
   const isSuperAdmin = currentUser?.role === 'superadmin'
+  const readOnly = isReadOnlyMode()
 
   const [users, setUsers] = useState<UserProfile[]>([])
   const [loading, setLoading] = useState(true)
@@ -81,6 +84,7 @@ export default function UserManagementPage() {
 
   return (
     <div className="space-y-4">
+      <ReadOnlyBanner />
 
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -205,7 +209,7 @@ export default function UserManagementPage() {
             </div>
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
               <button onClick={() => setEditingUser(null)} className="px-4 py-2 text-sm text-[#888] hover:text-[#111] transition">Batal</button>
-              <button onClick={handleSave} disabled={saving} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
+              <button onClick={handleSave} disabled={saving || readOnly} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
                 {saving ? 'Menyimpan...' : 'Simpan'}
               </button>
             </div>

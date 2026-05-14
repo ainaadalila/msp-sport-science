@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
 import { logAction } from '../../../lib/audit'
+import { ReadOnlyBanner } from '../../../components/ReadOnlyBanner'
+import { isReadOnlyMode } from '../../../lib/readOnlyMode'
 import type { Athlete, FitnessTestSession, SportFitnessTest, FitnessTestNorm } from '../../../types'
 
 interface TestResultInput {
@@ -29,6 +31,7 @@ interface SessionWithResults {
 export default function FitnessTestingPage() {
   const { profile } = useAuth()
   const canRecord = profile?.role === 'superadmin' || profile?.role === 'admin' || profile?.role === 'coach'
+  const readOnly = isReadOnlyMode()
 
   const [athletes, setAthletes] = useState<Athlete[]>([])
   const [selectedAthlete, setSelectedAthlete] = useState<Athlete | null>(null)
@@ -336,6 +339,7 @@ export default function FitnessTestingPage() {
 
   return (
     <div className="space-y-4">
+      <ReadOnlyBanner />
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold text-[#111]">Pencatatan Ujian Kecergasan</h2>
       </div>
@@ -927,14 +931,14 @@ export default function FitnessTestingPage() {
                 </button>
                 <button
                   onClick={() => handleSave(true)}
-                  disabled={saving}
+                  disabled={saving || readOnly}
                   className="px-4 py-2 text-sm text-[#F56A00] border border-[#F56A00] rounded-lg hover:bg-orange-50 transition disabled:opacity-60"
                 >
                   {saving ? 'Menyimpan...' : 'Simpan sebagai Draf'}
                 </button>
                 <button
                   onClick={() => handleSave(false)}
-                  disabled={saving || results.every(r => !r.result_value)}
+                  disabled={saving || readOnly || results.every(r => !r.result_value)}
                   className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition"
                 >
                   {saving ? 'Menyimpan...' : 'Serah Ujian'}

@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
 import { logAction } from '../../../lib/audit'
+import { ReadOnlyBanner } from '../../../components/ReadOnlyBanner'
+import { isReadOnlyMode } from '../../../lib/readOnlyMode'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 interface Athlete {
@@ -132,6 +134,7 @@ function InBodyScoreGauge({ score }: { score: number | null }) {
 export default function InBodyPage() {
   const { profile } = useAuth()
   const isAdmin = profile?.role === 'superadmin' || profile?.role === 'admin'
+  const readOnly = isReadOnlyMode()
 
   const [records, setRecords] = useState<InBodyRecord[]>([])
   const [athletes, setAthletes] = useState<Athlete[]>([])
@@ -268,11 +271,12 @@ export default function InBodyPage() {
 
   return (
     <div className="space-y-4">
+      <ReadOnlyBanner />
 
       {/* Header */}
       <div className="flex items-center justify-between">
         <p className="text-[12px] text-[#888]">{records.length} rekod penilaian</p>
-        <button onClick={openAdd} className="bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
+        <button onClick={openAdd} disabled={readOnly} className="bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
           + Rekod InBody
         </button>
       </div>
@@ -516,7 +520,7 @@ export default function InBodyPage() {
             </div>
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
               <button onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm text-[#888] hover:text-[#111] transition">Batal</button>
-              <button onClick={handleSave} disabled={saving} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
+              <button onClick={handleSave} disabled={saving || readOnly} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
                 {saving ? 'Menyimpan...' : 'Simpan'}
               </button>
             </div>

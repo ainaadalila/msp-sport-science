@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
 import { logAction } from '../../../lib/audit'
+import { ReadOnlyBanner } from '../../../components/ReadOnlyBanner'
+import { isReadOnlyMode } from '../../../lib/readOnlyMode'
 
 interface Athlete {
   id: string
@@ -137,6 +139,7 @@ export default function PhysioPage() {
   const { profile } = useAuth()
   const isAdmin = profile?.role === 'superadmin' || profile?.role === 'admin'
   const isPhysio = profile?.role === 'physio'
+  const readOnly = isReadOnlyMode()
 
   const [tab, setTab] = useState<Tab>('schedule')
   const [slots, setSlots] = useState<PhysioSlot[]>([])
@@ -303,12 +306,13 @@ export default function PhysioPage() {
 
   return (
     <div className="space-y-4">
+      <ReadOnlyBanner />
 
       {/* Header */}
       <div className="flex items-center justify-between">
         <p className="text-[12px] text-[#888]">{slots.length} rekod slot</p>
         {canEdit && (
-          <button onClick={() => openAdd()} className="bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
+          <button onClick={() => openAdd()} disabled={readOnly} className="bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
             + Tempah Slot
           </button>
         )}
@@ -411,7 +415,8 @@ export default function PhysioPage() {
                           ) : canEdit ? (
                             <button
                               onClick={() => openAdd(dateStr, time)}
-                              className="w-full h-full min-h-[48px] rounded-lg border border-dashed border-transparent hover:border-[#F56A00] hover:bg-orange-50/40 text-transparent hover:text-[#F56A00] text-[11px] transition flex items-center justify-center"
+                              disabled={readOnly}
+                              className="w-full h-full min-h-[48px] rounded-lg border border-dashed border-transparent hover:border-[#F56A00] hover:bg-orange-50/40 text-transparent hover:text-[#F56A00] text-[11px] transition flex items-center justify-center disabled:opacity-60 disabled:cursor-not-allowed"
                             >
                               +
                             </button>
@@ -496,8 +501,8 @@ export default function PhysioPage() {
                       <td className="px-4 py-3">
                         <div className="flex gap-3 justify-end">
                           <button onClick={() => setDetailSlot(s)} className="text-xs text-[#3A7EC8] hover:underline font-medium">Lihat</button>
-                          {canEdit && <button onClick={() => openEdit(s)} className="text-xs text-[#F56A00] hover:underline font-medium">Edit</button>}
-                          {isAdmin && <button onClick={() => setConfirmDelete(s)} className="text-xs text-[#D44040] hover:underline font-medium">Padam</button>}
+                          {canEdit && <button onClick={() => openEdit(s)} disabled={readOnly} className="text-xs text-[#F56A00] hover:underline font-medium disabled:opacity-60 disabled:cursor-not-allowed">Edit</button>}
+                          {isAdmin && <button onClick={() => setConfirmDelete(s)} disabled={readOnly} className="text-xs text-[#D44040] hover:underline font-medium disabled:opacity-60 disabled:cursor-not-allowed">Padam</button>}
                         </div>
                       </td>
                     </tr>
@@ -631,7 +636,7 @@ export default function PhysioPage() {
             </div>
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 shrink-0">
               <button onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm text-[#888] hover:text-[#111] transition">Batal</button>
-              <button onClick={handleSave} disabled={saving} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
+              <button onClick={handleSave} disabled={saving || readOnly} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
                 {saving ? 'Menyimpan...' : 'Simpan'}
               </button>
             </div>
@@ -708,18 +713,19 @@ export default function PhysioPage() {
             </div>
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 shrink-0">
               {isAdmin && (
-                <button onClick={() => { setConfirmDelete(detailSlot); setDetailSlot(null) }} className="px-4 py-2 text-sm text-[#D44040] border border-red-200 rounded-lg hover:bg-red-50 transition">Padam</button>
+                <button onClick={() => { setConfirmDelete(detailSlot); setDetailSlot(null) }} disabled={readOnly} className="px-4 py-2 text-sm text-[#D44040] border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-60 disabled:cursor-not-allowed transition">Padam</button>
               )}
               {canEdit && detailSlot.attendance_status === 'scheduled' && (
                 <button
                   onClick={() => handleMarkArrived(detailSlot)}
-                  className="px-4 py-2 text-sm font-semibold text-white bg-[#3A7EC8] hover:bg-blue-700 rounded-lg transition"
+                  disabled={readOnly}
+                  className="px-4 py-2 text-sm font-semibold text-white bg-[#3A7EC8] hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed rounded-lg transition"
                 >
                   Tandai Hadir
                 </button>
               )}
               {canEdit && (
-                <button onClick={() => { openEdit(detailSlot); setDetailSlot(null) }} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold rounded-lg transition">Edit</button>
+                <button onClick={() => { openEdit(detailSlot); setDetailSlot(null) }} disabled={readOnly} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">Edit</button>
               )}
             </div>
           </div>
@@ -734,7 +740,7 @@ export default function PhysioPage() {
             <p className="text-[13px] text-[#888] mb-6">{fmtDate(confirmDelete.slot_date)} {confirmDelete.time_slot} · {confirmDelete.athlete?.name ?? 'Tiada atlet'}</p>
             <div className="flex gap-3 justify-center">
               <button onClick={() => setConfirmDelete(null)} className="px-4 py-2 text-sm text-[#888] border border-gray-200 rounded-lg hover:border-gray-400 transition">Batal</button>
-              <button onClick={() => handleDelete(confirmDelete)} className="px-4 py-2 text-sm font-semibold text-white bg-[#D44040] hover:bg-red-700 rounded-lg transition">Padam</button>
+              <button onClick={() => handleDelete(confirmDelete)} disabled={readOnly} className="px-4 py-2 text-sm font-semibold text-white bg-[#D44040] hover:bg-red-700 disabled:opacity-60 rounded-lg transition">Padam</button>
             </div>
           </div>
         </div>

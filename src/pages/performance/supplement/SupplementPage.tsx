@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
 import { logAction } from '../../../lib/audit'
+import { ReadOnlyBanner } from '../../../components/ReadOnlyBanner'
+import { isReadOnlyMode } from '../../../lib/readOnlyMode'
 
 interface Supplement {
   id: string
@@ -57,6 +59,7 @@ function fmtDate(d: string) {
 export default function SupplementPage() {
   const { profile } = useAuth()
   const isAdmin = profile?.role === 'superadmin' || profile?.role === 'admin'
+  const readOnly = isReadOnlyMode()
 
   const [tab, setTab] = useState<Tab>('requests')
 
@@ -227,18 +230,19 @@ export default function SupplementPage() {
 
   return (
     <div className="space-y-4">
+      <ReadOnlyBanner />
 
       {/* Header */}
       <div className="flex items-center justify-between">
         <p className="text-[12px] text-[#888]">{supplements.length} jenis suplemen · {requests.length} permohonan</p>
         <div className="flex gap-2">
           {tab === 'inventory' && isAdmin && (
-            <button onClick={openAddSup} className="bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
+            <button onClick={openAddSup} disabled={readOnly} className="bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
               + Tambah Suplemen
             </button>
           )}
           {tab === 'requests' && (
-            <button onClick={openReqModal} className="bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
+            <button onClick={openReqModal} disabled={readOnly} className="bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
               + Permohonan Baharu
             </button>
           )}
@@ -299,8 +303,8 @@ export default function SupplementPage() {
                     <td className="px-5 py-3">
                       {isAdmin && (
                         <div className="flex gap-3 justify-end">
-                          <button onClick={() => openEditSup(s)} className="text-xs text-[#F56A00] hover:underline font-medium">Edit</button>
-                          <button onClick={() => setConfirmDelSup(s)} className="text-xs text-[#D44040] hover:underline font-medium">Padam</button>
+                          <button onClick={() => openEditSup(s)} disabled={readOnly} className="text-xs text-[#F56A00] hover:underline font-medium disabled:opacity-60 disabled:cursor-not-allowed">Edit</button>
+                          <button onClick={() => setConfirmDelSup(s)} disabled={readOnly} className="text-xs text-[#D44040] hover:underline font-medium disabled:opacity-60 disabled:cursor-not-allowed">Padam</button>
                         </div>
                       )}
                     </td>
@@ -359,14 +363,14 @@ export default function SupplementPage() {
                             <>
                               <button
                                 onClick={() => handleCoordinatorReview(r.id, 'semakan_lulus')}
-                                disabled={processingId === r.id}
+                                disabled={processingId === r.id || readOnly}
                                 className="text-xs font-semibold text-white bg-yellow-600 hover:bg-yellow-700 disabled:bg-yellow-400 disabled:cursor-wait px-2.5 py-1 rounded-md transition"
                               >
                                 {processingId === r.id ? 'Memproses...' : 'Sahkan'}
                               </button>
                               <button
                                 onClick={() => handleCoordinatorReview(r.id, 'semakan_tolak')}
-                                disabled={processingId === r.id}
+                                disabled={processingId === r.id || readOnly}
                                 className="text-xs font-semibold text-red-600 border border-red-200 hover:bg-red-50 disabled:opacity-60 disabled:cursor-wait px-2.5 py-1 rounded-md transition"
                               >
                                 {processingId === r.id ? 'Memproses...' : 'Tolak'}
@@ -377,7 +381,7 @@ export default function SupplementPage() {
                             <>
                               <button
                                 onClick={() => handleApproval(r.id, 'approved')}
-                                disabled={processingId === r.id}
+                                disabled={processingId === r.id || readOnly}
                                 className="text-xs font-semibold text-white bg-green-600 hover:bg-green-700 disabled:bg-green-400 disabled:cursor-wait px-2.5 py-1 rounded-md transition"
                               >
                                 {processingId === r.id ? 'Memproses...' : 'Lulus Penuh'}
@@ -388,7 +392,7 @@ export default function SupplementPage() {
                                   setPartialQuantity(r.quantity)
                                   setPartialModal(true)
                                 }}
-                                disabled={processingId === r.id}
+                                disabled={processingId === r.id || readOnly}
                                 className="text-xs font-semibold text-orange-600 border border-orange-200 hover:bg-orange-50 disabled:opacity-60 disabled:cursor-wait px-2.5 py-1 rounded-md transition"
                               >
                                 {processingId === r.id ? 'Memproses...' : 'Lulus Sebahagian'}
@@ -433,7 +437,7 @@ export default function SupplementPage() {
             </div>
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
               <button onClick={() => setInvModal(false)} className="px-4 py-2 text-sm text-[#888] hover:text-[#111] transition">Batal</button>
-              <button onClick={handleSaveSup} disabled={supSaving} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
+              <button onClick={handleSaveSup} disabled={supSaving || readOnly} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
                 {supSaving ? 'Menyimpan...' : 'Simpan'}
               </button>
             </div>
@@ -486,7 +490,8 @@ export default function SupplementPage() {
                       {reqForm.lines.length > 1 && (
                         <button
                           onClick={() => removeReqLine(i)}
-                          className="text-[#D44040] hover:text-red-700 text-lg leading-none px-1 shrink-0"
+                          disabled={readOnly}
+                          className="text-[#D44040] hover:text-red-700 text-lg leading-none px-1 shrink-0 disabled:opacity-60 disabled:cursor-not-allowed"
                         >
                           ×
                         </button>
@@ -496,7 +501,8 @@ export default function SupplementPage() {
                 </div>
                 <button
                   onClick={addReqLine}
-                  className="mt-2 text-xs text-[#F56A00] hover:underline font-semibold"
+                  disabled={readOnly}
+                  className="mt-2 text-xs text-[#F56A00] hover:underline font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   + Tambah Item
                 </button>
@@ -504,7 +510,7 @@ export default function SupplementPage() {
             </div>
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 shrink-0">
               <button onClick={() => setReqModal(false)} className="px-4 py-2 text-sm text-[#888] hover:text-[#111] transition">Batal</button>
-              <button onClick={handleSubmitRequest} disabled={reqSaving} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
+              <button onClick={handleSubmitRequest} disabled={reqSaving || readOnly} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
                 {reqSaving ? 'Menghantar...' : 'Hantar Permohonan'}
               </button>
             </div>
@@ -520,7 +526,7 @@ export default function SupplementPage() {
             <p className="text-[13px] text-[#888] mb-6">{confirmDelSup.name}</p>
             <div className="flex gap-3 justify-center">
               <button onClick={() => setConfirmDelSup(null)} className="px-4 py-2 text-sm text-[#888] border border-gray-200 rounded-lg hover:border-gray-400 transition">Batal</button>
-              <button onClick={() => handleDelSup(confirmDelSup)} className="px-4 py-2 text-sm font-semibold text-white bg-[#D44040] hover:bg-red-700 rounded-lg transition">Padam</button>
+              <button onClick={() => handleDelSup(confirmDelSup)} disabled={readOnly} className="px-4 py-2 text-sm font-semibold text-white bg-[#D44040] hover:bg-red-700 disabled:opacity-60 rounded-lg transition">Padam</button>
             </div>
           </div>
         </div>
@@ -560,7 +566,7 @@ export default function SupplementPage() {
                   setPartialModal(false)
                   setPartialSaving(false)
                 }}
-                disabled={partialSaving}
+                disabled={partialSaving || readOnly}
                 className="px-5 py-2 bg-orange-600 hover:bg-orange-700 disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition"
               >
                 {partialSaving ? 'Menyimpan...' : 'Lulus Sebahagian'}

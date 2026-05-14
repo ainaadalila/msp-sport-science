@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
+import { ReadOnlyBanner } from '../../../components/ReadOnlyBanner'
+import { isReadOnlyMode } from '../../../lib/readOnlyMode'
 import type { FitnessTestDefinition, SportFitnessTest } from '../../../types'
 
 interface CategoryGroup {
@@ -11,6 +13,7 @@ interface CategoryGroup {
 export default function FitnessTestConfigPage() {
   const { profile } = useAuth()
   const isAdmin = profile?.role === 'superadmin' || profile?.role === 'admin'
+  const readOnly = isReadOnlyMode()
 
   const [sports, setSports] = useState<string[]>([])
   const [selectedSport, setSelectedSport] = useState('')
@@ -121,6 +124,7 @@ export default function FitnessTestConfigPage() {
 
   return (
     <div className="space-y-4">
+      <ReadOnlyBanner />
       <div className="bg-white rounded-xl border border-gray-200 p-4">
         <label className="block text-[10px] font-bold uppercase tracking-widest text-[#888] mb-2">Pilih Sukan</label>
         <select
@@ -179,7 +183,7 @@ export default function FitnessTestConfigPage() {
                                 type="checkbox"
                                 checked={isAdded}
                                 onChange={() => toggleTest(test.id, isAdded)}
-                                disabled={saving}
+                                disabled={saving || readOnly}
                                 className="w-4 h-4 rounded cursor-pointer"
                               />
                               <span className="text-sm text-[#111]">{test.test_name}</span>
