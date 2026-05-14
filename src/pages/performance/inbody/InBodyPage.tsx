@@ -482,7 +482,7 @@ export default function InBodyPage() {
       {/* Add / Edit Modal */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm md:max-w-lg mx-4">
             <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
               <h3 className="font-bold text-[#111]">{editing ? 'Edit Rekod InBody' : 'Rekod InBody Baharu'}</h3>
               <button onClick={() => setModalOpen(false)} className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
@@ -535,7 +535,7 @@ export default function InBodyPage() {
       {/* View Modal */}
       {viewRecord && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm md:max-w-md mx-4">
             <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
               <div>
                 <h3 className="font-bold text-[#111]">{viewRecord.athlete?.name}</h3>

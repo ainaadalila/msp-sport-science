@@ -270,7 +270,7 @@ export default function StrengthPage() {
             </button>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {[
               { label: 'Hadir', value: summary.present, color: 'text-[#3A9E6A]' },
               { label: 'Tidak Hadir', value: summary.absent, color: 'text-[#D44040]' },
@@ -510,7 +510,7 @@ export default function StrengthPage() {
       {/* ── MODAL: ATTENDANCE ── */}
       {attendanceModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm md:max-w-md mx-4">
             <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
               <h3 className="font-bold text-[#111]">{editingRecord ? 'Edit Rekod Sesi' : 'Rekod Sesi Baharu'}</h3>
               <button onClick={() => setAttendanceModalOpen(false)} className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
@@ -555,14 +555,14 @@ export default function StrengthPage() {
       {/* ── MODAL: PROGRAM ── */}
       {programModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm md:max-w-lg">
             <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
               <h3 className="font-bold text-[#111]">{editingProgram ? 'Edit Program' : 'Program Baharu'}</h3>
               <button onClick={() => setProgramModalOpen(false)} className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
             </div>
             <div className="px-6 py-5 space-y-4">
               {error && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-600">{error}</div>}
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Field label="Sukan" required>
                   <select value={programForm.sport} onChange={e => setProgramForm(f => ({ ...f, sport: e.target.value }))} className={inputCls}>
                     <option value="">— Pilih —</option>
@@ -601,7 +601,7 @@ export default function StrengthPage() {
       {/* ── MODAL: ASSIGNMENT ── */}
       {assignmentModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm md:max-w-md">
             <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
               <h3 className="font-bold text-[#111]">{editingAssignment ? 'Edit Tugasan' : 'Tugasan Baharu'}</h3>
               <button onClick={() => setAssignmentModalOpen(false)} className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>

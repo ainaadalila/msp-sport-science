@@ -419,7 +419,7 @@ export default function PhysioPage() {
                     const dateStr = toDateStr(d)
                     const isToday = dateStr === todayStr
                     return (
-                      <th key={dateStr} className={`px-2 py-3 text-center min-w-[110px] border-l border-gray-200 ${isToday ? 'bg-[rgba(245,106,0,0.06)]' : 'bg-gray-50'}`}>
+                      <th key={dateStr} className={`px-2 py-3 text-center min-w-[90px] md:min-w-[110px] border-l border-gray-200 ${isToday ? 'bg-[rgba(245,106,0,0.06)]' : 'bg-gray-50'}`}>
                         <span className={`text-[10px] font-bold uppercase tracking-widest block ${isToday ? 'text-[#F56A00]' : 'text-[#888]'}`}>{DAY_NAMES[i]}</span>
                         <span className={`text-[18px] font-bold leading-none mt-0.5 block ${isToday ? 'text-[#F56A00]' : 'text-[#111]'}`}>
                           {d.getDate()}
@@ -561,7 +561,7 @@ export default function PhysioPage() {
       {/* Booking Modal */}
       {bookingModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm md:max-w-lg max-h-[90vh] flex flex-col">
             <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between shrink-0">
               <h3 className="font-bold text-[#111]">{bookingEditing ? 'Edit Slot Fisioterapi' : 'Rekod Slot Baharu'}</h3>
               <button onClick={() => setBookingModalOpen(false)} className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
@@ -634,7 +634,7 @@ export default function PhysioPage() {
       {/* Assessment Modal */}
       {assessmentModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm md:max-w-lg max-h-[90vh] flex flex-col">
             <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between shrink-0">
               <h3 className="font-bold text-[#111]">Catatan Sesi</h3>
               <button onClick={() => setAssessmentModalOpen(false)} className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
@@ -692,7 +692,7 @@ export default function PhysioPage() {
       {/* View Modal */}
       {detailSlot && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm md:max-w-md max-h-[90vh] flex flex-col">
             <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between shrink-0">
               <div>
                 <h3 className="font-bold text-[#111]">{detailSlot.athlete?.name ?? 'Tiada Atlet'}</h3>

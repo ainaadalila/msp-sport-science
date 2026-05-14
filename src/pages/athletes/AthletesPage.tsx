@@ -327,7 +327,7 @@ export default function AthletesPage() {
           placeholder="Cari nama, IC, sukan..."
           value={search}
           onChange={e => setSearch(e.target.value)}
-          className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-[#111] placeholder-[#bbb] outline-none focus:border-[#F56A00] w-64"
+          className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-[#111] placeholder-[#bbb] outline-none focus:border-[#F56A00] flex-1 min-w-0 md:w-64"
         />
         <button
           onClick={() => setFilterElite(v => !v)}
@@ -387,7 +387,8 @@ export default function AthletesPage() {
             )}
           </div>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100">
                 {['Atlet', 'No. IC', 'Jantina', 'Sukan', 'Kategori/Acara', 'Status', 'Atlet Elit', ''].map(h => (
@@ -448,14 +449,13 @@ export default function AthletesPage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
-        </div>
-      )}
 
       {/* Add / Edit Modal */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm md:max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
               <h3 className="font-bold text-[#111]">{editing ? 'Edit Atlet' : 'Tambah Atlet Baru'}</h3>
               <button onClick={() => setModalOpen(false)} className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>

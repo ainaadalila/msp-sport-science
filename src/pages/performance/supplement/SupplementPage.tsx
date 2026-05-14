@@ -444,7 +444,7 @@ export default function SupplementPage() {
       {/* New Request Modal */}
       {reqModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm md:max-w-lg max-h-[90vh] flex flex-col">
             <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between shrink-0">
               <h3 className="font-bold text-[#111]">Permohonan Suplemen</h3>
               <button onClick={() => setReqModal(false)} className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
