@@ -343,8 +343,8 @@ export default function StrengthPage() {
                       <td className="px-4 py-3 text-[#888] max-w-[160px] truncate">{r.notes ?? '—'}</td>
                       <td className="px-4 py-3">
                         <div className="flex gap-3 justify-end">
-                          <button onClick={() => openEditAttendance(r)} className="text-xs text-[#F56A00] hover:underline font-medium">Edit</button>
-                          {isAdmin && <button onClick={() => setConfirmDelete(r)} className="text-xs text-[#D44040] hover:underline font-medium">Padam</button>}
+                          <button onClick={() => openEditAttendance(r)} disabled={readOnly} className="text-xs text-[#F56A00] hover:underline font-medium disabled:opacity-60 disabled:cursor-not-allowed">Edit</button>
+                          {isAdmin && <button onClick={() => setConfirmDelete(r)} disabled={readOnly} className="text-xs text-[#D44040] hover:underline font-medium disabled:opacity-60 disabled:cursor-not-allowed">Padam</button>}
                         </div>
                       </td>
                     </tr>
@@ -408,8 +408,8 @@ export default function StrengthPage() {
                               )}
                             </div>
                             <div className="flex gap-2 shrink-0 opacity-0 group-hover:opacity-100 transition">
-                              <button onClick={() => openEditProgram(p)} className="text-xs text-[#F56A00] hover:underline">Edit</button>
-                              {isAdmin && <button onClick={() => setConfirmDeleteProgram(p)} className="text-xs text-[#D44040] hover:underline">Padam</button>}
+                              <button onClick={() => openEditProgram(p)} disabled={readOnly} className="text-xs text-[#F56A00] hover:underline disabled:opacity-60 disabled:cursor-not-allowed">Edit</button>
+                              {isAdmin && <button onClick={() => setConfirmDeleteProgram(p)} disabled={readOnly} className="text-xs text-[#D44040] hover:underline disabled:opacity-60 disabled:cursor-not-allowed">Padam</button>}
                             </div>
                           </div>
                         </div>
@@ -499,8 +499,8 @@ export default function StrengthPage() {
                     </div>
                     {isAdmin && (
                       <div className="flex gap-3 shrink-0">
-                        <button onClick={() => openEditAssignment(a)} className="text-xs text-[#F56A00] hover:underline font-medium">Edit</button>
-                        <button onClick={() => setConfirmDeleteAssignment(a)} className="text-xs text-[#D44040] hover:underline font-medium">Padam</button>
+                        <button onClick={() => openEditAssignment(a)} disabled={readOnly} className="text-xs text-[#F56A00] hover:underline font-medium disabled:opacity-60 disabled:cursor-not-allowed">Edit</button>
+                        <button onClick={() => setConfirmDeleteAssignment(a)} disabled={readOnly} className="text-xs text-[#D44040] hover:underline font-medium disabled:opacity-60 disabled:cursor-not-allowed">Padam</button>
                       </div>
                     )}
                   </div>

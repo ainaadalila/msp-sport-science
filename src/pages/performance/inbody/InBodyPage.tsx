@@ -354,8 +354,8 @@ export default function InBodyPage() {
                     <td className="px-4 py-3">
                       <div className="flex gap-3 justify-end">
                         <button onClick={() => setViewRecord(r)} className="text-xs text-[#3A7EC8] hover:underline font-medium">Lihat</button>
-                        <button onClick={() => openEdit(r)} className="text-xs text-[#F56A00] hover:underline font-medium">Edit</button>
-                        {isAdmin && <button onClick={() => setConfirmDelete(r)} className="text-xs text-[#D44040] hover:underline font-medium">Padam</button>}
+                        <button onClick={() => openEdit(r)} disabled={readOnly} className="text-xs text-[#F56A00] hover:underline font-medium disabled:opacity-60 disabled:cursor-not-allowed">Edit</button>
+                        {isAdmin && <button onClick={() => setConfirmDelete(r)} disabled={readOnly} className="text-xs text-[#D44040] hover:underline font-medium disabled:opacity-60 disabled:cursor-not-allowed">Padam</button>}
                       </div>
                     </td>
                   </tr>
@@ -576,9 +576,9 @@ export default function InBodyPage() {
             </div>
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
               {isAdmin && (
-                <button onClick={() => { setConfirmDelete(viewRecord); setViewRecord(null) }} className="px-4 py-2 text-sm text-[#D44040] border border-red-200 rounded-lg hover:bg-red-50 transition">Padam</button>
+                <button onClick={() => { setConfirmDelete(viewRecord); setViewRecord(null) }} disabled={readOnly} className="px-4 py-2 text-sm text-[#D44040] border border-red-200 rounded-lg hover:bg-red-50 transition disabled:opacity-60 disabled:cursor-not-allowed">Padam</button>
               )}
-              <button onClick={() => { openEdit(viewRecord); setViewRecord(null) }} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold rounded-lg transition">Edit</button>
+              <button onClick={() => { openEdit(viewRecord); setViewRecord(null) }} disabled={readOnly} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold rounded-lg transition disabled:opacity-60">Edit</button>
             </div>
           </div>
         </div>

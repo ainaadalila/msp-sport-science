@@ -163,7 +163,7 @@ export default function UserManagementPage() {
                   <td className="px-5 py-3 font-mono text-[12px] text-[#888]">{fmtDate(u.created_at)}</td>
                   <td className="px-5 py-3">
                     {(isSuperAdmin || (currentUser?.role === 'admin' && u.role !== 'superadmin')) && u.id !== currentUser?.id && (
-                      <button onClick={() => openEdit(u)} className="text-xs text-[#F56A00] hover:underline font-medium">
+                      <button onClick={() => openEdit(u)} disabled={readOnly} className="text-xs text-[#F56A00] hover:underline font-medium disabled:opacity-60 disabled:cursor-not-allowed">
                         Edit Peranan
                       </button>
                     )}

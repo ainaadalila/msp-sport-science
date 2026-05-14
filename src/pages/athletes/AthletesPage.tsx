@@ -415,11 +415,13 @@ export default function AthletesPage() {
                         <>
                           <button
                             onClick={e => { e.stopPropagation(); openEdit(a) }}
-                            className="text-xs text-[#F56A00] hover:underline font-medium opacity-0 group-hover:opacity-100 transition"
+                            disabled={readOnly}
+                            className="text-xs text-[#F56A00] hover:underline font-medium opacity-0 group-hover:opacity-100 transition disabled:opacity-60 disabled:cursor-not-allowed"
                           >Edit</button>
                           <button
                             onClick={e => { e.stopPropagation(); setConfirmDelete(a) }}
-                            className="text-xs text-[#D44040] hover:underline font-medium opacity-0 group-hover:opacity-100 transition"
+                            disabled={readOnly}
+                            className="text-xs text-[#D44040] hover:underline font-medium opacity-0 group-hover:opacity-100 transition disabled:opacity-60 disabled:cursor-not-allowed"
                           >Padam</button>
                         </>
                       )}
