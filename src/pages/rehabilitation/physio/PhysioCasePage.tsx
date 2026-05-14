@@ -66,6 +66,7 @@ export default function PhysioCasePage() {
   const { profile } = useAuth()
   const isAdmin = profile?.role === 'superadmin' || profile?.role === 'admin'
   const isPhysio = profile?.role === 'physio'
+  const readOnly = isReadOnlyMode()
 
   const [tab, setTab] = useState<Tab>('active')
   const [cases, setCases] = useState<PhysioCase[]>([])
