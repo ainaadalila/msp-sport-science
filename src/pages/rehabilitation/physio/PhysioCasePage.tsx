@@ -14,10 +14,9 @@ interface PhysioCase {
   athlete_id: string | null
   open_date: string
   injury_type: string | null
-  status: 'active' | 'closed' | 'referred'
-  rts_date: string | null
-  close_reason: string | null
-  referred_to: string | null
+  status: 'active' | 'closed'
+  referred_to_doctor: boolean
+  referred_date: string | null
   physio_id: string | null
   created_at: string
   athlete?: { name: string; sport: string } | null
@@ -39,11 +38,10 @@ interface CaseStats {
 
 type Tab = 'active' | 'closed'
 
-const statusLabel: Record<string, string> = { active: 'Aktif', closed: 'Ditutup (RTS)', referred: 'Dirujuk' }
+const statusLabel: Record<string, string> = { active: 'Aktif', closed: 'Ditutup' }
 const statusStyle: Record<string, string> = {
   active: 'bg-green-50 text-green-700',
   closed: 'bg-gray-100 text-[#888]',
-  referred: 'bg-red-50 text-[#D44040]',
 }
 
 function fmtDate(d: string) {
@@ -92,6 +90,10 @@ export default function PhysioCasePage() {
   const [closeError, setCloseError] = useState<string | null>(null)
 
   const [confirmDelete, setConfirmDelete] = useState<PhysioCase | null>(null)
+
+  const [confirmCaseAction, setConfirmCaseAction] = useState<{ case: PhysioCase; action: 'refer' | 'close' } | null>(null)
+  const [caseActionLoading, setCaseActionLoading] = useState(false)
+  const [caseActionError, setCaseActionError] = useState<string | null>(null)
 
   useEffect(() => { fetchAll() }, [])
 
@@ -203,6 +205,28 @@ export default function PhysioCasePage() {
     fetchAll()
   }
 
+  async function handleCaseAction(caseData: PhysioCase, action: 'refer' | 'close') {
+    setCaseActionLoading(true)
+    setCaseActionError(null)
+
+    const today = new Date().toISOString().split('T')[0]
+    const payload = action === 'refer'
+      ? { referred_to_doctor: true, referred_date: today }
+      : { status: 'closed' as const }
+
+    const { error } = await supabase.from('physio_cases').update(payload).eq('id', caseData.id)
+    if (error) {
+      setCaseActionError(error.message)
+      setCaseActionLoading(false)
+      return
+    }
+
+    await logAction(profile!.id, `${action}_physio_case`, 'physio_cases', caseData.id)
+    setCaseActionLoading(false)
+    setConfirmCaseAction(null)
+    fetchAll()
+  }
+
   function openCloseModal() {
     setCloseForm({ action: 'close', rts_date: '', close_reason: '', referred_to: '' })
     setCloseError(null)
@@ -210,7 +234,7 @@ export default function PhysioCasePage() {
   }
 
   const activeCases = cases.filter(c => c.status === 'active')
-  const closedCases = cases.filter(c => c.status === 'closed' || c.status === 'referred')
+  const closedCases = cases.filter(c => c.status === 'closed')
   const displayCases = tab === 'active' ? activeCases : closedCases
   const canEdit = isAdmin || isPhysio
 
@@ -280,8 +304,16 @@ export default function PhysioCasePage() {
                       <span className={`inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full ${statusStyle[c.status]}`}>{statusLabel[c.status]}</span>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex gap-3 justify-end">
+                      <div className="flex gap-2 justify-end flex-wrap">
                         <button onClick={() => { setDetailCase(c); fetchCaseSlots(c.id) }} className="text-xs text-[#3A7EC8] hover:underline font-medium">Lihat</button>
+                        {tab === 'active' && (
+                          <>
+                            {!c.referred_to_doctor && (
+                              <button onClick={() => setConfirmCaseAction({ case: c, action: 'refer' })} className="text-xs text-orange-600 hover:underline font-medium">Rujuk Doktor</button>
+                            )}
+                            <button onClick={() => setConfirmCaseAction({ case: c, action: 'close' })} className="text-xs text-green-700 hover:underline font-medium">Tutup Kes</button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -289,6 +321,36 @@ export default function PhysioCasePage() {
               </tbody>
             </table>
           )}
+        </div>
+      )}
+
+      {/* Case Action Confirmation Modal */}
+      {confirmCaseAction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
+            <p className="text-sm font-semibold text-[#111] mb-2">
+              {confirmCaseAction.action === 'refer'
+                ? 'Rujuk kes ke doktor?'
+                : 'Tutup kes ini?'}
+            </p>
+            <p className="text-[13px] text-[#888] mb-1">{confirmCaseAction.case.athlete?.name ?? '—'}</p>
+            <p className="text-[12px] text-[#888] mb-6">{confirmCaseAction.case.injury_type ?? '—'} · Dibuka {fmtDate(confirmCaseAction.case.open_date)}</p>
+            {caseActionError && (
+              <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[12px] text-red-600 mb-4">{caseActionError}</div>
+            )}
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => setConfirmCaseAction(null)} disabled={caseActionLoading} className="px-4 py-2 text-sm text-[#888] border border-gray-200 rounded-lg hover:border-gray-400 transition disabled:opacity-60">Batal</button>
+              <button
+                onClick={() => handleCaseAction(confirmCaseAction.case, confirmCaseAction.action)}
+                disabled={caseActionLoading}
+                className={`px-4 py-2 text-sm font-semibold text-white rounded-lg transition disabled:opacity-60 ${
+                  confirmCaseAction.action === 'refer' ? 'bg-orange-600 hover:bg-orange-700' : 'bg-green-700 hover:bg-green-800'
+                }`}
+              >
+                {caseActionLoading ? 'Memproses...' : 'Sahkan'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

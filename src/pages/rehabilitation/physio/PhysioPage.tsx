@@ -129,10 +129,6 @@ export default function PhysioPage() {
 
   const [confirmDelete, setConfirmDelete] = useState<PhysioSlot | null>(null)
 
-  const [caseActionLoading, setCaseActionLoading] = useState(false)
-  const [caseActionError, setCaseActionError] = useState<string | null>(null)
-  const [confirmCaseAction, setConfirmCaseAction] = useState<{ case: PhysioCase; action: 'refer' | 'close' } | null>(null)
-
   useEffect(() => { fetchAll() }, [])
 
   async function fetchAll() {
@@ -280,28 +276,6 @@ export default function PhysioPage() {
     fetchAll()
   }
 
-  async function handleCaseAction(caseData: PhysioCase, action: 'refer' | 'close') {
-    setCaseActionLoading(true)
-    setCaseActionError(null)
-
-    const today = new Date().toISOString().split('T')[0]
-    const payload = action === 'refer'
-      ? { referred_to_doctor: true, referred_date: today }
-      : { status: 'closed' }
-
-    const { error } = await supabase.from('physio_cases').update(payload).eq('id', caseData.id)
-    if (error) {
-      setCaseActionError(error.message)
-      setCaseActionLoading(false)
-      return
-    }
-
-    await logAction(profile!.id, `${action}_physio_case`, 'physio_cases', caseData.id)
-    setCaseActionLoading(false)
-    setConfirmCaseAction(null)
-    fetchAll()
-  }
-
   // Records view
   const filteredSlots = slots.filter(s => {
     const matchAthlete = !filterAthlete || s.athlete_id === filterAthlete
@@ -325,50 +299,32 @@ export default function PhysioPage() {
         )}
       </div>
 
+      {/* Stats Section */}
+      {!loading && (
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-[#888] mb-2">Kes Aktif</p>
+            <p className="text-3xl font-bold text-[#111]">{cases.length}</p>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-[#888] mb-2">Jumlah Sesi</p>
+            <p className="text-3xl font-bold text-[#111]">{slots.length}</p>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-[#888] mb-2">Purata Kesakitan</p>
+            <p className="text-3xl font-bold text-[#111]">
+              {slots.filter(s => s.pain_scale !== null).length > 0
+                ? (slots.filter(s => s.pain_scale !== null).reduce((sum, s) => sum + (s.pain_scale ?? 0), 0) / slots.filter(s => s.pain_scale !== null).length).toFixed(1)
+                : '—'}
+            </p>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <div className="py-16 text-center text-[#888] text-sm">Memuatkan...</div>
       ) : (
-        <div className="space-y-6">
-          {/* Active Cases Section */}
-          {cases.length > 0 && (
-            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-100">
-                <p className="text-sm font-semibold text-[#111]">{cases.length} Kes Aktif</p>
-              </div>
-              <div className="divide-y divide-gray-50">
-                {cases.map(c => (
-                  <div key={c.id} className="px-6 py-4 flex items-center justify-between hover:bg-gray-50">
-                    <div className="min-w-0">
-                      <p className="font-medium text-[#111]">{c.athlete?.name ?? '—'}</p>
-                      <p className="text-sm text-[#888]">{c.injury_type ?? '—'} · Dibuka {fmtDate(c.open_date)}</p>
-                      {c.referred_to_doctor && (
-                        <p className="text-xs text-orange-600 mt-1">✓ Dirujuk ke doktor ({fmtDate(c.referred_date!)})</p>
-                      )}
-                    </div>
-                    <div className="flex gap-2 ml-4">
-                      {!c.referred_to_doctor && (
-                        <button
-                          onClick={() => setConfirmCaseAction({ case: c, action: 'refer' })}
-                          className="px-3 py-2 text-xs font-semibold text-orange-600 border border-orange-200 rounded-lg hover:bg-orange-50 transition"
-                        >
-                          Rujuk Doktor
-                        </button>
-                      )}
-                      <button
-                        onClick={() => setConfirmCaseAction({ case: c, action: 'close' })}
-                        className="px-3 py-2 text-xs font-semibold text-green-700 border border-green-200 rounded-lg hover:bg-green-50 transition"
-                      >
-                        Tutup Kes
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* All Records Tab */}
-          <div className="space-y-3">
+        <div className="space-y-3">
           <div className="flex flex-wrap gap-2">
             <select value={filterAthlete} onChange={e => setFilterAthlete(e.target.value)} className={filterCls}>
               <option value="">Semua Atlet</option>
@@ -420,7 +376,6 @@ export default function PhysioPage() {
               </table>
             )}
           </div>
-        </div>
         </div>
       )}
 
@@ -665,36 +620,6 @@ export default function PhysioPage() {
                   )}
                 </>
               )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Case Action Confirmation */}
-      {confirmCaseAction && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
-            <p className="text-sm font-semibold text-[#111] mb-2">
-              {confirmCaseAction.action === 'refer'
-                ? 'Rujuk kes ke doktor?'
-                : 'Tutup kes ini?'}
-            </p>
-            <p className="text-[13px] text-[#888] mb-1">{confirmCaseAction.case.athlete?.name ?? '—'}</p>
-            <p className="text-[12px] text-[#888] mb-6">{confirmCaseAction.case.injury_type ?? '—'} · Dibuka {fmtDate(confirmCaseAction.case.open_date)}</p>
-            {caseActionError && (
-              <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[12px] text-red-600 mb-4">{caseActionError}</div>
-            )}
-            <div className="flex gap-3 justify-end">
-              <button onClick={() => setConfirmCaseAction(null)} disabled={caseActionLoading} className="px-4 py-2 text-sm text-[#888] border border-gray-200 rounded-lg hover:border-gray-400 transition disabled:opacity-60">Batal</button>
-              <button
-                onClick={() => handleCaseAction(confirmCaseAction.case, confirmCaseAction.action)}
-                disabled={caseActionLoading}
-                className={`px-4 py-2 text-sm font-semibold text-white rounded-lg transition disabled:opacity-60 ${
-                  confirmCaseAction.action === 'refer' ? 'bg-orange-600 hover:bg-orange-700' : 'bg-green-700 hover:bg-green-800'
-                }`}
-              >
-                {caseActionLoading ? 'Memproses...' : 'Sahkan'}
-              </button>
             </div>
           </div>
         </div>
