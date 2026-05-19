@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import jsPDF from 'jspdf'
+import html2canvas from 'html2canvas'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
 import { logAction } from '../../../lib/audit'
@@ -225,6 +227,161 @@ export default function PhysioCasePage() {
     setCaseActionLoading(false)
     setConfirmCaseAction(null)
     fetchAll()
+  }
+
+  async function downloadAthleteProfile(c: PhysioCase) {
+    const doc = new jsPDF()
+    const pageWidth = doc.internal.pageSize.getWidth()
+    const pageHeight = doc.internal.pageSize.getHeight()
+    let yPos = 20
+
+    const addLine = (y: number) => {
+      doc.setDrawColor(200, 200, 200)
+      doc.line(15, y, pageWidth - 15, y)
+      return y + 10
+    }
+
+    // Header
+    doc.setFontSize(18)
+    doc.setFont(undefined, 'bold')
+    doc.text('Profil Atlet', pageWidth / 2, yPos, { align: 'center' })
+    yPos = addLine(yPos + 12)
+
+    // Athlete Info
+    doc.setFontSize(11)
+    doc.setFont(undefined, 'bold')
+    doc.text('Maklumat Asas', 15, yPos)
+    yPos += 8
+
+    doc.setFontSize(10)
+    doc.setFont(undefined, 'normal')
+    const athleteInfo = [
+      ['Nama Atlet:', c.athlete?.name ?? '—'],
+      ['Sukan:', c.athlete?.sport ?? '—'],
+      ['ID Atlet:', c.athlete_id ?? '—'],
+    ]
+    athleteInfo.forEach(([label, value]) => {
+      doc.text(label, 20, yPos)
+      doc.text(String(value), 60, yPos)
+      yPos += 7
+    })
+
+    yPos = addLine(yPos + 5)
+
+    // Case Info
+    doc.setFontSize(11)
+    doc.setFont(undefined, 'bold')
+    doc.text('Maklumat Kes', 15, yPos)
+    yPos += 8
+
+    doc.setFontSize(10)
+    doc.setFont(undefined, 'normal')
+    const caseInfo = [
+      ['Jenis Kecederaan:', c.injury_type ?? '—'],
+      ['Tarikh Buka:', fmtDate(c.open_date)],
+      ['Status Kes:', c.status === 'active' ? 'Aktif' : 'Ditutup'],
+      ['Dirujuk ke Doktor:', c.referred_to_doctor ? 'Ya' : 'Tidak'],
+      ...(c.referred_to_doctor && c.referred_date ? [['Tarikh Rujukan:', fmtDate(c.referred_date)]] : []),
+    ]
+    caseInfo.forEach(([label, value]) => {
+      doc.text(label, 20, yPos)
+      doc.text(String(value), 60, yPos)
+      yPos += 7
+    })
+
+    yPos = addLine(yPos + 5)
+
+    // Statistics
+    doc.setFontSize(11)
+    doc.setFont(undefined, 'bold')
+    doc.text('Statistik Sesi', 15, yPos)
+    yPos += 8
+
+    doc.setFontSize(10)
+    doc.setFont(undefined, 'normal')
+    const painScales = caseSlots.filter(s => s.pain_scale !== null).map(s => s.pain_scale!)
+    const avgPain = painScales.length > 0 ? (painScales.reduce((a, b) => a + b, 0) / painScales.length).toFixed(1) : 'N/A'
+    const stats = [
+      ['Jumlah Sesi:', String(caseSlots.length)],
+      ['Kesakitan Purata:', String(avgPain)],
+    ]
+    stats.forEach(([label, value]) => {
+      doc.text(label, 20, yPos)
+      doc.text(value, 60, yPos)
+      yPos += 7
+    })
+
+    doc.save(`Profil_Atlet_${c.athlete?.name ?? 'Unknown'}_${new Date().toISOString().split('T')[0]}.pdf`)
+  }
+
+  async function downloadSessionReport(c: PhysioCase) {
+    const doc = new jsPDF()
+    const pageWidth = doc.internal.pageSize.getWidth()
+    const pageHeight = doc.internal.pageSize.getHeight()
+    let yPos = 20
+
+    const addLine = (y: number) => {
+      doc.setDrawColor(200, 200, 200)
+      doc.line(15, y, pageWidth - 15, y)
+      return y + 10
+    }
+
+    // Header
+    doc.setFontSize(18)
+    doc.setFont(undefined, 'bold')
+    doc.text('Laporan Sesi Fisioterapi', pageWidth / 2, yPos, { align: 'center' })
+    yPos = addLine(yPos + 12)
+
+    // Case Summary
+    doc.setFontSize(11)
+    doc.setFont(undefined, 'bold')
+    doc.text(c.athlete?.name ?? 'Tiada Atlet', 15, yPos)
+    yPos += 8
+
+    doc.setFontSize(10)
+    doc.setFont(undefined, 'normal')
+    doc.text(`${c.injury_type ?? '—'} · ${c.athlete?.sport ?? '—'} · ${fmtDate(c.open_date)}`, 15, yPos)
+    yPos = addLine(yPos + 8)
+
+    // Sessions Table
+    if (caseSlots.length === 0) {
+      doc.text('Tiada sesi untuk kes ini.', 15, yPos)
+    } else {
+      doc.setFontSize(11)
+      doc.setFont(undefined, 'bold')
+      doc.text('Sesi Berkaitan', 15, yPos)
+      yPos += 8
+
+      doc.setFontSize(9)
+      doc.setFont(undefined, 'normal')
+
+      caseSlots.forEach((slot, idx) => {
+        if (yPos > pageHeight - 30) {
+          doc.addPage()
+          yPos = 20
+        }
+
+        doc.setFont(undefined, 'bold')
+        doc.text(`Sesi ${idx + 1}`, 15, yPos)
+        yPos += 6
+
+        doc.setFont(undefined, 'normal')
+        const sessionInfo = [
+          [`Tarikh: ${fmtDate(slot.slot_date)}`],
+          [`Masa: ${slot.time_slot || '—'}`],
+          [`Kehadiran: ${slot.attendance_status || '—'}`],
+          ...(slot.pain_scale !== null ? [[`Kesakitan: ${slot.pain_scale}/10`]] : []),
+        ]
+        sessionInfo.forEach(([info]) => {
+          doc.text(info, 20, yPos)
+          yPos += 5
+        })
+
+        yPos += 3
+      })
+    }
+
+    doc.save(`Laporan_Sesi_${c.athlete?.name ?? 'Unknown'}_${new Date().toISOString().split('T')[0]}.pdf`)
   }
 
   function openCloseModal() {
@@ -504,7 +661,7 @@ export default function PhysioCasePage() {
               </div>
             </div>
 
-            <div className="px-6 py-4 border-t border-gray-100 flex justify-between gap-3 shrink-0">
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-between gap-3 shrink-0 flex-wrap">
               <div className="flex gap-3">
                 {isAdmin && (
                   <button
@@ -515,7 +672,17 @@ export default function PhysioCasePage() {
                   </button>
                 )}
               </div>
-              <div className="flex gap-3">
+              <div className="flex gap-3 flex-wrap">
+                {detailCase.referred_to_doctor && (
+                  <>
+                    <button onClick={() => downloadAthleteProfile(detailCase)} className="px-4 py-2 text-sm font-semibold text-white bg-[#6B7280] hover:bg-gray-700 rounded-lg transition">
+                      📥 Profil Atlet
+                    </button>
+                    <button onClick={() => downloadSessionReport(detailCase)} className="px-4 py-2 text-sm font-semibold text-white bg-[#6B7280] hover:bg-gray-700 rounded-lg transition">
+                      📥 Laporan Sesi
+                    </button>
+                  </>
+                )}
                 {canEdit && detailCase.status === 'active' && (
                   <button onClick={openCloseModal} className="px-4 py-2 text-sm font-semibold text-white bg-[#3A7EC8] hover:bg-blue-700 rounded-lg transition">
                     Tutup Kes
