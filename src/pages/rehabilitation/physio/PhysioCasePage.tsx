@@ -8,7 +8,10 @@ import { logAction } from '../../../lib/audit'
 interface Athlete {
   id: string
   name: string
+  ic_number: string
   sport: string
+  date_of_birth: string | null
+  gender: 'M' | 'F' | null
 }
 
 interface PhysioCase {
@@ -102,9 +105,9 @@ export default function PhysioCasePage() {
   async function fetchAll() {
     setLoading(true)
     const [casesRes, slotsRes, athRes] = await Promise.all([
-      supabase.from('physio_cases').select('*, athlete:athletes(name, sport)').order('open_date', { ascending: false }),
+      supabase.from('physio_cases').select('*, athlete:athletes(id, name, ic_number, sport, date_of_birth, gender)').order('open_date', { ascending: false }),
       supabase.from('physio_slots').select('case_id, pain_scale, slot_date').not('case_id', 'is', null),
-      supabase.from('athletes').select('id, name, sport').order('name'),
+      supabase.from('athletes').select('id, name, ic_number, sport, date_of_birth, gender').order('name'),
     ])
     setCases(casesRes.data ?? [])
     setAthletes(athRes.data ?? [])
@@ -125,7 +128,7 @@ export default function PhysioCasePage() {
     setCaseLoading(true)
     const { data } = await supabase
       .from('physio_slots')
-      .select('id, slot_date, time_slot, pain_scale, session_type, attendance_status, athlete:athletes(name, sport)')
+      .select('id, slot_date, time_slot, pain_scale, session_type, attendance_status, assessment_notes, athlete:athletes(name, sport)')
       .eq('case_id', caseId)
       .order('slot_date', { ascending: true })
       .order('time_slot')
@@ -229,7 +232,7 @@ export default function PhysioCasePage() {
     fetchAll()
   }
 
-  async function downloadAthleteProfile(c: PhysioCase) {
+  async function downloadCaseReport(c: PhysioCase) {
     const doc = new jsPDF()
     const pageWidth = doc.internal.pageSize.getWidth()
     const pageHeight = doc.internal.pageSize.getHeight()
@@ -241,34 +244,43 @@ export default function PhysioCasePage() {
       return y + 10
     }
 
+    const pageBreakCheck = () => {
+      if (yPos > pageHeight - 25) {
+        doc.addPage()
+        yPos = 15
+      }
+    }
+
     // Header
     doc.setFontSize(18)
     doc.setFont(undefined, 'bold')
-    doc.text('Profil Atlet', pageWidth / 2, yPos, { align: 'center' })
+    doc.text('Laporan Kes Fisioterapi', pageWidth / 2, yPos, { align: 'center' })
     yPos = addLine(yPos + 12)
 
-    // Athlete Info
+    // Athlete Info Section
     doc.setFontSize(11)
     doc.setFont(undefined, 'bold')
-    doc.text('Maklumat Asas', 15, yPos)
+    doc.text('Maklumat Atlet', 15, yPos)
     yPos += 8
 
     doc.setFontSize(10)
     doc.setFont(undefined, 'normal')
     const athleteInfo = [
-      ['Nama Atlet:', c.athlete?.name ?? '—'],
+      ['Nama:', c.athlete?.name ?? '—'],
+      ['No. K/P:', c.athlete?.ic_number ?? '—'],
       ['Sukan:', c.athlete?.sport ?? '—'],
-      ['ID Atlet:', c.athlete_id ?? '—'],
+      ['Jantina:', c.athlete?.gender ? (c.athlete.gender === 'M' ? 'Lelaki' : 'Perempuan') : '—'],
     ]
     athleteInfo.forEach(([label, value]) => {
       doc.text(label, 20, yPos)
-      doc.text(String(value), 60, yPos)
+      doc.text(String(value), 50, yPos)
       yPos += 7
     })
 
     yPos = addLine(yPos + 5)
+    pageBreakCheck()
 
-    // Case Info
+    // Case Info Section
     doc.setFontSize(11)
     doc.setFont(undefined, 'bold')
     doc.text('Maklumat Kes', 15, yPos)
@@ -276,90 +288,38 @@ export default function PhysioCasePage() {
 
     doc.setFontSize(10)
     doc.setFont(undefined, 'normal')
+    const painScales = caseSlots.filter(s => s.pain_scale !== null).map(s => s.pain_scale!)
+    const avgPain = painScales.length > 0 ? (painScales.reduce((a, b) => a + b, 0) / painScales.length).toFixed(1) : '—'
+
     const caseInfo = [
       ['Jenis Kecederaan:', c.injury_type ?? '—'],
-      ['Tarikh Buka:', fmtDate(c.open_date)],
-      ['Status Kes:', c.status === 'active' ? 'Aktif' : 'Ditutup'],
+      ['Tarikh Pembukaan:', fmtDate(c.open_date)],
+      ['Bilangan Sesi:', String(caseSlots.length)],
+      ['Kesakitan Purata:', String(avgPain)],
       ['Dirujuk ke Doktor:', c.referred_to_doctor ? 'Ya' : 'Tidak'],
       ...(c.referred_to_doctor && c.referred_date ? [['Tarikh Rujukan:', fmtDate(c.referred_date)]] : []),
     ]
     caseInfo.forEach(([label, value]) => {
       doc.text(label, 20, yPos)
-      doc.text(String(value), 60, yPos)
+      doc.text(String(value), 50, yPos)
       yPos += 7
     })
 
     yPos = addLine(yPos + 5)
-
-    // Statistics
-    doc.setFontSize(11)
-    doc.setFont(undefined, 'bold')
-    doc.text('Statistik Sesi', 15, yPos)
-    yPos += 8
-
-    doc.setFontSize(10)
-    doc.setFont(undefined, 'normal')
-    const painScales = caseSlots.filter(s => s.pain_scale !== null).map(s => s.pain_scale!)
-    const avgPain = painScales.length > 0 ? (painScales.reduce((a, b) => a + b, 0) / painScales.length).toFixed(1) : 'N/A'
-    const stats = [
-      ['Jumlah Sesi:', String(caseSlots.length)],
-      ['Kesakitan Purata:', String(avgPain)],
-    ]
-    stats.forEach(([label, value]) => {
-      doc.text(label, 20, yPos)
-      doc.text(value, 60, yPos)
-      yPos += 7
-    })
-
-    doc.save(`Profil_Atlet_${c.athlete?.name ?? 'Unknown'}_${new Date().toISOString().split('T')[0]}.pdf`)
-  }
-
-  async function downloadSessionReport(c: PhysioCase) {
-    const doc = new jsPDF()
-    const pageWidth = doc.internal.pageSize.getWidth()
-    const pageHeight = doc.internal.pageSize.getHeight()
-    let yPos = 20
-
-    const addLine = (y: number) => {
-      doc.setDrawColor(200, 200, 200)
-      doc.line(15, y, pageWidth - 15, y)
-      return y + 10
-    }
-
-    // Header
-    doc.setFontSize(18)
-    doc.setFont(undefined, 'bold')
-    doc.text('Laporan Sesi Fisioterapi', pageWidth / 2, yPos, { align: 'center' })
-    yPos = addLine(yPos + 12)
-
-    // Case Summary
-    doc.setFontSize(11)
-    doc.setFont(undefined, 'bold')
-    doc.text(c.athlete?.name ?? 'Tiada Atlet', 15, yPos)
-    yPos += 8
-
-    doc.setFontSize(10)
-    doc.setFont(undefined, 'normal')
-    doc.text(`${c.injury_type ?? '—'} · ${c.athlete?.sport ?? '—'} · ${fmtDate(c.open_date)}`, 15, yPos)
-    yPos = addLine(yPos + 8)
+    pageBreakCheck()
 
     // Sessions Table
-    if (caseSlots.length === 0) {
-      doc.text('Tiada sesi untuk kes ini.', 15, yPos)
-    } else {
+    if (caseSlots.length > 0) {
       doc.setFontSize(11)
       doc.setFont(undefined, 'bold')
-      doc.text('Sesi Berkaitan', 15, yPos)
-      yPos += 8
+      doc.text('Rekod Sesi', 15, yPos)
+      yPos += 10
 
       doc.setFontSize(9)
       doc.setFont(undefined, 'normal')
 
       caseSlots.forEach((slot, idx) => {
-        if (yPos > pageHeight - 30) {
-          doc.addPage()
-          yPos = 20
-        }
+        pageBreakCheck()
 
         doc.setFont(undefined, 'bold')
         doc.text(`Sesi ${idx + 1}`, 15, yPos)
@@ -367,21 +327,20 @@ export default function PhysioCasePage() {
 
         doc.setFont(undefined, 'normal')
         const sessionInfo = [
-          [`Tarikh: ${fmtDate(slot.slot_date)}`],
-          [`Masa: ${slot.time_slot || '—'}`],
-          [`Kehadiran: ${slot.attendance_status || '—'}`],
-          ...(slot.pain_scale !== null ? [[`Kesakitan: ${slot.pain_scale}/10`]] : []),
+          `Tarikh: ${fmtDate(slot.slot_date)}`,
+          `Masa: ${slot.time_slot || '—'}`,
+          `Kehadiran: ${slot.attendance_status || '—'}`,
+          ...(slot.pain_scale !== null ? [`Kesakitan: ${slot.pain_scale}/10`] : []),
         ]
-        sessionInfo.forEach(([info]) => {
+        sessionInfo.forEach((info) => {
           doc.text(info, 20, yPos)
           yPos += 5
         })
-
-        yPos += 3
+        yPos += 2
       })
     }
 
-    doc.save(`Laporan_Sesi_${c.athlete?.name ?? 'Unknown'}_${new Date().toISOString().split('T')[0]}.pdf`)
+    doc.save(`Laporan_Kes_${c.athlete?.name ?? 'Unknown'}_${new Date().toISOString().split('T')[0]}.pdf`)
   }
 
   function openCloseModal() {
@@ -674,14 +633,10 @@ export default function PhysioCasePage() {
               </div>
               <div className="flex gap-3 flex-wrap">
                 {detailCase.referred_to_doctor && (
-                  <>
-                    <button onClick={() => downloadAthleteProfile(detailCase)} className="px-4 py-2 text-sm font-semibold text-white bg-[#6B7280] hover:bg-gray-700 rounded-lg transition">
-                      📥 Profil Atlet
-                    </button>
-                    <button onClick={() => downloadSessionReport(detailCase)} className="px-4 py-2 text-sm font-semibold text-white bg-[#6B7280] hover:bg-gray-700 rounded-lg transition">
-                      📥 Laporan Sesi
-                    </button>
-                  </>
+                  <button onClick={() => downloadCaseReport(detailCase)} className="px-4 py-2 text-sm font-semibold text-white bg-[#3A7EC8] hover:bg-blue-700 rounded-lg transition flex items-center gap-2">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    Muat Turun Laporan
+                  </button>
                 )}
                 {canEdit && detailCase.status === 'active' && (
                   <button onClick={openCloseModal} className="px-4 py-2 text-sm font-semibold text-white bg-[#3A7EC8] hover:bg-blue-700 rounded-lg transition">
