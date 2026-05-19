@@ -273,7 +273,7 @@ export default function PhysioCasePage() {
     ]
     athleteInfo.forEach(([label, value]) => {
       doc.text(label, 20, yPos)
-      doc.text(String(value), 50, yPos)
+      doc.text(String(value), 75, yPos)
       yPos += 7
     })
 
@@ -301,7 +301,7 @@ export default function PhysioCasePage() {
     ]
     caseInfo.forEach(([label, value]) => {
       doc.text(label, 20, yPos)
-      doc.text(String(value), 50, yPos)
+      doc.text(String(value), 75, yPos)
       yPos += 7
     })
 
