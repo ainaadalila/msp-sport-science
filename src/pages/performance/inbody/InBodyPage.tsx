@@ -149,6 +149,7 @@ export default function InBodyPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<InBodyRecord | null>(null)
+  const [formSportFilter, setFormSportFilter] = useState<string>('')
 
   type ViewTab = 'jadual' | 'profil'
   const [activeTab, setActiveTab] = useState<ViewTab>('jadual')
@@ -194,6 +195,7 @@ export default function InBodyPage() {
   function openAdd() {
     setEditing(null)
     setForm(emptyForm)
+    setFormSportFilter('')
     setError(null)
     setModalOpen(true)
   }
@@ -202,6 +204,7 @@ export default function InBodyPage() {
     setEditing(r)
     const { id, created_at, athlete, ...rest } = r
     setForm(rest)
+    setFormSportFilter(r.athlete?.sport ?? '')
     setError(null)
     setModalOpen(true)
   }
@@ -491,10 +494,18 @@ export default function InBodyPage() {
               {error && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-600">{error}</div>}
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
+                  <Field label="Sukan" required>
+                    <select value={formSportFilter} onChange={e => { setFormSportFilter(e.target.value); setField('athlete_id', '') }} className={inputCls}>
+                      <option value="">— Pilih sukan —</option>
+                      {[...new Set(athletes.map(a => a.sport))].sort().map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </Field>
+                </div>
+                <div className="col-span-2">
                   <Field label="Atlet" required>
                     <select value={form.athlete_id} onChange={e => setField('athlete_id', e.target.value)} className={inputCls}>
                       <option value="">— Pilih atlet —</option>
-                      {athletes.map(a => <option key={a.id} value={a.id}>{a.name} ({a.sport})</option>)}
+                      {athletes.filter(a => !formSportFilter || a.sport === formSportFilter).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                     </select>
                   </Field>
                 </div>
