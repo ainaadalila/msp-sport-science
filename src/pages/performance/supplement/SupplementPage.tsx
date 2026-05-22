@@ -22,6 +22,10 @@ interface SupplementRequest {
   reviewed_by: string | null
   coordinator_id: string | null
   coordinator_notes: string | null
+  supporter_id: string | null
+  supporter_status: 'sokong' | 'tidak_sokong' | null
+  supporter_notes: string | null
+  supporter_reviewed_at: string | null
   approved_quantity: number | null
   created_at: string
   supplement?: { name: string; unit: string }
@@ -57,6 +61,9 @@ function fmtDate(d: string) {
 export default function SupplementPage() {
   const { profile } = useAuth()
   const isAdmin = profile?.role === 'superadmin' || profile?.role === 'admin'
+  const isCoordinator = profile?.module_permissions?.supplement_coordinator ?? false
+  const isSupporter = profile?.module_permissions?.supplement_supporter ?? false
+  const isApprover = profile?.module_permissions?.supplement_approver ?? false
 
   const [tab, setTab] = useState<Tab>('requests')
 
@@ -83,19 +90,39 @@ export default function SupplementPage() {
   const [reqSaving, setReqSaving] = useState(false)
   const [reqError, setReqError] = useState<string | null>(null)
 
-  // Partial approval modal
-  const [partialModal, setPartialModal] = useState(false)
-  const [partialRequest, setPartialRequest] = useState<SupplementRequest | null>(null)
+  // Partial quantity for approval
   const [partialQuantity, setPartialQuantity] = useState(0)
-  const [partialSaving, setPartialSaving] = useState(false)
+
+  // Coordinator notes modal
+  const [coordNotesModal, setCoordNotesModal] = useState(false)
+  const [coordNotesRequest, setCoordNotesRequest] = useState<SupplementRequest | null>(null)
+  const [coordNotesForm, setCoordNotesForm] = useState({ notes: '', decision: 'lulus' as 'lulus' | 'tolak' })
+  const [coordNotesSaving, setCoordNotesSaving] = useState(false)
+
+  // Supporter action modal
+  const [supporterModal, setSupporterModal] = useState(false)
+  const [supporterRequest, setSupporterRequest] = useState<SupplementRequest | null>(null)
+  const [supporterForm, setSupporterForm] = useState({ notes: '', decision: 'sokong' as 'sokong' | 'tidak_sokong' })
+  const [supporterSaving, setSupporterSaving] = useState(false)
+
+  // Timeline view modal
+  const [timelineModal, setTimelineModal] = useState(false)
+  const [timelineRequest, setTimelineRequest] = useState<SupplementRequest | null>(null)
+
+  // Approval notes modal
+  const [approvalModal, setApprovalModal] = useState(false)
+  const [approvalRequest, setApprovalRequest] = useState<SupplementRequest | null>(null)
+  const [approvalForm, setApprovalForm] = useState({ notes: '', decision: 'approved' as 'approved' | 'partial' })
+  const [approvalSaving, setApprovalSaving] = useState(false)
 
   // Action loading state
   const [processingId, setProcessingId] = useState<string | null>(null)
 
-  // Filters
+  // Filters & Sorting
   const [filterStatus, setFilterStatus] = useState('')
+  const [sortBy, setSortBy] = useState<'date_desc' | 'date_asc'>('date_desc')
 
-  useEffect(() => { fetchAll() }, [])
+  useEffect(() => { fetchAll() }, [sortBy])
 
   async function fetchAll() {
     setLoading(true)
@@ -103,7 +130,7 @@ export default function SupplementPage() {
       supabase.from('supplements').select('*').order('name'),
       supabase.from('supplement_requests')
         .select('*, supplement:supplement_id(name, unit)')
-        .order('created_at', { ascending: false }),
+        .order('created_at', { ascending: sortBy === 'date_asc' }),
       supabase.from('athletes').select('id, name, sport').order('name'),
     ])
     console.log('Supplements fetch:', { data: supRes.data, error: supRes.error })
@@ -206,20 +233,82 @@ export default function SupplementPage() {
     fetchAll()
   }
 
-  async function handleCoordinatorReview(id: string, status: 'semakan_lulus' | 'semakan_tolak') {
+  async function handleCoordinatorReview(id: string, decision: 'lulus' | 'tolak', notes?: string) {
     setProcessingId(id)
-    await supabase.from('supplement_requests').update({ status, coordinator_id: profile?.id }).eq('id', id)
-    await logAction(profile!.id, status === 'semakan_lulus' ? 'koordinator_approve_supplement' : 'koordinator_reject_supplement', 'supplement_requests', id)
+    const status = decision === 'lulus' ? 'semakan_lulus' : 'semakan_tolak'
+    await supabase.from('supplement_requests').update({ status, coordinator_id: profile?.id, coordinator_notes: notes || null }).eq('id', id)
+    await logAction(profile!.id, decision === 'lulus' ? 'koordinator_approve_supplement' : 'koordinator_reject_supplement', 'supplement_requests', id)
     await fetchAll()
     setProcessingId(null)
   }
 
-  async function handleApproval(id: string, status: 'approved' | 'partial', approvedQuantity?: number) {
+  async function handleApproval(id: string, status: 'approved' | 'partial', approvedQuantity?: number, notes?: string) {
     setProcessingId(id)
-    await supabase.from('supplement_requests').update({ status, reviewed_by: profile?.id, approved_quantity: approvedQuantity || null }).eq('id', id)
+
+    // Get the request to know which supplement and quantity to reduce
+    const { data: request, error: reqError } = await supabase.from('supplement_requests').select('supplement_id, quantity, approved_quantity').eq('id', id).single()
+
+    console.log('Request fetched:', request, 'Error:', reqError)
+
+    if (request && request.supplement_id) {
+      const quantityToReduce = status === 'partial' ? (approvedQuantity || request.quantity) : request.quantity
+
+      console.log('Reducing inventory - supplement_id:', request.supplement_id, 'quantity:', quantityToReduce)
+
+      // Reduce inventory
+      try {
+        const { data: sup, error: supError } = await supabase.from('supplements').select('stock').eq('id', request.supplement_id).single()
+        console.log('Supplement data:', sup, 'Error:', supError)
+
+        if (sup) {
+          const newStock = Math.max(0, sup.stock - quantityToReduce)
+          console.log('Updating stock from', sup.stock, 'to', newStock)
+
+          const { error: updateError } = await supabase.from('supplements')
+            .update({ stock: newStock })
+            .eq('id', request.supplement_id)
+
+          console.log('Stock update error:', updateError)
+        }
+      } catch (err) {
+        console.error('Error reducing inventory:', err)
+      }
+    } else {
+      console.error('Request data missing or no supplement_id:', request)
+    }
+
+    const updatePayload: any = { status, reviewed_by: profile?.id, approved_quantity: approvedQuantity || null }
+    if (notes) updatePayload.reviewer_notes = notes
+    await supabase.from('supplement_requests').update(updatePayload).eq('id', id)
     await logAction(profile!.id, status === 'approved' ? 'approve_supplement' : 'approve_supplement_partial', 'supplement_requests', id)
     await fetchAll()
     setProcessingId(null)
+  }
+
+  async function handleSupporterAction(id: string, decision: 'sokong' | 'tidak_sokong', notes?: string) {
+    setProcessingId(id)
+    await supabase.from('supplement_requests').update({
+      supporter_id: profile?.id,
+      supporter_status: decision,
+      supporter_notes: notes || null,
+      supporter_reviewed_at: new Date().toISOString(),
+    }).eq('id', id)
+    await logAction(profile!.id, decision === 'sokong' ? 'supporter_approve_supplement' : 'supporter_reject_supplement', 'supplement_requests', id)
+    await fetchAll()
+    setProcessingId(null)
+  }
+
+  function getDisplayStatus(r: SupplementRequest): string {
+    if (r.status === 'pending') return 'Menunggu Semakan'
+    if (r.status === 'semakan_tolak') return 'Ditolak (Penyelaras)'
+    if (r.status === 'semakan_lulus') {
+      if (!r.supporter_status) return 'Menunggu Sokongan'
+      if (r.supporter_status === 'sokong') return 'Menunggu Kelulusan'
+      if (r.supporter_status === 'tidak_sokong') return 'Tidak Disokong'
+    }
+    if (r.status === 'approved') return 'Diluluskan'
+    if (r.status === 'partial') return 'Diluluskan Sebahagian'
+    return r.status
   }
 
   const pendingCount = requests.filter(r => r.status === 'pending').length
@@ -336,7 +425,24 @@ export default function SupplementPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-100">
-                    {['Tarikh', 'Sukan', 'Suplemen', 'Kuantiti', 'Status', ''].map(h => (
+                    <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-[#888] px-5 py-3">
+                      <button
+                        onClick={() => setSortBy(sortBy === 'date_desc' ? 'date_asc' : 'date_desc')}
+                        className="flex items-center gap-2 hover:text-[#111] transition cursor-pointer"
+                      >
+                        Tarikh
+                        {sortBy === 'date_desc' ? (
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <polyline points="18 15 12 9 6 15"></polyline>
+                          </svg>
+                        ) : (
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                          </svg>
+                        )}
+                      </button>
+                    </th>
+                    {['Sukan', 'Suplemen', 'Kuantiti', 'Status', ''].map(h => (
                       <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-wider text-[#888] px-5 py-3">{h}</th>
                     ))}
                   </tr>
@@ -350,22 +456,28 @@ export default function SupplementPage() {
                       <td className="px-5 py-3 text-[#444]">{r.quantity} {r.supplement?.unit ?? ''}</td>
                       <td className="px-5 py-3">
                         <span className={`inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full ${statusStyle[r.status]}`}>
-                          {statusLabel[r.status]}
+                          {getDisplayStatus(r)}
                         </span>
                       </td>
                       <td className="px-5 py-3">
                         <div className="flex gap-2 justify-end">
-                          {r.status === 'pending' && (
+                          <button
+                            onClick={() => { setTimelineRequest(r); setTimelineModal(true) }}
+                            className="text-xs font-semibold text-[#F56A00] border border-[#F56A00] hover:bg-orange-50 px-2.5 py-1 rounded-md transition"
+                          >
+                            Lihat
+                          </button>
+                          {r.status === 'pending' && isCoordinator && (
                             <>
                               <button
-                                onClick={() => handleCoordinatorReview(r.id, 'semakan_lulus')}
+                                onClick={() => { setCoordNotesRequest(r); setCoordNotesForm({ notes: r.coordinator_notes || '', decision: 'lulus' }); setCoordNotesModal(true) }}
                                 disabled={processingId === r.id}
                                 className="text-xs font-semibold text-white bg-yellow-600 hover:bg-yellow-700 disabled:bg-yellow-400 disabled:cursor-wait px-2.5 py-1 rounded-md transition"
                               >
                                 {processingId === r.id ? 'Memproses...' : 'Sahkan'}
                               </button>
                               <button
-                                onClick={() => handleCoordinatorReview(r.id, 'semakan_tolak')}
+                                onClick={() => { setCoordNotesRequest(r); setCoordNotesForm({ notes: r.coordinator_notes || '', decision: 'tolak' }); setCoordNotesModal(true) }}
                                 disabled={processingId === r.id}
                                 className="text-xs font-semibold text-red-600 border border-red-200 hover:bg-red-50 disabled:opacity-60 disabled:cursor-wait px-2.5 py-1 rounded-md transition"
                               >
@@ -373,10 +485,28 @@ export default function SupplementPage() {
                               </button>
                             </>
                           )}
-                          {r.status === 'semakan_lulus' && (
+                          {r.status === 'semakan_lulus' && !r.supporter_status && isSupporter && (
                             <>
                               <button
-                                onClick={() => handleApproval(r.id, 'approved')}
+                                onClick={() => { setSupporterRequest(r); setSupporterForm({ notes: '', decision: 'sokong' }); setSupporterModal(true) }}
+                                disabled={processingId === r.id}
+                                className="text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-wait px-2.5 py-1 rounded-md transition"
+                              >
+                                {processingId === r.id ? 'Memproses...' : 'Sokong'}
+                              </button>
+                              <button
+                                onClick={() => { setSupporterRequest(r); setSupporterForm({ notes: '', decision: 'tidak_sokong' }); setSupporterModal(true) }}
+                                disabled={processingId === r.id}
+                                className="text-xs font-semibold text-red-600 border border-red-200 hover:bg-red-50 disabled:opacity-60 disabled:cursor-wait px-2.5 py-1 rounded-md transition"
+                              >
+                                {processingId === r.id ? 'Memproses...' : 'Tidak Sokong'}
+                              </button>
+                            </>
+                          )}
+                          {r.status === 'semakan_lulus' && r.supporter_status === 'sokong' && isApprover && (
+                            <>
+                              <button
+                                onClick={() => { setApprovalRequest(r); setApprovalForm({ notes: '', decision: 'approved' }); setApprovalModal(true) }}
                                 disabled={processingId === r.id}
                                 className="text-xs font-semibold text-white bg-green-600 hover:bg-green-700 disabled:bg-green-400 disabled:cursor-wait px-2.5 py-1 rounded-md transition"
                               >
@@ -384,9 +514,9 @@ export default function SupplementPage() {
                               </button>
                               <button
                                 onClick={() => {
-                                  setPartialRequest(r)
-                                  setPartialQuantity(r.quantity)
-                                  setPartialModal(true)
+                                  setApprovalRequest(r)
+                                  setApprovalForm({ notes: '', decision: 'partial' })
+                                  setApprovalModal(true)
                                 }}
                                 disabled={processingId === r.id}
                                 className="text-xs font-semibold text-orange-600 border border-orange-200 hover:bg-orange-50 disabled:opacity-60 disabled:cursor-wait px-2.5 py-1 rounded-md transition"
@@ -473,7 +603,7 @@ export default function SupplementPage() {
                         className="flex-1 bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2.5 text-sm text-[#111] outline-none transition focus:border-[#F56A00] focus:bg-white"
                       >
                         <option value="">— Pilih suplemen —</option>
-                        {supplements.map(s => <option key={s.id} value={s.id}>{s.name} (Stok: {s.stock} {s.unit})</option>)}
+                        {supplements.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                       </select>
                       <input
                         type="number"
@@ -526,44 +656,239 @@ export default function SupplementPage() {
         </div>
       )}
 
-      {/* Partial Approval Modal */}
-      {partialModal && partialRequest && (
+      {/* Coordinator Notes Modal */}
+      {coordNotesModal && coordNotesRequest && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4">
             <div className="px-6 py-4 border-b border-gray-100">
-              <p className="text-sm font-semibold text-[#111]">Lulus Sebahagian</p>
-              <p className="text-[13px] text-[#888] mt-1">{partialRequest.supplement?.name}</p>
+              <p className="text-sm font-semibold text-[#111]">{coordNotesForm.decision === 'lulus' ? 'Sahkan' : 'Tolak'} Permohonan</p>
+              <div className="mt-2 space-y-1">
+                <p className="text-[13px] text-[#444] font-medium">{coordNotesRequest.supplement?.name}</p>
+                <p className="text-[12px] text-[#888]">Sukan: <span className="font-semibold text-[#111]">{coordNotesRequest.sport}</span></p>
+                <p className="text-[12px] text-[#888]">Kuantiti: <span className="font-semibold text-[#111]">{coordNotesRequest.quantity} {coordNotesRequest.supplement?.unit}</span></p>
+              </div>
             </div>
             <div className="px-6 py-4 space-y-4">
               <div>
-                <label className="block text-[12px] font-semibold text-[#888] uppercase mb-2">Kuantiti Dimohon</label>
-                <p className="text-lg font-bold text-[#111]">{partialRequest.quantity} {partialRequest.supplement?.unit}</p>
-              </div>
-              <div>
-                <label className="block text-[12px] font-semibold text-[#888] uppercase mb-2">Kuantiti Diluluskan</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={partialRequest.quantity}
-                  value={partialQuantity}
-                  onChange={e => setPartialQuantity(Math.min(partialRequest.quantity, Math.max(1, +e.target.value)))}
-                  className="w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2 text-sm"
+                <label className="block text-[12px] font-semibold text-[#888] uppercase mb-2">Ulasan (Pilihan)</label>
+                <textarea
+                  value={coordNotesForm.notes}
+                  onChange={e => setCoordNotesForm(f => ({ ...f, notes: e.target.value }))}
+                  placeholder="Masukkan ulasan anda..."
+                  className="w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2 text-sm resize-none h-24 outline-none transition focus:border-[#F56A00] focus:bg-white"
                 />
               </div>
             </div>
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
-              <button onClick={() => setPartialModal(false)} disabled={partialSaving} className="px-4 py-2 text-sm text-[#888] hover:text-[#111] transition">Batal</button>
+              <button onClick={() => setCoordNotesModal(false)} disabled={coordNotesSaving} className="px-4 py-2 text-sm text-[#888] hover:text-[#111] transition">Batal</button>
               <button
                 onClick={async () => {
-                  setPartialSaving(true)
-                  await handleApproval(partialRequest.id, 'partial', partialQuantity)
-                  setPartialModal(false)
-                  setPartialSaving(false)
+                  setCoordNotesSaving(true)
+                  await handleCoordinatorReview(coordNotesRequest.id, coordNotesForm.decision, coordNotesForm.notes)
+                  setCoordNotesModal(false)
+                  setCoordNotesSaving(false)
                 }}
-                disabled={partialSaving}
-                className="px-5 py-2 bg-orange-600 hover:bg-orange-700 disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition"
+                disabled={coordNotesSaving}
+                className={`px-5 py-2 text-white text-sm font-semibold rounded-lg transition disabled:opacity-60 ${coordNotesForm.decision === 'lulus' ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-red-600 hover:bg-red-700'}`}
               >
-                {partialSaving ? 'Menyimpan...' : 'Lulus Sebahagian'}
+                {coordNotesSaving ? 'Menyimpan...' : (coordNotesForm.decision === 'lulus' ? 'Sahkan' : 'Tolak')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Supporter Action Modal */}
+      {supporterModal && supporterRequest && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4">
+            <div className="px-6 py-4 border-b border-gray-100">
+              <p className="text-sm font-semibold text-[#111]">{supporterForm.decision === 'sokong' ? 'Sokong' : 'Tidak Sokong'} Permohonan</p>
+              <div className="mt-2 space-y-1">
+                <p className="text-[13px] text-[#444] font-medium">{supporterRequest.supplement?.name}</p>
+                <p className="text-[12px] text-[#888]">Sukan: <span className="font-semibold text-[#111]">{supporterRequest.sport}</span></p>
+                <p className="text-[12px] text-[#888]">Kuantiti: <span className="font-semibold text-[#111]">{supporterRequest.quantity} {supporterRequest.supplement?.unit}</span></p>
+              </div>
+            </div>
+            <div className="px-6 py-4 space-y-4">
+              {supporterRequest.coordinator_notes && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-blue-600 mb-1">Ulasan Penyelaras Semak</p>
+                  <p className="text-[13px] text-blue-900">"{supporterRequest.coordinator_notes}"</p>
+                </div>
+              )}
+              <div>
+                <label className="block text-[12px] font-semibold text-[#888] uppercase mb-2">Ulasan Anda (Pilihan)</label>
+                <textarea
+                  value={supporterForm.notes}
+                  onChange={e => setSupporterForm(f => ({ ...f, notes: e.target.value }))}
+                  placeholder="Masukkan ulasan anda..."
+                  className="w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2 text-sm resize-none h-24 outline-none transition focus:border-[#F56A00] focus:bg-white"
+                />
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+              <button onClick={() => setSupporterModal(false)} disabled={supporterSaving} className="px-4 py-2 text-sm text-[#888] hover:text-[#111] transition">Batal</button>
+              <button
+                onClick={async () => {
+                  setSupporterSaving(true)
+                  await handleSupporterAction(supporterRequest.id, supporterForm.decision, supporterForm.notes)
+                  setSupporterModal(false)
+                  setSupporterSaving(false)
+                }}
+                disabled={supporterSaving}
+                className={`px-5 py-2 text-white text-sm font-semibold rounded-lg transition disabled:opacity-60 ${supporterForm.decision === 'sokong' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-red-600 hover:bg-red-700'}`}
+              >
+                {supporterSaving ? 'Menyimpan...' : (supporterForm.decision === 'sokong' ? 'Sokong' : 'Tidak Sokong')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Timeline View Modal */}
+      {timelineModal && timelineRequest && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
+              <div>
+                <p className="text-sm font-semibold text-[#111]">Aliran Permohonan</p>
+                <p className="text-[13px] text-[#888] mt-1">{timelineRequest.supplement?.name} — {timelineRequest.quantity} {timelineRequest.supplement?.unit}</p>
+              </div>
+              <button onClick={() => setTimelineModal(false)} className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
+            </div>
+            <div className="px-6 py-5 overflow-y-auto flex-1 space-y-5">
+              {/* Step 1: Penyelaras Semak */}
+              <div className="border-l-2 pl-4" style={{ borderColor: timelineRequest.status !== 'pending' ? '#F56A00' : '#E8E8E8' }}>
+                <div className="flex items-center gap-3 mb-2">
+                  <div className={`w-3 h-3 rounded-full ${timelineRequest.status !== 'pending' ? 'bg-[#F56A00]' : 'bg-[#E8E8E8]'}`} />
+                  <p className="text-sm font-semibold text-[#111]">Penyelaras Semak</p>
+                  {timelineRequest.status !== 'pending' && (
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${timelineRequest.status === 'semakan_tolak' ? 'bg-red-50 text-red-600' : 'bg-yellow-50 text-yellow-600'}`}>
+                      {timelineRequest.status === 'semakan_tolak' ? 'Ditolak' : 'Lulus'}
+                    </span>
+                  )}
+                </div>
+                {timelineRequest.status !== 'pending' && (
+                  <div className="text-[13px] text-[#888] space-y-1">
+                    <p>Keputusan pada: {fmtDate(timelineRequest.request_date)}</p>
+                    {timelineRequest.coordinator_notes && <p className="italic text-[#444]">"{timelineRequest.coordinator_notes}"</p>}
+                  </div>
+                )}
+                {timelineRequest.status === 'pending' && <p className="text-[13px] text-[#888]">Menunggu semakan...</p>}
+              </div>
+
+              {/* Step 2: Penyokong */}
+              <div className="border-l-2 pl-4" style={{ borderColor: timelineRequest.supporter_status ? '#F56A00' : '#E8E8E8' }}>
+                <div className="flex items-center gap-3 mb-2">
+                  <div className={`w-3 h-3 rounded-full ${timelineRequest.supporter_status ? 'bg-[#F56A00]' : 'bg-[#E8E8E8]'}`} />
+                  <p className="text-sm font-semibold text-[#111]">Penyokong</p>
+                  {timelineRequest.supporter_status && (
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${timelineRequest.supporter_status === 'tidak_sokong' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
+                      {timelineRequest.supporter_status === 'tidak_sokong' ? 'Tidak Sokong' : 'Sokong'}
+                    </span>
+                  )}
+                </div>
+                {timelineRequest.supporter_status && (
+                  <div className="text-[13px] text-[#888] space-y-1">
+                    <p>Keputusan pada: {timelineRequest.supporter_reviewed_at ? fmtDate(timelineRequest.supporter_reviewed_at) : '—'}</p>
+                    {timelineRequest.supporter_notes && <p className="italic text-[#444]">"{timelineRequest.supporter_notes}"</p>}
+                  </div>
+                )}
+                {timelineRequest.status === 'semakan_lulus' && !timelineRequest.supporter_status && <p className="text-[13px] text-[#888]">Menunggu sokongan...</p>}
+                {(timelineRequest.status === 'pending' || timelineRequest.status === 'semakan_tolak') && <p className="text-[13px] text-[#888]">Belum dimulai</p>}
+              </div>
+
+              {/* Step 3: Pegawai Pelulus */}
+              <div className="border-l-2 pl-4" style={{ borderColor: timelineRequest.status === 'approved' || timelineRequest.status === 'partial' ? '#F56A00' : '#E8E8E8' }}>
+                <div className="flex items-center gap-3 mb-2">
+                  <div className={`w-3 h-3 rounded-full ${timelineRequest.status === 'approved' || timelineRequest.status === 'partial' ? 'bg-[#F56A00]' : 'bg-[#E8E8E8]'}`} />
+                  <p className="text-sm font-semibold text-[#111]">Pegawai Pelulus</p>
+                  {(timelineRequest.status === 'approved' || timelineRequest.status === 'partial') && (
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${timelineRequest.status === 'partial' ? 'bg-orange-50 text-orange-600' : 'bg-green-50 text-green-600'}`}>
+                      {timelineRequest.status === 'partial' ? 'Lulus Sebahagian' : 'Lulus Penuh'}
+                    </span>
+                  )}
+                </div>
+                {(timelineRequest.status === 'approved' || timelineRequest.status === 'partial') && (
+                  <div className="text-[13px] text-[#888]">
+                    <p>Keputusan: {timelineRequest.status === 'partial' ? `${timelineRequest.approved_quantity} ${timelineRequest.supplement?.unit}` : `${timelineRequest.quantity} ${timelineRequest.supplement?.unit}`}</p>
+                  </div>
+                )}
+                {timelineRequest.status === 'semakan_lulus' && timelineRequest.supporter_status === 'sokong' && <p className="text-[13px] text-[#888]">Menunggu kelulusan...</p>}
+                {(timelineRequest.status === 'pending' || timelineRequest.status === 'semakan_tolak' || (timelineRequest.status === 'semakan_lulus' && !timelineRequest.supporter_status)) && <p className="text-[13px] text-[#888]">Belum dimulai</p>}
+                {timelineRequest.status === 'semakan_lulus' && timelineRequest.supporter_status === 'tidak_sokong' && <p className="text-[13px] text-[#888]">Tidak dilanjutkan</p>}
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-end">
+              <button onClick={() => setTimelineModal(false)} className="px-4 py-2 text-sm text-[#888] hover:text-[#111] transition">Tutup</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Approval Notes Modal */}
+      {approvalModal && approvalRequest && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-gray-100">
+              <p className="text-sm font-semibold text-[#111]">{approvalForm.decision === 'approved' ? 'Lulus Penuh' : 'Lulus Sebahagian'}</p>
+              <div className="mt-2 space-y-1">
+                <p className="text-[13px] text-[#444] font-medium">{approvalRequest.supplement?.name}</p>
+                <p className="text-[12px] text-[#888]">Sukan: <span className="font-semibold text-[#111]">{approvalRequest.sport}</span></p>
+                <p className="text-[12px] text-[#888]">Kuantiti: <span className="font-semibold text-[#111]">{approvalRequest.quantity} {approvalRequest.supplement?.unit}</span></p>
+              </div>
+            </div>
+            <div className="px-6 py-4 space-y-4">
+              {approvalRequest.coordinator_notes && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-blue-600 mb-1">Ulasan Penyelaras Semak</p>
+                  <p className="text-[13px] text-blue-900">"{approvalRequest.coordinator_notes}"</p>
+                </div>
+              )}
+              {approvalRequest.supporter_notes && (
+                <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-purple-600 mb-1">Ulasan Penyokong</p>
+                  <p className="text-[13px] text-purple-900">"{approvalRequest.supporter_notes}"</p>
+                </div>
+              )}
+              {approvalForm.decision === 'partial' && (
+                <div>
+                  <label className="block text-[12px] font-semibold text-[#888] uppercase mb-2">Kuantiti Diluluskan</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={approvalRequest.quantity}
+                    value={partialQuantity}
+                    onChange={e => setPartialQuantity(Math.min(approvalRequest.quantity, Math.max(1, +e.target.value)))}
+                    className="w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2 text-sm"
+                  />
+                </div>
+              )}
+              <div>
+                <label className="block text-[12px] font-semibold text-[#888] uppercase mb-2">Ulasan (Pilihan)</label>
+                <textarea
+                  value={approvalForm.notes}
+                  onChange={e => setApprovalForm(f => ({ ...f, notes: e.target.value }))}
+                  placeholder="Masukkan ulasan anda..."
+                  className="w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2 text-sm resize-none h-24 outline-none transition focus:border-[#F56A00] focus:bg-white"
+                />
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+              <button onClick={() => setApprovalModal(false)} disabled={approvalSaving} className="px-4 py-2 text-sm text-[#888] hover:text-[#111] transition">Batal</button>
+              <button
+                onClick={async () => {
+                  setApprovalSaving(true)
+                  const approvedQty = approvalForm.decision === 'partial' ? partialQuantity : undefined
+                  await handleApproval(approvalRequest.id, approvalForm.decision, approvedQty, approvalForm.notes)
+                  setApprovalModal(false)
+                  setApprovalSaving(false)
+                }}
+                disabled={approvalSaving}
+                className={`px-5 py-2 text-white text-sm font-semibold rounded-lg transition disabled:opacity-60 ${approvalForm.decision === 'approved' ? 'bg-green-600 hover:bg-green-700' : 'bg-orange-600 hover:bg-orange-700'}`}
+              >
+                {approvalSaving ? 'Menyimpan...' : (approvalForm.decision === 'approved' ? 'Lulus Penuh' : 'Lulus Sebahagian')}
               </button>
             </div>
           </div>

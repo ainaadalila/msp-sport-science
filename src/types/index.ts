@@ -1,9 +1,23 @@
 export type UserRole = 'superadmin' | 'admin' | 'coach' | 'physio' | 'medical' | 'athlete'
 
+export interface ModulePermissions {
+  athletes: boolean
+  inbody: boolean
+  supplement: boolean
+  physio: boolean
+  fitness: boolean
+  strength: boolean
+  reports: boolean
+  supplement_coordinator: boolean
+  supplement_supporter: boolean
+  supplement_approver: boolean
+}
+
 export interface Profile {
   id: string
   full_name: string
   role: UserRole
+  module_permissions: ModulePermissions
   created_at: string
 }
 
@@ -69,9 +83,16 @@ export interface SupplementRequest {
   supplement_id: string
   quantity: number
   request_date: string
-  status: 'pending' | 'approved' | 'rejected'
+  status: 'pending' | 'semakan_lulus' | 'semakan_tolak' | 'approved' | 'partial' | 'rejected'
+  coordinator_id?: string
+  coordinator_notes?: string
+  supporter_id?: string
+  supporter_status?: 'sokong' | 'tidak_sokong'
+  supporter_notes?: string
+  supporter_reviewed_at?: string
   requested_by?: string
   reviewed_by?: string
+  approved_quantity?: number
   created_at: string
 }
 
@@ -194,4 +215,19 @@ export interface FitnessTestResult {
   notes?: string
   created_at: string
   test?: FitnessTestDefinition
+}
+
+export interface PhysioRating {
+  id: string
+  athlete_id: string
+  phase: 'persediaan' | 'pertandingan' | 'pemulihan'
+  cognitive_anxiety_score: number | null
+  somatic_anxiety_score: number | null
+  self_confidence_score: number | null
+  raw_responses: Record<string, number> | null
+  assessment_date: string
+  recorded_by?: string
+  created_at: string
+  updated_at: string
+  athlete?: { name: string; sport: string }
 }

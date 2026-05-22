@@ -389,68 +389,70 @@ export default function AthletesPage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100">
-                {['Atlet', 'No. IC', 'Jantina', 'Sukan', 'Kategori/Acara', 'Status', 'Atlet Elit', ''].map(h => (
-                  <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-wider text-[#888] px-5 py-3">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(a => (
-                <tr
-                  key={a.id}
-                  onClick={() => navigate(`/athletes/${a.id}`)}
-                  className="border-b border-gray-50 last:border-0 hover:bg-gray-50 cursor-pointer group"
-                >
-                  <td className="px-5 py-3">
-                    <div className="flex items-center gap-3">
-                      <Avatar name={a.name} url={a.photo_url} size={32} />
-                      <div>
-                        <span className="font-medium text-[#111] group-hover:text-[#F56A00] transition">{a.name}</span>
-                        {a.date_of_birth && <p className="text-[11px] text-[#888] mt-0.5">{fmtDate(a.date_of_birth)}</p>}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-5 py-3 font-mono text-[12px] text-[#444]">{a.ic_number}</td>
-                  <td className="px-5 py-3 text-[#444]">{a.gender ?? '—'}</td>
-                  <td className="px-5 py-3 text-[#444]">{a.sport}</td>
-                  <td className="px-5 py-3 text-[#888]">{a.category ?? '—'}</td>
-                  <td className="px-5 py-3">
-                    <StatusBadge status={a.status} />
-                  </td>
-                  <td className="px-5 py-3">
-                    {a.is_elite && (
-                      <span className="inline-block text-[11px] font-bold px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-600 border border-yellow-200">
-                        ATLET ELIT
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-5 py-3">
-                    <div className="flex gap-3 justify-end items-center">
-                      {isAdmin && (
-                        <>
-                          <button
-                            onClick={e => { e.stopPropagation(); openEdit(a) }}
-                            className="text-xs text-[#F56A00] hover:underline font-medium opacity-0 group-hover:opacity-100 transition"
-                          >Edit</button>
-                          <button
-                            onClick={e => { e.stopPropagation(); setConfirmDelete(a) }}
-                            className="text-xs text-[#D44040] hover:underline font-medium opacity-0 group-hover:opacity-100 transition"
-                          >Padam</button>
-                        </>
-                      )}
-                      <svg className="w-3.5 h-3.5 text-[#bbb] group-hover:text-[#F56A00] transition shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                        <polyline points="9 18 15 12 9 6"/>
-                      </svg>
-                    </div>
-                  </td>
+              <thead>
+                <tr className="border-b border-gray-100">
+                  {['Atlet', 'No. IC', 'Jantina', 'Sukan', 'Kategori/Acara', 'Status', 'Atlet Elit', ''].map(h => (
+                    <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-wider text-[#888] px-5 py-3">{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          </div>
-        )}
+              </thead>
+              <tbody>
+                {filtered.map(a => (
+                  <tr
+                    key={a.id}
+                    onClick={() => navigate(`/athletes/${a.id}`)}
+                    className="border-b border-gray-50 last:border-0 hover:bg-gray-50 cursor-pointer group"
+                  >
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-3">
+                        <Avatar name={a.name} url={a.photo_url} size={32} />
+                        <div>
+                          <span className="font-medium text-[#111] group-hover:text-[#F56A00] transition">{a.name}</span>
+                          {a.date_of_birth && <p className="text-[11px] text-[#888] mt-0.5">{fmtDate(a.date_of_birth)}</p>}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-5 py-3 font-mono text-[12px] text-[#444]">{a.ic_number}</td>
+                    <td className="px-5 py-3 text-[#444]">{a.gender ?? '—'}</td>
+                    <td className="px-5 py-3 text-[#444]">{a.sport}</td>
+                    <td className="px-5 py-3 text-[#888]">{a.category ?? '—'}</td>
+                    <td className="px-5 py-3">
+                      <StatusBadge status={a.status} />
+                    </td>
+                    <td className="px-5 py-3">
+                      {a.is_elite && (
+                        <span className="inline-block text-[11px] font-bold px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-600 border border-yellow-200">
+                          ATLET ELIT
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-5 py-3">
+                      <div className="flex gap-3 justify-end items-center">
+                        {isAdmin && (
+                          <>
+                            <button
+                              onClick={e => { e.stopPropagation(); openEdit(a) }}
+                              className="text-xs text-[#F56A00] hover:underline font-medium opacity-0 group-hover:opacity-100 transition"
+                            >Edit</button>
+                            <button
+                              onClick={e => { e.stopPropagation(); setConfirmDelete(a) }}
+                              className="text-xs text-[#D44040] hover:underline font-medium opacity-0 group-hover:opacity-100 transition"
+                            >Padam</button>
+                          </>
+                        )}
+                        <svg className="w-3.5 h-3.5 text-[#bbb] group-hover:text-[#F56A00] transition shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <polyline points="9 18 15 12 9 6"/>
+                        </svg>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Add / Edit Modal */}
       {modalOpen && (

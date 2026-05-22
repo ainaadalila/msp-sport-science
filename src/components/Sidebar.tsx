@@ -1,26 +1,31 @@
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
+import type { ModulePermissions } from '../types'
 
 interface NavItem {
   label: string
   path: string
   end?: boolean
+  module?: keyof ModulePermissions
 }
 
 const expandableGroups: Record<string, NavItem[]> = {
   kecergasan: [
-    { label: 'Strength & Conditioning', path: '/fitness/strength' },
-    { label: 'Ujian Kecergasan', path: '/fitness/testing' },
-    { label: 'Konfigurasi Ujian', path: '/fitness/config' },
+    { label: 'Strength & Conditioning', path: '/fitness/strength', module: 'strength' },
+    { label: 'Ujian Kecergasan', path: '/fitness/testing', module: 'fitness' },
+    { label: 'Konfigurasi Ujian', path: '/fitness/config', module: 'fitness' },
   ],
   prestasi: [
-    { label: 'Penilaian InBody', path: '/performance/inbody' },
-    { label: 'Pengurusan Suplemen', path: '/performance/supplement' },
+    { label: 'Penilaian InBody', path: '/performance/inbody', module: 'inbody' },
+    { label: 'Pengurusan Suplemen', path: '/performance/supplement', module: 'supplement' },
   ],
   fisioterapi: [
-    { label: 'Saringan Fisioterapi', path: '/rehabilitation/physio', end: true },
-    { label: 'Pengurusan Kes', path: '/rehabilitation/physio/cases' },
+    { label: 'Saringan Fisioterapi', path: '/rehabilitation/physio', end: true, module: 'physio' },
+    { label: 'Pengurusan Kes', path: '/rehabilitation/physio/cases', module: 'physio' },
+  ],
+  psikologi: [
+    { label: 'Penilaian Psikologi', path: '/psychology/rating' },
   ],
 }
 
@@ -33,6 +38,10 @@ export default function Sidebar() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const isAdmin = profile?.role === 'superadmin' || profile?.role === 'admin'
+  const isSuperAdmin = profile?.role === 'superadmin'
+
+  const can = (mod: keyof ModulePermissions) =>
+    isSuperAdmin || (profile?.module_permissions?.[mod] ?? true)
 
   // Auto-expand group if a child route is active
   function isGroupActive(key: string) {
@@ -43,6 +52,7 @@ export default function Sidebar() {
     kecergasan: isGroupActive('kecergasan'),
     prestasi: isGroupActive('prestasi'),
     fisioterapi: isGroupActive('fisioterapi'),
+    psikologi: isGroupActive('psikologi'),
   })
 
   // Re-evaluate on route change
@@ -51,6 +61,7 @@ export default function Sidebar() {
       kecergasan: prev.kecergasan || isGroupActive('kecergasan'),
       prestasi: prev.prestasi || isGroupActive('prestasi'),
       fisioterapi: prev.fisioterapi || isGroupActive('fisioterapi'),
+      psikologi: prev.psikologi || isGroupActive('psikologi'),
     }))
   }, [pathname])
 
@@ -82,7 +93,9 @@ export default function Sidebar() {
         <div>
           <p className={groupLabelCls}>Utama</p>
           <NavLink to="/" end className={({ isActive }) => navItemCls(isActive)}>Dashboard</NavLink>
-          <NavLink to="/athletes" className={({ isActive }) => navItemCls(isActive)}>Profil Atlet</NavLink>
+          {can('athletes') && (
+            <NavLink to="/athletes" className={({ isActive }) => navItemCls(isActive)}>Profil Atlet</NavLink>
+          )}
         </div>
 
         {/* Sains Sukan */}
@@ -90,65 +103,109 @@ export default function Sidebar() {
           <p className={groupLabelCls}>Sains Sukan</p>
 
           {/* Kecergasan */}
-          <button
-            onClick={() => toggle('kecergasan')}
-            className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium transition-colors ${isGroupActive('kecergasan') ? 'text-[#F56A00]' : 'text-[#444] hover:bg-gray-100'}`}
-          >
-            <span>Kecergasan</span>
-            <svg className={`w-3.5 h-3.5 text-[#aaa] transition-transform ${open.kecergasan ? 'rotate-90' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg>
-          </button>
-          {open.kecergasan && (
-            <div className="ml-3 mt-0.5 space-y-0.5 border-l border-gray-100 pl-3">
-              {expandableGroups.kecergasan.map(item => (
-                <NavLink key={item.path} to={item.path} end={item.end} className={({ isActive }) => subNavItemCls(isActive)}>
-                  {item.label}
-                </NavLink>
-              ))}
-            </div>
+          {expandableGroups.kecergasan.some(item => item.module && can(item.module)) && (
+            <>
+              <button
+                onClick={() => toggle('kecergasan')}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium transition-colors ${isGroupActive('kecergasan') ? 'text-[#F56A00]' : 'text-[#444] hover:bg-gray-100'}`}
+              >
+                <span>Kecergasan</span>
+                <svg className={`w-3.5 h-3.5 text-[#aaa] transition-transform ${open.kecergasan ? 'rotate-90' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+              {open.kecergasan && (
+                <div className="ml-3 mt-0.5 space-y-0.5 border-l border-gray-100 pl-3">
+                  {expandableGroups.kecergasan.map(item => (
+                    item.module && can(item.module) && (
+                      <NavLink key={item.path} to={item.path} end={item.end} className={({ isActive }) => subNavItemCls(isActive)}>
+                        {item.label}
+                      </NavLink>
+                    )
+                  ))}
+                </div>
+              )}
+            </>
           )}
 
           {/* Prestasi */}
-          <button
-            onClick={() => toggle('prestasi')}
-            className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium transition-colors ${isGroupActive('prestasi') ? 'text-[#F56A00]' : 'text-[#444] hover:bg-gray-100'}`}
-          >
-            <span>Prestasi</span>
-            <svg className={`w-3.5 h-3.5 text-[#aaa] transition-transform ${open.prestasi ? 'rotate-90' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg>
-          </button>
-          {open.prestasi && (
-            <div className="ml-3 mt-0.5 space-y-0.5 border-l border-gray-100 pl-3">
-              {expandableGroups.prestasi.map(item => (
-                <NavLink key={item.path} to={item.path} end={item.end} className={({ isActive }) => subNavItemCls(isActive)}>
-                  {item.label}
-                </NavLink>
-              ))}
-            </div>
+          {expandableGroups.prestasi.some(item => item.module && can(item.module)) && (
+            <>
+              <button
+                onClick={() => toggle('prestasi')}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium transition-colors ${isGroupActive('prestasi') ? 'text-[#F56A00]' : 'text-[#444] hover:bg-gray-100'}`}
+              >
+                <span>Prestasi</span>
+                <svg className={`w-3.5 h-3.5 text-[#aaa] transition-transform ${open.prestasi ? 'rotate-90' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+              {open.prestasi && (
+                <div className="ml-3 mt-0.5 space-y-0.5 border-l border-gray-100 pl-3">
+                  {expandableGroups.prestasi.map(item => (
+                    item.module && can(item.module) && (
+                      <NavLink key={item.path} to={item.path} end={item.end} className={({ isActive }) => subNavItemCls(isActive)}>
+                        {item.label}
+                      </NavLink>
+                    )
+                  ))}
+                </div>
+              )}
+            </>
           )}
 
           {/* Fisioterapi */}
-          <button
-            onClick={() => toggle('fisioterapi')}
-            className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium transition-colors ${isGroupActive('fisioterapi') ? 'text-[#F56A00]' : 'text-[#444] hover:bg-gray-100'}`}
-          >
-            <span>Fisioterapi</span>
-            <svg className={`w-3.5 h-3.5 text-[#aaa] transition-transform ${open.fisioterapi ? 'rotate-90' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg>
-          </button>
-          {open.fisioterapi && (
-            <div className="ml-3 mt-0.5 space-y-0.5 border-l border-gray-100 pl-3">
-              {expandableGroups.fisioterapi.map(item => (
-                <NavLink key={item.path} to={item.path} end={item.end} className={({ isActive }) => subNavItemCls(isActive)}>
-                  {item.label}
-                </NavLink>
-              ))}
-            </div>
+          {expandableGroups.fisioterapi.some(item => item.module && can(item.module)) && (
+            <>
+              <button
+                onClick={() => toggle('fisioterapi')}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium transition-colors ${isGroupActive('fisioterapi') ? 'text-[#F56A00]' : 'text-[#444] hover:bg-gray-100'}`}
+              >
+                <span>Fisioterapi</span>
+                <svg className={`w-3.5 h-3.5 text-[#aaa] transition-transform ${open.fisioterapi ? 'rotate-90' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+              {open.fisioterapi && (
+                <div className="ml-3 mt-0.5 space-y-0.5 border-l border-gray-100 pl-3">
+                  {expandableGroups.fisioterapi.map(item => (
+                    item.module && can(item.module) && (
+                      <NavLink key={item.path} to={item.path} end={item.end} className={({ isActive }) => subNavItemCls(isActive)}>
+                        {item.label}
+                      </NavLink>
+                    )
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Psikologi */}
+          {expandableGroups.psikologi.some(item => !item.module || can(item.module)) && (
+            <>
+              <button
+                onClick={() => toggle('psikologi')}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium transition-colors ${isGroupActive('psikologi') ? 'text-[#F56A00]' : 'text-[#444] hover:bg-gray-100'}`}
+              >
+                <span>Psikologi</span>
+                <svg className={`w-3.5 h-3.5 text-[#aaa] transition-transform ${open.psikologi ? 'rotate-90' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+              {open.psikologi && (
+                <div className="ml-3 mt-0.5 space-y-0.5 border-l border-gray-100 pl-3">
+                  {expandableGroups.psikologi.map(item => (
+                    (!item.module || can(item.module)) && (
+                      <NavLink key={item.path} to={item.path} end={item.end} className={({ isActive }) => subNavItemCls(isActive)}>
+                        {item.label}
+                      </NavLink>
+                    )
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
 
         {/* Pelaporan */}
-        <div>
-          <p className={groupLabelCls}>Pelaporan</p>
-          <NavLink to="/reports" className={({ isActive }) => navItemCls(isActive)}>Laporan</NavLink>
-        </div>
+        {can('reports') && (
+          <div>
+            <p className={groupLabelCls}>Pelaporan</p>
+            <NavLink to="/reports" className={({ isActive }) => navItemCls(isActive)}>Laporan</NavLink>
+          </div>
+        )}
 
         {/* Pentadbiran */}
         {isAdmin && (

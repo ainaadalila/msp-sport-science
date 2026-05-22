@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import jsPDF from 'jspdf'
-import html2canvas from 'html2canvas'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
 import { logAction } from '../../../lib/audit'
@@ -24,7 +23,7 @@ interface PhysioCase {
   referred_date: string | null
   physio_id: string | null
   created_at: string
-  athlete?: { name: string; sport: string } | null
+  athlete?: { id: string; name: string; ic_number: string; sport: string; date_of_birth: string | null; gender: 'M' | 'F' | null } | null
 }
 
 interface PhysioSlot {
@@ -253,18 +252,18 @@ export default function PhysioCasePage() {
 
     // Header
     doc.setFontSize(18)
-    doc.setFont(undefined, 'bold')
+    doc.setFont('', 'bold')
     doc.text('Laporan Kes Fisioterapi', pageWidth / 2, yPos, { align: 'center' })
     yPos = addLine(yPos + 12)
 
     // Athlete Info Section
     doc.setFontSize(11)
-    doc.setFont(undefined, 'bold')
+    doc.setFont('', 'bold')
     doc.text('Maklumat Atlet', 15, yPos)
     yPos += 8
 
     doc.setFontSize(10)
-    doc.setFont(undefined, 'normal')
+    doc.setFont('', 'normal')
     const athleteInfo = [
       ['Nama:', c.athlete?.name ?? '—'],
       ['No. K/P:', c.athlete?.ic_number ?? '—'],
@@ -282,12 +281,12 @@ export default function PhysioCasePage() {
 
     // Case Info Section
     doc.setFontSize(11)
-    doc.setFont(undefined, 'bold')
+    doc.setFont('', 'bold')
     doc.text('Maklumat Kes', 15, yPos)
     yPos += 8
 
     doc.setFontSize(10)
-    doc.setFont(undefined, 'normal')
+    doc.setFont('', 'normal')
     const painScales = caseSlots.filter(s => s.pain_scale !== null).map(s => s.pain_scale!)
     const avgPain = painScales.length > 0 ? (painScales.reduce((a, b) => a + b, 0) / painScales.length).toFixed(1) : '—'
 
@@ -311,21 +310,21 @@ export default function PhysioCasePage() {
     // Sessions Table
     if (caseSlots.length > 0) {
       doc.setFontSize(11)
-      doc.setFont(undefined, 'bold')
+      doc.setFont('', 'bold')
       doc.text('Rekod Sesi', 15, yPos)
       yPos += 10
 
       doc.setFontSize(9)
-      doc.setFont(undefined, 'normal')
+      doc.setFont('', 'normal')
 
       caseSlots.forEach((slot, idx) => {
         pageBreakCheck()
 
-        doc.setFont(undefined, 'bold')
+        doc.setFont('', 'bold')
         doc.text(`Sesi ${idx + 1}`, 15, yPos)
         yPos += 6
 
-        doc.setFont(undefined, 'normal')
+        doc.setFont('', 'normal')
         const sessionInfo = [
           `Tarikh: ${fmtDate(slot.slot_date)}`,
           `Masa: ${slot.time_slot || '—'}`,

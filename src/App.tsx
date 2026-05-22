@@ -16,6 +16,7 @@ import InBodyPage from './pages/performance/inbody/InBodyPage'
 import SupplementPage from './pages/performance/supplement/SupplementPage'
 import PhysioPage from './pages/rehabilitation/physio/PhysioPage'
 import PhysioCasePage from './pages/rehabilitation/physio/PhysioCasePage'
+import PsychologyRatingPage from './pages/psychology/PsychologyRatingPage'
 import ReportsPage from './pages/reports/ReportsPage'
 import UserManagementPage from './pages/admin/UserManagementPage'
 
@@ -35,16 +36,17 @@ export default function App() {
             }
           >
             <Route index element={<DashboardPage />} />
-            <Route path="athletes" element={<AthletesPage />} />
-            <Route path="athletes/:id" element={<AthleteProfilePage />} />
-            <Route path="fitness/strength" element={<StrengthPage />} />
-            <Route path="fitness/testing" element={<FitnessTestingPage />} />
-            <Route path="fitness/config" element={<FitnessTestConfigPage />} />
-            <Route path="performance/inbody" element={<InBodyPage />} />
-            <Route path="performance/supplement" element={<SupplementPage />} />
-            <Route path="rehabilitation/physio" element={<PhysioPage />} />
-            <Route path="rehabilitation/physio/cases" element={<PhysioCasePage />} />
-            <Route path="reports" element={<ReportsPage />} />
+            <Route path="athletes" element={<ProtectedRoute module="athletes"><AthletesPage /></ProtectedRoute>} />
+            <Route path="athletes/:id" element={<ProtectedRoute module="athletes"><AthleteProfilePage /></ProtectedRoute>} />
+            <Route path="fitness/strength" element={<ProtectedRoute module="strength"><StrengthPage /></ProtectedRoute>} />
+            <Route path="fitness/testing" element={<ProtectedRoute module="fitness"><FitnessTestingPage /></ProtectedRoute>} />
+            <Route path="fitness/config" element={<ProtectedRoute module="fitness"><FitnessTestConfigPage /></ProtectedRoute>} />
+            <Route path="performance/inbody" element={<ProtectedRoute module="inbody"><InBodyPage /></ProtectedRoute>} />
+            <Route path="performance/supplement" element={<ProtectedRoute module="supplement"><SupplementPage /></ProtectedRoute>} />
+            <Route path="rehabilitation/physio" element={<ProtectedRoute module="physio"><PhysioPage /></ProtectedRoute>} />
+            <Route path="rehabilitation/physio/cases" element={<ProtectedRoute module="physio"><PhysioCasePage /></ProtectedRoute>} />
+            <Route path="psychology/rating" element={<ProtectedRoute><PsychologyRatingPage /></ProtectedRoute>} />
+            <Route path="reports" element={<ProtectedRoute module="reports"><ReportsPage /></ProtectedRoute>} />
             <Route
               path="admin/users"
               element={
