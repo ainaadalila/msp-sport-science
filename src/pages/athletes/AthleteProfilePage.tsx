@@ -14,6 +14,7 @@ interface Athlete {
   weight: number | null
   height: number | null
   photo_url: string | null
+  is_elite: boolean
 }
 
 interface InBodyRecord {
@@ -214,9 +215,16 @@ export default function AthleteProfilePage() {
               <h2 className="text-xl font-bold text-[#111]">{athlete.name}</h2>
               <p className="text-sm text-[#888] mt-0.5">{athlete.sport}{athlete.category ? ` · ${athlete.category}` : ''}</p>
             </div>
-            <span className={`text-[11px] font-semibold px-3 py-1 rounded-full ${statusStyle[athlete.status]}`}>
-              {statusLabel[athlete.status]}
-            </span>
+            <div className="flex gap-2 flex-wrap items-start">
+              <span className={`text-[11px] font-semibold px-3 py-1 rounded-full ${statusStyle[athlete.status]}`}>
+                {statusLabel[athlete.status]}
+              </span>
+              {athlete.is_elite && (
+                <span className="inline-block text-[11px] font-bold px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-600 border border-yellow-200">
+                  ATLET ELIT
+                </span>
+              )}
+            </div>
           </div>
           <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[

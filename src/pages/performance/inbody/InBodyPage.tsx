@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
 import { logAction } from '../../../lib/audit'
@@ -23,6 +23,8 @@ interface InBodyRecord {
   inbody_score: number | null
   skor: number | null
   ulasan: string | null
+  diet_plan_url: string | null
+  diet_plan_name: string | null
   created_at: string
   athlete?: { name: string; sport: string }
 }
@@ -41,6 +43,8 @@ const emptyForm: FormState = {
   inbody_score: null,
   skor: null,
   ulasan: null,
+  diet_plan_url: null,
+  diet_plan_name: null,
 }
 
 function scoreBadge(score: number | null) {
@@ -149,6 +153,7 @@ export default function InBodyPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<InBodyRecord | null>(null)
+  const [formSportFilter, setFormSportFilter] = useState<string>('')
 
   type ViewTab = 'jadual' | 'profil'
   const [activeTab, setActiveTab] = useState<ViewTab>('jadual')
@@ -156,6 +161,11 @@ export default function InBodyPage() {
   const [profilAthlete, setProfilAthlete] = useState<string>('')
   const [profilRecords, setProfilRecords] = useState<InBodyRecord[]>([])
   const [profilLoading, setProfilLoading] = useState(false)
+
+  // Diet plan upload
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [uploadingDietPlan, setUploadingDietPlan] = useState(false)
+  const [dietPlanError, setDietPlanError] = useState<string | null>(null)
 
   useEffect(() => {
     fetchAll()
@@ -194,6 +204,7 @@ export default function InBodyPage() {
   function openAdd() {
     setEditing(null)
     setForm(emptyForm)
+    setFormSportFilter('')
     setError(null)
     setModalOpen(true)
   }
@@ -202,6 +213,7 @@ export default function InBodyPage() {
     setEditing(r)
     const { id, created_at, athlete, ...rest } = r
     setForm(rest)
+    setFormSportFilter(r.athlete?.sport ?? '')
     setError(null)
     setModalOpen(true)
   }
@@ -244,6 +256,75 @@ export default function InBodyPage() {
     setViewRecord(null)
     fetchAll()
     if (profilAthlete) fetchAthleteRecords(profilAthlete)
+  }
+
+  async function handleDietPlanUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file || !viewRecord) return
+
+    setUploadingDietPlan(true)
+    setDietPlanError(null)
+
+    try {
+      const fileName = `inbody_diet_${viewRecord.id}_${Date.now()}_${file.name}`
+      const { error: uploadError } = await supabase.storage
+        .from('inbody_diet_plans')
+        .upload(fileName, file)
+
+      if (uploadError) {
+        setDietPlanError(uploadError.message)
+        setUploadingDietPlan(false)
+        return
+      }
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('inbody_diet_plans')
+        .getPublicUrl(fileName)
+
+      await supabase.from('inbody_records')
+        .update({ diet_plan_url: publicUrl, diet_plan_name: file.name })
+        .eq('id', viewRecord.id)
+
+      await logAction(profile!.id, 'upload_inbody_diet_plan', 'inbody_records', viewRecord.id)
+
+      setViewRecord({ ...viewRecord, diet_plan_url: publicUrl, diet_plan_name: file.name })
+      fetchAll()
+      if (profilAthlete) fetchAthleteRecords(profilAthlete)
+    } catch (err) {
+      setDietPlanError(err instanceof Error ? err.message : 'Upload failed')
+    } finally {
+      setUploadingDietPlan(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  async function handleDeleteDietPlan() {
+    if (!viewRecord?.diet_plan_url) return
+
+    setUploadingDietPlan(true)
+    setDietPlanError(null)
+
+    try {
+      // Extract file name from URL
+      const fileName = viewRecord.diet_plan_url.split('/').pop() || ''
+      if (fileName) {
+        await supabase.storage.from('inbody_diet_plans').remove([fileName])
+      }
+
+      await supabase.from('inbody_records')
+        .update({ diet_plan_url: null, diet_plan_name: null })
+        .eq('id', viewRecord.id)
+
+      await logAction(profile!.id, 'delete_inbody_diet_plan', 'inbody_records', viewRecord.id)
+
+      setViewRecord({ ...viewRecord, diet_plan_url: null, diet_plan_name: null })
+      fetchAll()
+      if (profilAthlete) fetchAthleteRecords(profilAthlete)
+    } catch (err) {
+      setDietPlanError(err instanceof Error ? err.message : 'Delete failed')
+    } finally {
+      setUploadingDietPlan(false)
+    }
   }
 
   const filtered = records.filter(r => {
@@ -327,7 +408,7 @@ export default function InBodyPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100">
-                {['Tarikh', 'Atlet', 'Sukan', 'Berat (kg)', 'BMI', 'Lemak (%)', 'SMM (kg)', 'Skor InBody', ''].map(h => (
+                {['Tarikh', 'Atlet', 'Sukan', 'Berat (kg)', 'BMI', 'Lemak (%)', 'SMM (kg)', 'Skor InBody', 'Diet Plan', ''].map(h => (
                   <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-wider text-[#888] px-4 py-3">{h}</th>
                 ))}
               </tr>
@@ -340,7 +421,10 @@ export default function InBodyPage() {
                     <td className="px-4 py-3 font-mono text-[12px] text-[#444] whitespace-nowrap">{fmtDate(r.recorded_date)}</td>
                     <td className="px-4 py-3 font-medium">
                       {r.athlete?.name ? (
-                        <button onClick={() => { setActiveTab('profil'); setProfilAthlete(r.athlete_id) }} className="text-[#F56A00] hover:underline font-medium">
+                        <button
+                          onClick={() => { setActiveTab('profil'); setProfilAthlete(r.athlete_id); setProfilSport(r.athlete?.sport || '') }}
+                          className="text-[#F56A00] hover:underline font-medium cursor-pointer"
+                        >
                           {r.athlete.name}
                         </button>
                       ) : (
@@ -355,9 +439,15 @@ export default function InBodyPage() {
                     <td className="px-4 py-3">
                       <span className={`inline-block text-[11px] font-bold px-2 py-0.5 rounded-full ${badge.style}`}>{badge.label}</span>
                     </td>
+                    <td className="px-4 py-3 text-center">
+                      {r.diet_plan_url ? (
+                        <span className="text-lg">✓</span>
+                      ) : (
+                        <span className="text-[#888]">—</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-3 justify-end">
-                        <button onClick={() => setViewRecord(r)} className="text-xs text-[#3A7EC8] hover:underline font-medium">Lihat</button>
                         <button onClick={() => openEdit(r)} className="text-xs text-[#F56A00] hover:underline font-medium">Edit</button>
                         {isAdmin && <button onClick={() => setConfirmDelete(r)} className="text-xs text-[#D44040] hover:underline font-medium">Padam</button>}
                       </div>
@@ -474,6 +564,72 @@ export default function InBodyPage() {
                   ))}
                 </div>
               </div>
+
+              {/* F. Diet Plan Section */}
+              {latestRecord && (
+                <div className="bg-white rounded-xl border border-gray-200 p-5">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#888] mb-4">Pelan Diet</p>
+                  {dietPlanError && (
+                    <div className="mb-3 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[12px] text-red-600">{dietPlanError}</div>
+                  )}
+                  {latestRecord.diet_plan_url ? (
+                    <div className="space-y-3">
+                      <div className="bg-[#F5F5F7] rounded-lg px-4 py-3">
+                        <p className="text-[12px] text-[#888] mb-1">Fail Dimuat Naik</p>
+                        <p className="text-sm font-medium text-[#111] truncate">{latestRecord.diet_plan_name || 'Diet Plan File'}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <a
+                          href={latestRecord.diet_plan_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-1 px-3 py-2 text-xs font-semibold text-[#3A7EC8] border border-[#3A7EC8] rounded-lg hover:bg-blue-50 transition text-center"
+                        >
+                          Muat Turun
+                        </a>
+                        <button
+                          onClick={() => {
+                            setViewRecord(latestRecord)
+                            fileInputRef.current?.click()
+                          }}
+                          disabled={uploadingDietPlan}
+                          className="flex-1 px-3 py-2 text-xs font-semibold text-[#F56A00] border border-[#F56A00] rounded-lg hover:bg-orange-50 disabled:opacity-60 transition"
+                        >
+                          {uploadingDietPlan ? 'Memuat...' : 'Ganti'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setViewRecord(latestRecord)
+                            handleDeleteDietPlan()
+                          }}
+                          disabled={uploadingDietPlan}
+                          className="flex-1 px-3 py-2 text-xs font-semibold text-[#D44040] border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-60 transition"
+                        >
+                          Buang
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setViewRecord(latestRecord)
+                        fileInputRef.current?.click()
+                      }}
+                      disabled={uploadingDietPlan}
+                      className="w-full px-4 py-3 text-sm font-semibold text-white bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 rounded-lg transition"
+                    >
+                      {uploadingDietPlan ? 'Memuat Naik...' : '+ Muat Naik Pelan Diet'}
+                    </button>
+                  )}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,.doc,.docx,.ppt,.pptx,.jpg,.jpeg,.png,.gif"
+                    onChange={handleDietPlanUpload}
+                    className="hidden"
+                  />
+                </div>
+              )}
             </>
           )}
         </div>
@@ -482,7 +638,7 @@ export default function InBodyPage() {
       {/* Add / Edit Modal */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm md:max-w-lg mx-4">
             <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
               <h3 className="font-bold text-[#111]">{editing ? 'Edit Rekod InBody' : 'Rekod InBody Baharu'}</h3>
               <button onClick={() => setModalOpen(false)} className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
@@ -491,10 +647,18 @@ export default function InBodyPage() {
               {error && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-600">{error}</div>}
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
+                  <Field label="Sukan" required>
+                    <select value={formSportFilter} onChange={e => { setFormSportFilter(e.target.value); setField('athlete_id', '') }} className={inputCls}>
+                      <option value="">— Pilih sukan —</option>
+                      {[...new Set(athletes.map(a => a.sport))].sort().map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </Field>
+                </div>
+                <div className="col-span-2">
                   <Field label="Atlet" required>
                     <select value={form.athlete_id} onChange={e => setField('athlete_id', e.target.value)} className={inputCls}>
                       <option value="">— Pilih atlet —</option>
-                      {athletes.map(a => <option key={a.id} value={a.id}>{a.name} ({a.sport})</option>)}
+                      {athletes.filter(a => !formSportFilter || a.sport === formSportFilter).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                     </select>
                   </Field>
                 </div>
@@ -533,60 +697,6 @@ export default function InBodyPage() {
       )}
 
       {/* View Modal */}
-      {viewRecord && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4">
-            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
-              <div>
-                <h3 className="font-bold text-[#111]">{viewRecord.athlete?.name}</h3>
-                <p className="text-[12px] text-[#888]">{fmtDate(viewRecord.recorded_date)} · {viewRecord.athlete?.sport}</p>
-              </div>
-              <button onClick={() => setViewRecord(null)} className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
-            </div>
-            <div className="px-6 py-5">
-              {/* InBody score highlight */}
-              {viewRecord.inbody_score != null && (
-                <div className="mb-5 text-center">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#888] mb-1">Skor InBody</p>
-                  <p className={`text-5xl font-bold font-mono ${viewRecord.inbody_score >= 80 ? 'text-[#3A9E6A]' : viewRecord.inbody_score >= 60 ? 'text-[#F56A00]' : 'text-[#D44040]'}`}>
-                    {viewRecord.inbody_score}
-                  </p>
-                  {viewRecord.skor != null && (
-                    <p className="text-center mt-1">
-                      <span className="text-sm font-bold text-[#888]">{viewRecord.skor}/5 — </span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        viewRecord.ulasan === 'BAIK' ? BADGE_GREEN :
-                        viewRecord.ulasan === 'SEDERHANA' ? BADGE_ORANGE : BADGE_RED
-                      }`}>{viewRecord.ulasan}</span>
-                    </p>
-                  )}
-                </div>
-              )}
-              <div className="grid grid-cols-2 gap-4">
-                {[
-                  ['Berat', n(viewRecord.weight, ' kg')],
-                  ['SMM', n(viewRecord.smm, ' kg')],
-                  ['Lemak Badan (kg)', n(viewRecord.body_fat_mass, ' kg')],
-                  ['BMI', n(viewRecord.bmi)],
-                  ['Lemak Badan %', n(viewRecord.fat_pct, '%')],
-                  ['BMR', n(viewRecord.bmr, ' kcal', 0)],
-                ].map(([label, val]) => (
-                  <div key={label} className="bg-[#F5F5F7] rounded-lg px-4 py-3">
-                    <p className="text-[10px] text-[#888] mb-0.5">{label}</p>
-                    <p className="text-sm font-semibold text-[#111]">{val}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
-              {isAdmin && (
-                <button onClick={() => { setConfirmDelete(viewRecord); setViewRecord(null) }} className="px-4 py-2 text-sm text-[#D44040] border border-red-200 rounded-lg hover:bg-red-50 transition">Padam</button>
-              )}
-              <button onClick={() => { openEdit(viewRecord); setViewRecord(null) }} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold rounded-lg transition">Edit</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Delete Confirmation */}
       {confirmDelete && (

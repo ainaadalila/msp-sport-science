@@ -97,15 +97,20 @@ function computeStats(
 
   if (reportType === 'fitness') {
     const athletes = new Set(data.map(r => r['Nama Atlet']))
-    const sports = new Set(data.map(r => r['Sukan']))
     return [
       { label: 'Total Rekod', value: data.length },
       { label: 'Jumlah Atlet Unik', value: athletes.size },
-      { label: 'Bilangan Sukan', value: sports.size },
     ]
   } else if (reportType === 'inbody') {
     const athletes = new Set(data.map(r => r['Nama Atlet']))
-    const baik = data.filter(r => r['Ulasan'] === 'BAIK').length
+    const baik = data.filter(r => {
+      const skor = r['Skor SUKMA']
+      if (typeof skor === 'string') {
+        const score = parseFloat(skor.split('/')[0])
+        return score >= 80
+      }
+      return false
+    }).length
     return [
       { label: 'Total Rekod', value: data.length },
       { label: 'Jumlah Atlet Unik', value: athletes.size },
@@ -121,21 +126,23 @@ function computeStats(
       { label: 'Tidak Hadir + MC', value: tidakHadir + mc, color: 'red' },
     ]
   } else if (reportType === 'supplement') {
-    const approved = data.filter(r => r['Status'] === 'Diluluskan').length
-    const rejected = data.filter(r => r['Status'] === 'Ditolak').length
-    const pending = data.filter(r => r['Status'] === 'Menunggu').length
+    const approved = data.filter(r => r['Status'] === 'Diluluskan' || r['Status'] === 'Diluluskan Sebahagian').length
+    const rejected = data.filter(r => r['Status'] === 'Ditolak' || r['Status'] === 'Ditolak (Penyelaras)').length
+    const pending = data.filter(r => r['Status'] === 'Menunggu Semakan' || r['Status'] === 'Menunggu Sokongan').length
     return [
       { label: 'Total Permohonan', value: data.length },
       { label: 'Diluluskan', value: approved, color: 'green' },
       { label: 'Ditolak', value: rejected, color: 'red' },
-      { label: 'Menunggu', value: pending, color: 'orange' },
+      { label: 'Menunggu Proses', value: pending, color: 'orange' },
     ]
   } else if (reportType === 'physio') {
     const athletes = new Set(data.map(r => r['Nama Atlet']))
     const totalSessions = (data as any[]).reduce((sum, r) => sum + ((r['Bilangan Sesi'] as number) || 0), 0)
+    const referred = data.filter(r => r['Dirujuk Doktor'] === 'Ya').length
     return [
       { label: 'Jumlah Sesi', value: totalSessions },
       { label: 'Jumlah Atlet Unik', value: athletes.size },
+      { label: 'Dirujuk Doktor', value: referred, color: 'orange' },
     ]
   }
   return []
@@ -191,33 +198,36 @@ export default function ReportsPage() {
     setData([])
     try {
       if (active === 'fitness') {
-        let q = supabase.from('fitness_tests').select('*, athlete:athletes(name, sport)').order('year', { ascending: false })
-        if (filterSession) q = q.eq('session', filterSession)
-        const { data: rows } = await q
+        let q = supabase
+          .from('fitness_test_sessions')
+          .select('*, athlete:athletes(name, sport), results:fitness_test_results(*, test:fitness_test_definitions(test_name))')
+          .order('recorded_date', { ascending: false })
+        if (filterSession) {
+          q = q.eq('session', filterSession)
+        }
+        const { data: rows, error } = await q
+        if (error) {
+          console.error('Fitness report error:', error)
+          throw error
+        }
+        console.log('Fitness test sessions fetched:', rows?.length ?? 0, 'sessions')
         setData((rows ?? [])
           .filter(r => !filterSport || r.athlete?.sport === filterSport)
-          .map(r => ({
-            'Nama Atlet': r.athlete?.name ?? '—',
-            'Sukan': r.athlete?.sport ?? '—',
-            'Fasa': r.session,
-            'Tahun': r.year,
-            'Push Up': r.push_up ?? '',
-            'Sit Up': r.sit_up ?? '',
-            'Pull Up': r.pull_up ?? '',
-            'Plank (s)': r.plank_sec ?? '',
-            'Lompat Jauh (cm)': r.standing_broad_jump ?? '',
-            'CMJ (cm)': r.counter_movement_jump ?? '',
-            'Lontar Bola (m)': r.medicine_ball_throw ?? '',
-            'Kekuatan Belakang (kg)': r.back_strength ?? '',
-            'Genggaman (kg)': r.handgrip ?? '',
-            'Duduk & Jangkau (cm)': r.sit_and_reach ?? '',
-            'T-Test (s)': r.t_test ?? '',
-            'Sprint 20m (s)': r.sprint_20m ?? '',
-            'Sprint 40m (s)': r.sprint_40m ?? '',
-            'Bleep Test': r.bleep_test ?? '',
-            'Yo-Yo (m)': r.yoyo_test ?? '',
-            'Larian 2400m (s)': r.run_2400m ?? '',
-          }))
+          .map(r => {
+            const resultMap: Record<string, number | string> = {}
+            ;(r.results ?? []).forEach((res: any) => {
+              const testName = res.test?.test_name ?? `Test ${res.test_id}`
+              resultMap[testName] = res.result_value ?? ''
+            })
+            return {
+              'Nama Atlet': r.athlete?.name ?? '—',
+              'Sukan': r.athlete?.sport ?? '—',
+              'Fasa': r.session,
+              'Tahun': r.year,
+              'Tarikh': r.recorded_date,
+              ...resultMap,
+            }
+          })
         )
       } else if (active === 'inbody') {
         let q = supabase.from('inbody_records').select('*, athlete:athletes(name, sport)').order('recorded_date', { ascending: false })
@@ -261,20 +271,31 @@ export default function ReportsPage() {
         )
       } else if (active === 'supplement') {
         let q = supabase.from('supplement_requests')
-          .select('*, athlete:athletes(name, sport), supplement:supplements(name, unit)')
+          .select('*, supplement:supplements(name, unit)')
           .order('created_at', { ascending: false })
         if (filterStatus) q = q.eq('status', filterStatus)
         if (filterFrom) q = q.gte('request_date', filterFrom)
         if (filterTo) q = q.lte('request_date', filterTo)
-        const { data: rows } = await q
-        const statusMap: Record<string, string> = { pending: 'Menunggu', approved: 'Diluluskan', rejected: 'Ditolak' }
+        const { data: rows, error } = await q
+        if (error) {
+          console.error('Supplement report error:', error)
+          throw error
+        }
+        console.log('Supplement requests fetched:', rows?.length ?? 0, 'records')
+        const statusMap: Record<string, string> = {
+          pending: 'Menunggu Semakan',
+          semakan_lulus: 'Menunggu Sokongan',
+          semakan_tolak: 'Ditolak (Penyelaras)',
+          approved: 'Diluluskan',
+          partial: 'Diluluskan Sebahagian',
+          rejected: 'Ditolak',
+        }
         setData((rows ?? []).map(r => ({
           'Tarikh Permohonan': r.request_date,
-          'Nama Atlet': r.athlete?.name ?? '—',
-          'Sukan': r.athlete?.sport ?? '—',
-          'Suplemen': r.supplement?.name ?? '—',
+          'Sukan': r.sport ?? '—',
+          'Suplemen': (r.supplement as any)?.name ?? '—',
           'Kuantiti': r.quantity,
-          'Unit': r.supplement?.unit ?? '',
+          'Unit': (r.supplement as any)?.unit ?? '',
           'Status': statusMap[r.status] ?? r.status,
         })))
       } else if (active === 'physio') {
@@ -282,7 +303,7 @@ export default function ReportsPage() {
         const endDate = new Date(filterYear, filterMonth, 0).toISOString().slice(0, 10)
         const { data: rows } = await supabase
           .from('physio_slots')
-          .select('athlete_id, slot_date, pain_scale, athlete:athletes(name, sport)')
+          .select('athlete_id, slot_date, pain_scale, case_id, athlete:athletes(name, sport), physio_case:physio_cases(referred_to_doctor)')
           .gte('slot_date', startDate)
           .lte('slot_date', endDate)
           .not('athlete_id', 'is', null)
@@ -292,6 +313,7 @@ export default function ReportsPage() {
         ;(rows ?? []).forEach((s: any) => {
           const athleteName = Array.isArray(s.athlete) ? s.athlete[0]?.name : s.athlete?.name
           const athleteSport = Array.isArray(s.athlete) ? s.athlete[0]?.sport : s.athlete?.sport
+          const isReferred = Array.isArray(s.physio_case) ? s.physio_case[0]?.referred_to_doctor : s.physio_case?.referred_to_doctor
           if (filterSport && athleteSport !== filterSport) return
           if (!grouped.has(s.athlete_id)) {
             grouped.set(s.athlete_id, {
@@ -300,6 +322,7 @@ export default function ReportsPage() {
               'Bilangan Sesi': 0,
               'Tarikh Sesi': '',
               'Skala Kesakitan Terkini': '—',
+              'Dirujuk Doktor': isReferred ? 'Ya' : 'Tidak',
             })
           }
           const row = grouped.get(s.athlete_id)!
@@ -387,10 +410,10 @@ export default function ReportsPage() {
                   <label className={labelCls}>Fasa</label>
                   <select value={filterSession} onChange={e => setFilterSession(e.target.value)} className={inputCls}>
                     <option value="">Semua Fasa</option>
-                    <option value="Jan">Fasa Jan</option>
-                    <option value="Apr">Fasa Apr</option>
-                    <option value="Jul">Fasa Jul</option>
-                    <option value="Oct">Fasa Okt</option>
+                    <option value="Fasa 1">Fasa 1</option>
+                    <option value="Fasa 2">Fasa 2</option>
+                    <option value="Fasa 3">Fasa 3</option>
+                    <option value="Fasa 4">Fasa 4</option>
                   </select>
                 </div>
               )}
@@ -458,8 +481,11 @@ export default function ReportsPage() {
                   <label className={labelCls}>Status</label>
                   <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className={inputCls}>
                     <option value="">Semua</option>
-                    <option value="pending">Menunggu</option>
+                    <option value="pending">Menunggu Semakan</option>
+                    <option value="semakan_lulus">Menunggu Sokongan</option>
+                    <option value="semakan_tolak">Ditolak (Penyelaras)</option>
                     <option value="approved">Diluluskan</option>
+                    <option value="partial">Diluluskan Sebahagian</option>
                     <option value="rejected">Ditolak</option>
                   </select>
                 </div>

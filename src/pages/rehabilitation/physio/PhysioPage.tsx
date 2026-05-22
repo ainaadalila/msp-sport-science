@@ -12,14 +12,12 @@ interface Athlete {
 interface PhysioSlot {
   id: string
   slot_date: string
-  time_slot: string
   athlete_id: string | null
   diagnosis: string | null
   date_of_injury: string | null
   referred_by: string | null
   chief_complaint: string | null
   injury_type: string | null
-  session_type: 'standard' | 'manual' | 'injury' | null
   assessment_notes: string | null
   rehab_plan: string | null
   progress_notes: string | null
@@ -38,22 +36,22 @@ interface PhysioCase {
   athlete_id: string | null
   open_date: string
   injury_type: string | null
-  status: 'active' | 'closed' | 'referred'
+  status: 'active' | 'closed'
+  referred_to_doctor: boolean
+  referred_date: string | null
   athlete?: { name: string; sport: string } | null
 }
 
 type BookingFormState = {
   slot_date: string
-  time_slot: string
   athlete_id: string
-  diagnosis: string
-  date_of_injury: string
-  referred_by: string
-  session_type: 'standard' | 'manual' | 'injury' | ''
   case_id: string
 }
 
 type AssessmentFormState = {
+  diagnosis: string
+  date_of_injury: string
+  referred_by: string
   chief_complaint: string
   injury_type: string
   assessment_notes: string
@@ -65,17 +63,7 @@ type AssessmentFormState = {
   attendance_status: 'scheduled' | 'arrived' | 'completed' | 'no_show'
 }
 
-type Tab = 'schedule' | 'records'
 
-const TIME_SLOTS = ['07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00']
-const DAY_NAMES = ['Isnin', 'Selasa', 'Rabu', 'Khamis', 'Jumaat', 'Sabtu', 'Ahad']
-
-const sessionLabel: Record<string, string> = { standard: 'PENILAIAN', manual: 'SUSULAN', injury: 'KRISIS' }
-const sessionStyle: Record<string, string> = {
-  standard: 'bg-[rgba(245,106,0,0.1)] text-[#F56A00] border border-[rgba(245,106,0,0.25)]',
-  manual: 'bg-blue-50 text-[#3A7EC8] border border-blue-200',
-  injury: 'bg-red-50 text-[#D44040] border border-red-200',
-}
 
 const attendanceLabel: Record<string, string> = { scheduled: 'Dijadual', arrived: 'Hadir', completed: 'Selesai', no_show: 'Tidak Hadir' }
 const attendanceStyle: Record<string, string> = {
@@ -84,50 +72,22 @@ const attendanceStyle: Record<string, string> = {
   completed: 'bg-green-50 text-green-700',
   no_show: 'bg-red-50 text-[#D44040]',
 }
-const attendanceDot: Record<string, string> = {
-  scheduled: 'bg-gray-300',
-  arrived: 'bg-blue-400',
-  completed: 'bg-green-500',
-  no_show: 'bg-red-400',
-}
 
 function fmtDate(d: string) {
   return new Date(d + 'T00:00:00').toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-function getWeekStart(d: Date): Date {
-  const day = d.getDay()
-  const diff = day === 0 ? -6 : 1 - day
-  const start = new Date(d)
-  start.setDate(d.getDate() + diff)
-  start.setHours(0, 0, 0, 0)
-  return start
-}
-
-function getWeekDays(weekStart: Date): Date[] {
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(weekStart)
-    d.setDate(weekStart.getDate() + i)
-    return d
-  })
-}
-
-function toDateStr(d: Date): string {
-  return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-')
-}
 
 const emptyBookingForm: BookingFormState = {
   slot_date: new Date().toISOString().slice(0, 10),
-  time_slot: '08:00',
   athlete_id: '',
-  diagnosis: '',
-  date_of_injury: '',
-  referred_by: '',
-  session_type: '',
   case_id: '',
 }
 
 const emptyAssessmentForm: AssessmentFormState = {
+  diagnosis: '',
+  date_of_injury: '',
+  referred_by: '',
   chief_complaint: '',
   injury_type: '',
   assessment_notes: '',
@@ -144,15 +104,12 @@ export default function PhysioPage() {
   const isAdmin = profile?.role === 'superadmin' || profile?.role === 'admin'
   const isPhysio = profile?.role === 'physio'
 
-  const [tab, setTab] = useState<Tab>('schedule')
   const [slots, setSlots] = useState<PhysioSlot[]>([])
   const [athletes, setAthletes] = useState<Athlete[]>([])
   const [cases, setCases] = useState<PhysioCase[]>([])
   const [loading, setLoading] = useState(true)
 
-  const [weekStart, setWeekStart] = useState<Date>(() => getWeekStart(new Date()))
   const [filterAthlete, setFilterAthlete] = useState('')
-  const [filterSession, setFilterSession] = useState('')
 
   const [bookingModalOpen, setBookingModalOpen] = useState(false)
   const [assessmentModalOpen, setAssessmentModalOpen] = useState(false)
@@ -179,8 +136,7 @@ export default function PhysioPage() {
     const [slotRes, athRes, caseRes] = await Promise.all([
       supabase.from('physio_slots')
         .select('*, athlete:athletes(name, sport)')
-        .order('slot_date', { ascending: false })
-        .order('time_slot'),
+        .order('slot_date', { ascending: false }),
       supabase.from('athletes').select('id, name, sport').order('name'),
       supabase.from('physio_cases')
         .select('*, athlete:athletes(name, sport)')
@@ -193,13 +149,9 @@ export default function PhysioPage() {
     setLoading(false)
   }
 
-  function openBookingAdd(prefillDate?: string, prefillTime?: string) {
+  function openBookingAdd() {
     setBookingEditing(null)
-    setBookingForm({
-      ...emptyBookingForm,
-      slot_date: prefillDate ?? new Date().toISOString().slice(0, 10),
-      time_slot: prefillTime ?? '08:00',
-    })
+    setBookingForm(emptyBookingForm)
     setFormSport('')
     setBookingError(null)
     setBookingModalOpen(true)
@@ -209,12 +161,7 @@ export default function PhysioPage() {
     setBookingEditing(s)
     setBookingForm({
       slot_date: s.slot_date,
-      time_slot: s.time_slot,
       athlete_id: s.athlete_id ?? '',
-      diagnosis: s.diagnosis ?? '',
-      date_of_injury: s.date_of_injury ?? '',
-      referred_by: s.referred_by ?? '',
-      session_type: s.session_type ?? '',
       case_id: s.case_id ?? '',
     })
     setFormSport(s.athlete?.sport ?? '')
@@ -225,6 +172,9 @@ export default function PhysioPage() {
   function openAssessmentEdit(s: PhysioSlot) {
     setAssessmentEditing(s)
     setAssessmentForm({
+      diagnosis: s.diagnosis ?? '',
+      date_of_injury: s.date_of_injury ?? '',
+      referred_by: s.referred_by ?? '',
       chief_complaint: s.chief_complaint ?? '',
       injury_type: s.injury_type ?? '',
       assessment_notes: s.assessment_notes ?? '',
@@ -248,8 +198,8 @@ export default function PhysioPage() {
   }
 
   async function handleBookingSave() {
-    if (!bookingForm.slot_date || !bookingForm.time_slot) {
-      setBookingError('Tarikh dan masa slot wajib diisi.')
+    if (!bookingForm.slot_date) {
+      setBookingError('Tarikh sesi wajib diisi.')
       return
     }
     setBookingSaving(true)
@@ -257,12 +207,7 @@ export default function PhysioPage() {
 
     const payload = {
       slot_date: bookingForm.slot_date,
-      time_slot: bookingForm.time_slot,
       athlete_id: bookingForm.athlete_id || null,
-      diagnosis: bookingForm.diagnosis || null,
-      date_of_injury: bookingForm.date_of_injury || null,
-      referred_by: bookingForm.referred_by || null,
-      session_type: bookingForm.session_type || null,
       case_id: bookingForm.case_id || null,
       physiotherapist_id: profile?.id,
     }
@@ -287,6 +232,9 @@ export default function PhysioPage() {
     setAssessmentError(null)
 
     const payload = {
+      diagnosis: assessmentForm.diagnosis || null,
+      date_of_injury: assessmentForm.date_of_injury || null,
+      referred_by: assessmentForm.referred_by || null,
       chief_complaint: assessmentForm.chief_complaint || null,
       injury_type: assessmentForm.injury_type || null,
       assessment_notes: assessmentForm.assessment_notes || null,
@@ -328,22 +276,11 @@ export default function PhysioPage() {
     fetchAll()
   }
 
-  // Schedule view: weekly slot map
-  const weekDays = getWeekDays(weekStart)
-  const weekSlotMap: Record<string, Record<string, PhysioSlot>> = {}
-  slots.forEach(s => {
-    if (!weekSlotMap[s.slot_date]) weekSlotMap[s.slot_date] = {}
-    weekSlotMap[s.slot_date][s.time_slot] = s
-  })
-  const weekSlotsCount = weekDays.filter(d => weekSlotMap[toDateStr(d)]).reduce((acc, d) => acc + Object.keys(weekSlotMap[toDateStr(d)] ?? {}).length, 0)
-  const todayStr = toDateStr(new Date())
-
   // Records view
   const filteredSlots = slots.filter(s => {
     const matchAthlete = !filterAthlete || s.athlete_id === filterAthlete
-    const matchSession = !filterSession || s.session_type === filterSession
-    return matchAthlete && matchSession
-  })
+    return matchAthlete
+  }).sort((a, b) => new Date(b.slot_date).getTime() - new Date(a.slot_date).getTime())
 
   const canEdit = isAdmin || isPhysio
   const allSports = [...new Set(athletes.map(a => a.sport))].sort()
@@ -354,161 +291,47 @@ export default function PhysioPage() {
 
       {/* Header */}
       <div className="flex items-center justify-between">
-        <p className="text-[12px] text-[#888]">{slots.length} rekod slot</p>
+        <p className="text-[12px] text-[#888]">{slots.length} rekod sesi</p>
         {canEdit && (
           <button onClick={() => openBookingAdd()} className="bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
-            + Tempah Slot
+            + Rekod Sesi Baharu
           </button>
         )}
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
-        {(['schedule', 'records'] as Tab[]).map(t => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${tab === t ? 'bg-white text-[#111] shadow-sm' : 'text-[#888] hover:text-[#444]'}`}
-          >
-            {t === 'schedule' ? 'Jadual Mingguan' : 'Semua Rekod'}
-          </button>
-        ))}
-      </div>
+      {/* Stats Section */}
+      {!loading && (
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-[#888] mb-2">Kes Aktif</p>
+            <p className="text-3xl font-bold text-[#111]">{cases.length}</p>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-[#888] mb-2">Jumlah Sesi</p>
+            <p className="text-3xl font-bold text-[#111]">{slots.length}</p>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-[#888] mb-2">Purata Kesakitan</p>
+            <p className="text-3xl font-bold text-[#111]">
+              {slots.filter(s => s.pain_scale !== null).length > 0
+                ? (slots.filter(s => s.pain_scale !== null).reduce((sum, s) => sum + (s.pain_scale ?? 0), 0) / slots.filter(s => s.pain_scale !== null).length).toFixed(1)
+                : '—'}
+            </p>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="py-16 text-center text-[#888] text-sm">Memuatkan...</div>
-      ) : tab === 'schedule' ? (
-
-        // ── Schedule Tab (Weekly) ─────────────────────────────
-        <div className="space-y-3">
-          {/* Week navigation */}
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold text-[#111]">
-              {weekDays[0].toLocaleDateString('ms-MY', { day: 'numeric', month: 'short' })} — {weekDays[6].toLocaleDateString('ms-MY', { day: 'numeric', month: 'short', year: 'numeric' })}
-            </span>
-            <div className="flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5">
-              <button
-                onClick={() => setWeekStart(d => { const prev = new Date(d); prev.setDate(d.getDate() - 7); return prev })}
-                className="px-3 py-1.5 text-sm text-[#555] hover:text-[#F56A00] rounded-md hover:bg-white transition"
-              >
-                ← Lepas
-              </button>
-              <button
-                onClick={() => setWeekStart(getWeekStart(new Date()))}
-                className="px-3 py-1.5 text-sm text-[#555] hover:text-[#F56A00] rounded-md hover:bg-white transition"
-              >
-                Minggu Ini
-              </button>
-              <button
-                onClick={() => setWeekStart(d => { const next = new Date(d); next.setDate(d.getDate() + 7); return next })}
-                className="px-3 py-1.5 text-sm text-[#555] hover:text-[#F56A00] rounded-md hover:bg-white transition"
-              >
-                Depan →
-              </button>
-            </div>
-            <span className="text-[12px] text-[#888]">{weekSlotsCount} slot minggu ini</span>
-          </div>
-
-          {/* Weekly grid */}
-          <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
-            <table className="w-full text-sm border-collapse">
-              <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="w-16 px-3 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-[#888] bg-gray-50"></th>
-                  {weekDays.map((d, i) => {
-                    const dateStr = toDateStr(d)
-                    const isToday = dateStr === todayStr
-                    return (
-                      <th key={dateStr} className={`px-2 py-3 text-center min-w-[110px] border-l border-gray-200 ${isToday ? 'bg-[rgba(245,106,0,0.06)]' : 'bg-gray-50'}`}>
-                        <span className={`text-[10px] font-bold uppercase tracking-widest block ${isToday ? 'text-[#F56A00]' : 'text-[#888]'}`}>{DAY_NAMES[i]}</span>
-                        <span className={`text-[18px] font-bold leading-none mt-0.5 block ${isToday ? 'text-[#F56A00]' : 'text-[#111]'}`}>
-                          {d.getDate()}
-                        </span>
-                        <span className={`text-[10px] ${isToday ? 'text-[#F56A00]' : 'text-[#888]'}`}>
-                          {d.toLocaleDateString('ms-MY', { month: 'short' })}
-                        </span>
-                      </th>
-                    )
-                  })}
-                </tr>
-              </thead>
-              <tbody>
-                {TIME_SLOTS.map((time, ri) => (
-                  <tr key={time} className={ri < TIME_SLOTS.length - 1 ? 'border-b border-gray-100' : ''}>
-                    <td className="px-3 py-1.5 font-mono text-[11px] text-[#aaa] whitespace-nowrap align-top pt-2 bg-gray-50 border-r border-gray-200">{time}</td>
-                    {weekDays.map((d) => {
-                      const dateStr = toDateStr(d)
-                      const booked = weekSlotMap[dateStr]?.[time]
-                      const isToday = dateStr === todayStr
-                      return (
-                        <td key={dateStr} className={`px-1.5 py-1.5 align-top border-l border-gray-100 ${isToday ? 'bg-[rgba(245,106,0,0.025)]' : ''}`}>
-                          {booked ? (
-                            <button
-                              onClick={() => { setDetailSlot(booked); setDetailView('booking') }}
-                              className={`w-full text-left rounded-lg px-2 py-1.5 border text-[11px] transition hover:opacity-80 ${booked.session_type ? sessionStyle[booked.session_type] : 'bg-gray-50 text-[#444] border-gray-200'}`}
-                            >
-                              <p className="font-mono font-semibold text-[10px] opacity-60">{booked.time_slot}</p>
-                              <p className="font-semibold truncate leading-tight mt-0.5">{booked.athlete?.name ?? 'Tiada atlet'}</p>
-                              {booked.athlete?.sport && <p className="opacity-60 text-[10px] truncate">{booked.athlete.sport}</p>}
-                              {booked.session_type && <p className="opacity-60 text-[10px] mt-0.5 font-semibold tracking-wide">{sessionLabel[booked.session_type]}</p>}
-                              <div className="flex items-center gap-1 mt-1">
-                                <span className={`w-1.5 h-1.5 rounded-full inline-block ${attendanceDot[booked.attendance_status ?? 'scheduled']}`} />
-                                <span className="text-[9px] opacity-50">{attendanceLabel[booked.attendance_status ?? 'scheduled']}</span>
-                              </div>
-                            </button>
-                          ) : canEdit ? (
-                            <button
-                              onClick={() => openBookingAdd(dateStr, time)}
-                              className="w-full h-full min-h-[48px] rounded-lg border border-dashed border-transparent hover:border-[#F56A00] hover:bg-orange-50/40 text-transparent hover:text-[#F56A00] text-[11px] transition flex items-center justify-center"
-                            >
-                              +
-                            </button>
-                          ) : (
-                            <div className="min-h-[48px]" />
-                          )}
-                        </td>
-                      )
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {/* Legend */}
-            <div className="flex items-center gap-5 px-4 py-3 border-t border-gray-100 flex-wrap">
-              {(['standard', 'manual', 'injury'] as const).map(type => (
-                <div key={type} className="flex items-center gap-1.5">
-                  <span className={`w-2.5 h-2.5 rounded-full inline-block ${type === 'standard' ? 'bg-[#F56A00]' : type === 'manual' ? 'bg-[#3A7EC8]' : 'bg-[#D44040]'}`} />
-                  <span className="text-[11px] text-[#888]">{sessionLabel[type]}</span>
-                </div>
-              ))}
-              <div className="w-px h-4 bg-gray-200 mx-1" />
-              {(['scheduled', 'arrived', 'completed', 'no_show'] as const).map(status => (
-                <div key={status} className="flex items-center gap-1.5">
-                  <span className={`w-2 h-2 rounded-full inline-block ${attendanceDot[status]}`} />
-                  <span className="text-[10px] text-[#888]">{attendanceLabel[status]}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
       ) : (
-
-        // ── All Records Tab ──────────────────────────────────
         <div className="space-y-3">
           <div className="flex flex-wrap gap-2">
             <select value={filterAthlete} onChange={e => setFilterAthlete(e.target.value)} className={filterCls}>
               <option value="">Semua Atlet</option>
               {athletes.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
-            <select value={filterSession} onChange={e => setFilterSession(e.target.value)} className={filterCls}>
-              <option value="">Semua Jenis Sesi</option>
-              <option value="standard">PENILAIAN</option>
-              <option value="manual">SUSULAN</option>
-              <option value="injury">KRISIS</option>
-            </select>
-            {(filterAthlete || filterSession) && (
-              <button onClick={() => { setFilterAthlete(''); setFilterSession('') }} className="px-3 py-2 text-xs text-[#888] hover:text-[#F56A00] border border-gray-200 rounded-lg transition">
+            {filterAthlete && (
+              <button onClick={() => setFilterAthlete('')} className="px-3 py-2 text-xs text-[#888] hover:text-[#F56A00] border border-gray-200 rounded-lg transition">
                 Kosongkan Penapis
               </button>
             )}
@@ -523,7 +346,7 @@ export default function PhysioPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-100">
-                    {['Tarikh', 'Masa', 'Atlet', 'Jenis Sesi', 'Kecederaan', ''].map(h => (
+                    {['Tarikh', 'Atlet', 'Kecederaan', 'Status', ''].map(h => (
                       <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-wider text-[#888] px-4 py-3">{h}</th>
                     ))}
                   </tr>
@@ -532,15 +355,13 @@ export default function PhysioPage() {
                   {filteredSlots.map(s => (
                     <tr key={s.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
                       <td className="px-4 py-3 font-mono text-[12px] text-[#444] whitespace-nowrap">{fmtDate(s.slot_date)}</td>
-                      <td className="px-4 py-3 font-mono text-[13px] text-[#444]">{s.time_slot}</td>
                       <td className="px-4 py-3 font-medium text-[#111]">{s.athlete?.name ?? '—'}</td>
-                      <td className="px-4 py-3">
-                        {s.session_type
-                          ? <span className={`inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full ${sessionStyle[s.session_type]}`}>{sessionLabel[s.session_type]}</span>
-                          : <span className="text-[#888]">—</span>
-                        }
-                      </td>
                       <td className="px-4 py-3 text-[#888]">{s.injury_type ?? '—'}</td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full ${attendanceStyle[s.attendance_status ?? 'scheduled']}`}>
+                          {attendanceLabel[s.attendance_status ?? 'scheduled']}
+                        </span>
+                      </td>
                       <td className="px-4 py-3">
                         <div className="flex gap-2 justify-end text-xs">
                           <button onClick={() => { setDetailSlot(s); setDetailView('booking') }} className="text-[#3A7EC8] hover:underline font-medium">Lihat</button>
@@ -561,25 +382,18 @@ export default function PhysioPage() {
       {/* Booking Modal */}
       {bookingModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm md:max-w-lg max-h-[90vh] flex flex-col">
             <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between shrink-0">
-              <h3 className="font-bold text-[#111]">{bookingEditing ? 'Edit Slot Fisioterapi' : 'Rekod Slot Baharu'}</h3>
+              <h3 className="font-bold text-[#111]">{bookingEditing ? 'Edit Sesi Fisioterapi' : 'Rekod Sesi Fisioterapi Baharu'}</h3>
               <button onClick={() => setBookingModalOpen(false)} className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
             </div>
             <div className="px-6 py-5 overflow-y-auto space-y-4">
               {bookingError && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-600">{bookingError}</div>}
 
               <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-4">
-                  <Field label="Tarikh" required>
-                    <input type="date" value={bookingForm.slot_date} onChange={e => setBookingField('slot_date', e.target.value)} className={inputCls} />
-                  </Field>
-                  <Field label="Masa Slot" required>
-                    <select value={bookingForm.time_slot} onChange={e => setBookingField('time_slot', e.target.value)} className={inputCls}>
-                      {TIME_SLOTS.map(t => <option key={t} value={t}>{t}</option>)}
-                    </select>
-                  </Field>
-                </div>
+                <Field label="Tarikh Sesi" required>
+                  <input type="date" value={bookingForm.slot_date} onChange={e => setBookingField('slot_date', e.target.value)} className={inputCls} />
+                </Field>
                 <div className="grid grid-cols-2 gap-4">
                   <Field label="Sukan">
                     <select value={formSport} onChange={e => { setFormSport(e.target.value); setBookingField('athlete_id', '') }} className={inputCls}>
@@ -600,25 +414,6 @@ export default function PhysioPage() {
                     {cases.map(c => <option key={c.id} value={c.id}>{c.athlete?.name}{c.injury_type ? ` - ${c.injury_type}` : ''} - {new Date(c.open_date + 'T00:00:00').toLocaleDateString('ms-MY', { day: 'numeric', month: 'short', year: '2-digit' })}</option>)}
                   </select>
                 </Field>
-                <Field label="Diagnosis">
-                  <input value={bookingForm.diagnosis} onChange={e => setBookingField('diagnosis', e.target.value.toUpperCase())} className={inputCls} placeholder="cth. STRAIN HAMSTRING" />
-                </Field>
-                <div className="grid grid-cols-2 gap-4">
-                  <Field label="Tarikh Kecederaan">
-                    <input type="date" value={bookingForm.date_of_injury} onChange={e => setBookingField('date_of_injury', e.target.value)} className={inputCls} />
-                  </Field>
-                  <Field label="Dirujuk Oleh">
-                    <input value={bookingForm.referred_by} onChange={e => setBookingField('referred_by', e.target.value.toUpperCase())} className={inputCls} placeholder="cth. DOKTOR" />
-                  </Field>
-                </div>
-                <Field label="Jenis Sesi">
-                  <select value={bookingForm.session_type} onChange={e => setBookingField('session_type', e.target.value as BookingFormState['session_type'])} className={inputCls}>
-                    <option value="">— Pilih —</option>
-                    <option value="standard">PENILAIAN</option>
-                    <option value="manual">SUSULAN</option>
-                    <option value="injury">KRISIS</option>
-                  </select>
-                </Field>
               </div>
             </div>
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 shrink-0">
@@ -634,7 +429,7 @@ export default function PhysioPage() {
       {/* Assessment Modal */}
       {assessmentModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm md:max-w-lg max-h-[90vh] flex flex-col">
             <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between shrink-0">
               <h3 className="font-bold text-[#111]">Catatan Sesi</h3>
               <button onClick={() => setAssessmentModalOpen(false)} className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
@@ -643,6 +438,17 @@ export default function PhysioPage() {
               {assessmentError && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-600">{assessmentError}</div>}
 
               <div className="space-y-3">
+                <Field label="Diagnosis">
+                  <input value={assessmentForm.diagnosis} onChange={e => setAssessmentField('diagnosis', e.target.value.toUpperCase())} className={inputCls} placeholder="cth. STRAIN HAMSTRING" />
+                </Field>
+                <div className="grid grid-cols-2 gap-4">
+                  <Field label="Tarikh Kecederaan">
+                    <input type="date" value={assessmentForm.date_of_injury} onChange={e => setAssessmentField('date_of_injury', e.target.value)} className={inputCls} />
+                  </Field>
+                  <Field label="Dirujuk Oleh">
+                    <input value={assessmentForm.referred_by} onChange={e => setAssessmentField('referred_by', e.target.value.toUpperCase())} className={inputCls} placeholder="cth. DOKTOR" />
+                  </Field>
+                </div>
                 <Field label="Keluhan Utama (COC)">
                   <textarea value={assessmentForm.chief_complaint} onChange={e => setAssessmentField('chief_complaint', e.target.value.toUpperCase())} className={`${inputCls} resize-none`} rows={2} placeholder="HURAIAN KELUHAN UTAMA..." />
                 </Field>
@@ -692,11 +498,11 @@ export default function PhysioPage() {
       {/* View Modal */}
       {detailSlot && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm md:max-w-md max-h-[90vh] flex flex-col">
             <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between shrink-0">
               <div>
                 <h3 className="font-bold text-[#111]">{detailSlot.athlete?.name ?? 'Tiada Atlet'}</h3>
-                <p className="text-[12px] text-[#888]">{fmtDate(detailSlot.slot_date)} · {detailSlot.time_slot} · {detailSlot.athlete?.sport ?? ''}</p>
+                <p className="text-[12px] text-[#888]">{fmtDate(detailSlot.slot_date)} · {detailSlot.athlete?.sport ?? ''}</p>
               </div>
               <button onClick={() => setDetailSlot(null)} className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
             </div>
@@ -704,14 +510,13 @@ export default function PhysioPage() {
               {detailView === 'booking' ? (
                 // Modal 1: Booking View
                 <div className="space-y-3">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-[#888]">Maklumat Tempahan</p>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-[#888]">Maklumat Sesi</p>
                   <div className="space-y-2">
                     {[
                       ['Diagnosis', detailSlot.diagnosis],
                       ['Tarikh Kecederaan', detailSlot.date_of_injury ? fmtDate(detailSlot.date_of_injury) : null],
                       ['Dirujuk Oleh', detailSlot.referred_by],
                       ['Kes', detailSlot.case_id ? cases.find(c => c.id === detailSlot.case_id)?.athlete?.name : null],
-                      ['Jenis Sesi', detailSlot.session_type ? sessionLabel[detailSlot.session_type] : null],
                     ].map(([label, val]) => (
                       <div key={label as string} className="flex justify-between">
                         <p className="text-[10px] text-[#888]">{label}</p>
@@ -723,14 +528,13 @@ export default function PhysioPage() {
               ) : (
                 // Modal 2: Full Session View
                 <>
-                  {/* Booking Summary */}
+                  {/* Session Summary */}
                   <div className="bg-[#F5F5F7] rounded-lg px-4 py-3 space-y-1.5">
-                    <p className="text-[11px] font-bold text-[#888]">TEMPAHAN</p>
+                    <p className="text-[11px] font-bold text-[#888]">MAKLUMAT SESI</p>
                     <div className="text-sm text-[#444] space-y-0.5">
                       <p><span className="text-[#888]">Diagnosis:</span> {detailSlot.diagnosis || '—'}</p>
                       <p><span className="text-[#888]">Tarikh Kecederaan:</span> {detailSlot.date_of_injury ? fmtDate(detailSlot.date_of_injury) : '—'}</p>
                       <p><span className="text-[#888]">Dirujuk Oleh:</span> {detailSlot.referred_by || '—'}</p>
-                      <p><span className="text-[#888]">Jenis Sesi:</span> {detailSlot.session_type ? sessionLabel[detailSlot.session_type] : '—'}</p>
                     </div>
                   </div>
 
@@ -825,8 +629,8 @@ export default function PhysioPage() {
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 text-center">
-            <p className="text-sm font-semibold text-[#111] mb-1">Padam slot ini?</p>
-            <p className="text-[13px] text-[#888] mb-6">{fmtDate(confirmDelete.slot_date)} {confirmDelete.time_slot} · {confirmDelete.athlete?.name ?? 'Tiada atlet'}</p>
+            <p className="text-sm font-semibold text-[#111] mb-1">Padam sesi ini?</p>
+            <p className="text-[13px] text-[#888] mb-6">{fmtDate(confirmDelete.slot_date)} · {confirmDelete.athlete?.name ?? 'Tiada atlet'}</p>
             <div className="flex gap-3 justify-center">
               <button onClick={() => setConfirmDelete(null)} className="px-4 py-2 text-sm text-[#888] border border-gray-200 rounded-lg hover:border-gray-400 transition">Batal</button>
               <button onClick={() => handleDelete(confirmDelete)} className="px-4 py-2 text-sm font-semibold text-white bg-[#D44040] hover:bg-red-700 rounded-lg transition">Padam</button>

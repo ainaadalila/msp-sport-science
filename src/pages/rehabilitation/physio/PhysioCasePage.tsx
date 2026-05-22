@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import jsPDF from 'jspdf'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
 import { logAction } from '../../../lib/audit'
@@ -6,7 +7,10 @@ import { logAction } from '../../../lib/audit'
 interface Athlete {
   id: string
   name: string
+  ic_number: string
   sport: string
+  date_of_birth: string | null
+  gender: 'M' | 'F' | null
 }
 
 interface PhysioCase {
@@ -14,13 +18,12 @@ interface PhysioCase {
   athlete_id: string | null
   open_date: string
   injury_type: string | null
-  status: 'active' | 'closed' | 'referred'
-  rts_date: string | null
-  close_reason: string | null
-  referred_to: string | null
+  status: 'active' | 'closed'
+  referred_to_doctor: boolean
+  referred_date: string | null
   physio_id: string | null
   created_at: string
-  athlete?: { name: string; sport: string } | null
+  athlete?: { id: string; name: string; ic_number: string; sport: string; date_of_birth: string | null; gender: 'M' | 'F' | null } | null
 }
 
 interface PhysioSlot {
@@ -39,11 +42,10 @@ interface CaseStats {
 
 type Tab = 'active' | 'closed'
 
-const statusLabel: Record<string, string> = { active: 'Aktif', closed: 'Ditutup (RTS)', referred: 'Dirujuk' }
+const statusLabel: Record<string, string> = { active: 'Aktif', closed: 'Ditutup' }
 const statusStyle: Record<string, string> = {
   active: 'bg-green-50 text-green-700',
   closed: 'bg-gray-100 text-[#888]',
-  referred: 'bg-red-50 text-[#D44040]',
 }
 
 function fmtDate(d: string) {
@@ -93,14 +95,18 @@ export default function PhysioCasePage() {
 
   const [confirmDelete, setConfirmDelete] = useState<PhysioCase | null>(null)
 
+  const [confirmCaseAction, setConfirmCaseAction] = useState<{ case: PhysioCase; action: 'refer' | 'close' } | null>(null)
+  const [caseActionLoading, setCaseActionLoading] = useState(false)
+  const [caseActionError, setCaseActionError] = useState<string | null>(null)
+
   useEffect(() => { fetchAll() }, [])
 
   async function fetchAll() {
     setLoading(true)
     const [casesRes, slotsRes, athRes] = await Promise.all([
-      supabase.from('physio_cases').select('*, athlete:athletes(name, sport)').order('open_date', { ascending: false }),
+      supabase.from('physio_cases').select('*, athlete:athletes(id, name, ic_number, sport, date_of_birth, gender)').order('open_date', { ascending: false }),
       supabase.from('physio_slots').select('case_id, pain_scale, slot_date').not('case_id', 'is', null),
-      supabase.from('athletes').select('id, name, sport').order('name'),
+      supabase.from('athletes').select('id, name, ic_number, sport, date_of_birth, gender').order('name'),
     ])
     setCases(casesRes.data ?? [])
     setAthletes(athRes.data ?? [])
@@ -121,7 +127,7 @@ export default function PhysioCasePage() {
     setCaseLoading(true)
     const { data } = await supabase
       .from('physio_slots')
-      .select('id, slot_date, time_slot, pain_scale, session_type, attendance_status, athlete:athletes(name, sport)')
+      .select('id, slot_date, time_slot, pain_scale, session_type, attendance_status, assessment_notes, athlete:athletes(name, sport)')
       .eq('case_id', caseId)
       .order('slot_date', { ascending: true })
       .order('time_slot')
@@ -203,6 +209,139 @@ export default function PhysioCasePage() {
     fetchAll()
   }
 
+  async function handleCaseAction(caseData: PhysioCase, action: 'refer' | 'close') {
+    setCaseActionLoading(true)
+    setCaseActionError(null)
+
+    const today = new Date().toISOString().split('T')[0]
+    const payload = action === 'refer'
+      ? { referred_to_doctor: true, referred_date: today }
+      : { status: 'closed' as const }
+
+    const { error } = await supabase.from('physio_cases').update(payload).eq('id', caseData.id)
+    if (error) {
+      setCaseActionError(error.message)
+      setCaseActionLoading(false)
+      return
+    }
+
+    await logAction(profile!.id, `${action}_physio_case`, 'physio_cases', caseData.id)
+    setCaseActionLoading(false)
+    setConfirmCaseAction(null)
+    fetchAll()
+  }
+
+  async function downloadCaseReport(c: PhysioCase) {
+    const doc = new jsPDF()
+    const pageWidth = doc.internal.pageSize.getWidth()
+    const pageHeight = doc.internal.pageSize.getHeight()
+    let yPos = 20
+
+    const addLine = (y: number) => {
+      doc.setDrawColor(200, 200, 200)
+      doc.line(15, y, pageWidth - 15, y)
+      return y + 10
+    }
+
+    const pageBreakCheck = () => {
+      if (yPos > pageHeight - 25) {
+        doc.addPage()
+        yPos = 15
+      }
+    }
+
+    // Header
+    doc.setFontSize(18)
+    doc.setFont('', 'bold')
+    doc.text('Laporan Kes Fisioterapi', pageWidth / 2, yPos, { align: 'center' })
+    yPos = addLine(yPos + 12)
+
+    // Athlete Info Section
+    doc.setFontSize(11)
+    doc.setFont('', 'bold')
+    doc.text('Maklumat Atlet', 15, yPos)
+    yPos += 8
+
+    doc.setFontSize(10)
+    doc.setFont('', 'normal')
+    const athleteInfo = [
+      ['Nama:', c.athlete?.name ?? '—'],
+      ['No. K/P:', c.athlete?.ic_number ?? '—'],
+      ['Sukan:', c.athlete?.sport ?? '—'],
+      ['Jantina:', c.athlete?.gender ? (c.athlete.gender === 'M' ? 'Lelaki' : 'Perempuan') : '—'],
+    ]
+    athleteInfo.forEach(([label, value]) => {
+      doc.text(label, 20, yPos)
+      doc.text(String(value), 75, yPos)
+      yPos += 7
+    })
+
+    yPos = addLine(yPos + 5)
+    pageBreakCheck()
+
+    // Case Info Section
+    doc.setFontSize(11)
+    doc.setFont('', 'bold')
+    doc.text('Maklumat Kes', 15, yPos)
+    yPos += 8
+
+    doc.setFontSize(10)
+    doc.setFont('', 'normal')
+    const painScales = caseSlots.filter(s => s.pain_scale !== null).map(s => s.pain_scale!)
+    const avgPain = painScales.length > 0 ? (painScales.reduce((a, b) => a + b, 0) / painScales.length).toFixed(1) : '—'
+
+    const caseInfo = [
+      ['Jenis Kecederaan:', c.injury_type ?? '—'],
+      ['Tarikh Pembukaan:', fmtDate(c.open_date)],
+      ['Bilangan Sesi:', String(caseSlots.length)],
+      ['Kesakitan Purata:', String(avgPain)],
+      ['Dirujuk ke Doktor:', c.referred_to_doctor ? 'Ya' : 'Tidak'],
+      ...(c.referred_to_doctor && c.referred_date ? [['Tarikh Rujukan:', fmtDate(c.referred_date)]] : []),
+    ]
+    caseInfo.forEach(([label, value]) => {
+      doc.text(label, 20, yPos)
+      doc.text(String(value), 75, yPos)
+      yPos += 7
+    })
+
+    yPos = addLine(yPos + 5)
+    pageBreakCheck()
+
+    // Sessions Table
+    if (caseSlots.length > 0) {
+      doc.setFontSize(11)
+      doc.setFont('', 'bold')
+      doc.text('Rekod Sesi', 15, yPos)
+      yPos += 10
+
+      doc.setFontSize(9)
+      doc.setFont('', 'normal')
+
+      caseSlots.forEach((slot, idx) => {
+        pageBreakCheck()
+
+        doc.setFont('', 'bold')
+        doc.text(`Sesi ${idx + 1}`, 15, yPos)
+        yPos += 6
+
+        doc.setFont('', 'normal')
+        const sessionInfo = [
+          `Tarikh: ${fmtDate(slot.slot_date)}`,
+          `Masa: ${slot.time_slot || '—'}`,
+          `Kehadiran: ${slot.attendance_status || '—'}`,
+          ...(slot.pain_scale !== null ? [`Kesakitan: ${slot.pain_scale}/10`] : []),
+        ]
+        sessionInfo.forEach((info) => {
+          doc.text(info, 20, yPos)
+          yPos += 5
+        })
+        yPos += 2
+      })
+    }
+
+    doc.save(`Laporan_Kes_${c.athlete?.name ?? 'Unknown'}_${new Date().toISOString().split('T')[0]}.pdf`)
+  }
+
   function openCloseModal() {
     setCloseForm({ action: 'close', rts_date: '', close_reason: '', referred_to: '' })
     setCloseError(null)
@@ -210,7 +349,7 @@ export default function PhysioCasePage() {
   }
 
   const activeCases = cases.filter(c => c.status === 'active')
-  const closedCases = cases.filter(c => c.status === 'closed' || c.status === 'referred')
+  const closedCases = cases.filter(c => c.status === 'closed')
   const displayCases = tab === 'active' ? activeCases : closedCases
   const canEdit = isAdmin || isPhysio
 
@@ -280,8 +419,16 @@ export default function PhysioCasePage() {
                       <span className={`inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full ${statusStyle[c.status]}`}>{statusLabel[c.status]}</span>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex gap-3 justify-end">
+                      <div className="flex gap-2 justify-end flex-wrap">
                         <button onClick={() => { setDetailCase(c); fetchCaseSlots(c.id) }} className="text-xs text-[#3A7EC8] hover:underline font-medium">Lihat</button>
+                        {tab === 'active' && (
+                          <>
+                            {!c.referred_to_doctor && (
+                              <button onClick={() => setConfirmCaseAction({ case: c, action: 'refer' })} className="text-xs text-orange-600 hover:underline font-medium">Rujuk Doktor</button>
+                            )}
+                            <button onClick={() => setConfirmCaseAction({ case: c, action: 'close' })} className="text-xs text-green-700 hover:underline font-medium">Tutup Kes</button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -289,6 +436,36 @@ export default function PhysioCasePage() {
               </tbody>
             </table>
           )}
+        </div>
+      )}
+
+      {/* Case Action Confirmation Modal */}
+      {confirmCaseAction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
+            <p className="text-sm font-semibold text-[#111] mb-2">
+              {confirmCaseAction.action === 'refer'
+                ? 'Rujuk kes ke doktor?'
+                : 'Tutup kes ini?'}
+            </p>
+            <p className="text-[13px] text-[#888] mb-1">{confirmCaseAction.case.athlete?.name ?? '—'}</p>
+            <p className="text-[12px] text-[#888] mb-6">{confirmCaseAction.case.injury_type ?? '—'} · Dibuka {fmtDate(confirmCaseAction.case.open_date)}</p>
+            {caseActionError && (
+              <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[12px] text-red-600 mb-4">{caseActionError}</div>
+            )}
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => setConfirmCaseAction(null)} disabled={caseActionLoading} className="px-4 py-2 text-sm text-[#888] border border-gray-200 rounded-lg hover:border-gray-400 transition disabled:opacity-60">Batal</button>
+              <button
+                onClick={() => handleCaseAction(confirmCaseAction.case, confirmCaseAction.action)}
+                disabled={caseActionLoading}
+                className={`px-4 py-2 text-sm font-semibold text-white rounded-lg transition disabled:opacity-60 ${
+                  confirmCaseAction.action === 'refer' ? 'bg-orange-600 hover:bg-orange-700' : 'bg-green-700 hover:bg-green-800'
+                }`}
+              >
+                {caseActionLoading ? 'Memproses...' : 'Sahkan'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -442,7 +619,7 @@ export default function PhysioCasePage() {
               </div>
             </div>
 
-            <div className="px-6 py-4 border-t border-gray-100 flex justify-between gap-3 shrink-0">
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-between gap-3 shrink-0 flex-wrap">
               <div className="flex gap-3">
                 {isAdmin && (
                   <button
@@ -453,7 +630,13 @@ export default function PhysioCasePage() {
                   </button>
                 )}
               </div>
-              <div className="flex gap-3">
+              <div className="flex gap-3 flex-wrap">
+                {detailCase.referred_to_doctor && (
+                  <button onClick={() => downloadCaseReport(detailCase)} className="px-4 py-2 text-sm font-semibold text-white bg-[#3A7EC8] hover:bg-blue-700 rounded-lg transition flex items-center gap-2">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    Muat Turun Laporan
+                  </button>
+                )}
                 {canEdit && detailCase.status === 'active' && (
                   <button onClick={openCloseModal} className="px-4 py-2 text-sm font-semibold text-white bg-[#3A7EC8] hover:bg-blue-700 rounded-lg transition">
                     Tutup Kes

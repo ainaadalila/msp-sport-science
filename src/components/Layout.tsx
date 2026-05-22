@@ -14,6 +14,7 @@ const routeMeta: Record<string, { title: string; parent?: string }> = {
   '/performance/supplement':      { title: 'Pengurusan Suplemen', parent: 'Sains Sukan' },
   '/rehabilitation/physio':       { title: 'Saringan Fisioterapi', parent: 'Sains Sukan' },
   '/rehabilitation/physio/cases': { title: 'Pengurusan Kes Fisioterapi', parent: 'Sains Sukan' },
+  '/psychology/rating':           { title: 'Penilaian Psikologi', parent: 'Sains Sukan' },
   '/reports':                     { title: 'Laporan', parent: 'Dashboard' },
   '/admin/users':                 { title: 'Pengurusan Pengguna', parent: 'Dashboard' },
 }

@@ -17,6 +17,7 @@ interface Athlete {
   weight: number | null
   height: number | null
   photo_url: string | null
+  is_elite: boolean
   created_at: string
 }
 
@@ -31,6 +32,7 @@ interface FormState {
   weight: number | null
   height: number | null
   photo_url: string | null
+  is_elite: boolean
 }
 
 const emptyForm: FormState = {
@@ -44,6 +46,7 @@ const emptyForm: FormState = {
   weight: null,
   height: null,
   photo_url: null,
+  is_elite: false,
 }
 
 const statusConfig: Record<string, { label: string; cls: string; icon: React.ReactNode }> = {
@@ -125,6 +128,7 @@ export default function AthletesPage() {
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [filterSport, setFilterSport] = useState('')
+  const [filterElite, setFilterElite] = useState(false)
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Athlete | null>(null)
@@ -165,6 +169,7 @@ export default function AthletesPage() {
       weight: a.weight,
       height: a.height,
       photo_url: a.photo_url,
+      is_elite: a.is_elite,
     })
     setError(null)
     setModalOpen(true)
@@ -200,6 +205,7 @@ export default function AthletesPage() {
       weight: form.weight,
       height: form.height,
       photo_url: form.photo_url,
+      is_elite: form.is_elite,
     }
 
     if (editing) {
@@ -233,7 +239,8 @@ export default function AthletesPage() {
     const matchSearch = !q || a.name.toLowerCase().includes(q) || a.ic_number.includes(q) || a.sport.toLowerCase().includes(q)
     const matchStatus = !filterStatus || a.status === filterStatus
     const matchSport = !filterSport || a.sport === filterSport
-    return matchSearch && matchStatus && matchSport
+    const matchElite = !filterElite || a.is_elite
+    return matchSearch && matchStatus && matchSport && matchElite
   })
 
   const totalSports = new Set(athletes.map(a => a.sport)).size
@@ -320,8 +327,14 @@ export default function AthletesPage() {
           placeholder="Cari nama, IC, sukan..."
           value={search}
           onChange={e => setSearch(e.target.value)}
-          className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-[#111] placeholder-[#bbb] outline-none focus:border-[#F56A00] w-64"
+          className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-[#111] placeholder-[#bbb] outline-none focus:border-[#F56A00] flex-1 min-w-0 md:w-64"
         />
+        <button
+          onClick={() => setFilterElite(v => !v)}
+          className={`px-3 py-2 text-xs font-semibold rounded-lg border transition ${filterElite ? 'bg-yellow-400 border-yellow-400 text-white' : 'bg-white border-gray-200 text-[#888] hover:border-[#F56A00]'}`}
+        >
+          Atlet Elit
+        </button>
       </div>
 
       {/* Table */}
@@ -374,68 +387,77 @@ export default function AthletesPage() {
             )}
           </div>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100">
-                {['Atlet', 'No. IC', 'Jantina', 'Sukan', 'Kategori/Acara', 'Status', ''].map(h => (
-                  <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-wider text-[#888] px-5 py-3">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(a => (
-                <tr
-                  key={a.id}
-                  onClick={() => navigate(`/athletes/${a.id}`)}
-                  className="border-b border-gray-50 last:border-0 hover:bg-gray-50 cursor-pointer group"
-                >
-                  <td className="px-5 py-3">
-                    <div className="flex items-center gap-3">
-                      <Avatar name={a.name} url={a.photo_url} size={32} />
-                      <div>
-                        <span className="font-medium text-[#111] group-hover:text-[#F56A00] transition">{a.name}</span>
-                        {a.date_of_birth && <p className="text-[11px] text-[#888] mt-0.5">{fmtDate(a.date_of_birth)}</p>}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-5 py-3 font-mono text-[12px] text-[#444]">{a.ic_number}</td>
-                  <td className="px-5 py-3 text-[#444]">{a.gender ?? '—'}</td>
-                  <td className="px-5 py-3 text-[#444]">{a.sport}</td>
-                  <td className="px-5 py-3 text-[#888]">{a.category ?? '—'}</td>
-                  <td className="px-5 py-3">
-                    <StatusBadge status={a.status} />
-                  </td>
-                  <td className="px-5 py-3">
-                    <div className="flex gap-3 justify-end items-center">
-                      {isAdmin && (
-                        <>
-                          <button
-                            onClick={e => { e.stopPropagation(); openEdit(a) }}
-                            className="text-xs text-[#F56A00] hover:underline font-medium opacity-0 group-hover:opacity-100 transition"
-                          >Edit</button>
-                          <button
-                            onClick={e => { e.stopPropagation(); setConfirmDelete(a) }}
-                            className="text-xs text-[#D44040] hover:underline font-medium opacity-0 group-hover:opacity-100 transition"
-                          >Padam</button>
-                        </>
-                      )}
-                      <svg className="w-3.5 h-3.5 text-[#bbb] group-hover:text-[#F56A00] transition shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                        <polyline points="9 18 15 12 9 6"/>
-                      </svg>
-                    </div>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100">
+                  {['Atlet', 'No. IC', 'Jantina', 'Sukan', 'Kategori/Acara', 'Status', 'Atlet Elit', ''].map(h => (
+                    <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-wider text-[#888] px-5 py-3">{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+              </thead>
+              <tbody>
+                {filtered.map(a => (
+                  <tr
+                    key={a.id}
+                    onClick={() => navigate(`/athletes/${a.id}`)}
+                    className="border-b border-gray-50 last:border-0 hover:bg-gray-50 cursor-pointer group"
+                  >
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-3">
+                        <Avatar name={a.name} url={a.photo_url} size={32} />
+                        <div>
+                          <span className="font-medium text-[#111] group-hover:text-[#F56A00] transition">{a.name}</span>
+                          {a.date_of_birth && <p className="text-[11px] text-[#888] mt-0.5">{fmtDate(a.date_of_birth)}</p>}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-5 py-3 font-mono text-[12px] text-[#444]">{a.ic_number}</td>
+                    <td className="px-5 py-3 text-[#444]">{a.gender ?? '—'}</td>
+                    <td className="px-5 py-3 text-[#444]">{a.sport}</td>
+                    <td className="px-5 py-3 text-[#888]">{a.category ?? '—'}</td>
+                    <td className="px-5 py-3">
+                      <StatusBadge status={a.status} />
+                    </td>
+                    <td className="px-5 py-3">
+                      {a.is_elite && (
+                        <span className="inline-block text-[11px] font-bold px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-600 border border-yellow-200">
+                          ATLET ELIT
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-5 py-3">
+                      <div className="flex gap-3 justify-end items-center">
+                        {isAdmin && (
+                          <>
+                            <button
+                              onClick={e => { e.stopPropagation(); openEdit(a) }}
+                              className="text-xs text-[#F56A00] hover:underline font-medium opacity-0 group-hover:opacity-100 transition"
+                            >Edit</button>
+                            <button
+                              onClick={e => { e.stopPropagation(); setConfirmDelete(a) }}
+                              className="text-xs text-[#D44040] hover:underline font-medium opacity-0 group-hover:opacity-100 transition"
+                            >Padam</button>
+                          </>
+                        )}
+                        <svg className="w-3.5 h-3.5 text-[#bbb] group-hover:text-[#F56A00] transition shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <polyline points="9 18 15 12 9 6"/>
+                        </svg>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            </div>
+          )}
         </div>
       )}
 
       {/* Add / Edit Modal */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm md:max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
               <h3 className="font-bold text-[#111]">{editing ? 'Edit Atlet' : 'Tambah Atlet Baru'}</h3>
               <button onClick={() => setModalOpen(false)} className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
@@ -508,6 +530,19 @@ export default function AthletesPage() {
                 <Field label="Tinggi (cm)">
                   <input type="number" step="0.1" value={form.height ?? ''} onChange={e => setForm(f => ({ ...f, height: e.target.value ? +e.target.value : null }))} className={inputCls} placeholder="0.0" />
                 </Field>
+                <div className="col-span-2 flex items-center justify-between bg-[#F5F5F7] rounded-lg px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium text-[#111]">Atlet Elit</p>
+                    <p className="text-[11px] text-[#888]">Tandakan jika atlet ini merupakan atlet elit</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, is_elite: !f.is_elite }))}
+                    className={`relative w-11 h-6 rounded-full transition ${form.is_elite ? 'bg-[#F56A00]' : 'bg-gray-300'}`}
+                  >
+                    <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${form.is_elite ? 'left-5' : 'left-0.5'}`} />
+                  </button>
+                </div>
               </div>
             </div>
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">

@@ -21,7 +21,7 @@ interface SCProgram {
 
 interface CoachAssignment {
   id: string; coach_id: string; sport: string
-  days_of_week: string[] | null; notes: string | null
+  days_of_week: string[] | null; session_time: string | null; notes: string | null
   coach?: { full_name: string }
 }
 
@@ -36,7 +36,7 @@ interface ProgramForm {
 }
 
 interface AssignmentForm {
-  coach_id: string; sport: string; days_of_week: string[]; notes: string
+  coach_id: string; sport: string; days_of_week: string[]; session_time: string; notes: string
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mac', 'Apr', 'Mei', 'Jun', 'Jul', 'Ogos', 'Sep', 'Okt', 'Nov', 'Dis']
@@ -57,7 +57,7 @@ const emptyProgramForm: ProgramForm = {
   sport: '', month: new Date().getMonth() + 1, year: new Date().getFullYear(), content: '',
 }
 const emptyAssignmentForm: AssignmentForm = {
-  coach_id: '', sport: '', days_of_week: [], notes: '',
+  coach_id: '', sport: '', days_of_week: [], session_time: '08:00', notes: '',
 }
 
 export default function StrengthPage() {
@@ -83,6 +83,7 @@ export default function StrengthPage() {
   const [attendanceModalOpen, setAttendanceModalOpen] = useState(false)
   const [editingRecord, setEditingRecord] = useState<SCRecord | null>(null)
   const [attendanceForm, setAttendanceForm] = useState<AttendanceForm>(emptyAttendanceForm)
+  const [modalFilterSport, setModalFilterSport] = useState('')
   const [confirmDelete, setConfirmDelete] = useState<SCRecord | null>(null)
 
   // Tab 2 — Program Bulanan
@@ -128,7 +129,7 @@ export default function StrengthPage() {
 
   // --- ATTENDANCE ---
   function openAddAttendance() {
-    setEditingRecord(null); setAttendanceForm(emptyAttendanceForm); setError(null); setAttendanceModalOpen(true)
+    setEditingRecord(null); setAttendanceForm(emptyAttendanceForm); setModalFilterSport(''); setError(null); setAttendanceModalOpen(true)
   }
   function openEditAttendance(rec: SCRecord) {
     setEditingRecord(rec)
@@ -192,13 +193,13 @@ export default function StrengthPage() {
   }
   function openEditAssignment(a: CoachAssignment) {
     setEditingAssignment(a)
-    setAssignmentForm({ coach_id: a.coach_id, sport: a.sport, days_of_week: a.days_of_week ?? [], notes: a.notes ?? '' })
+    setAssignmentForm({ coach_id: a.coach_id, sport: a.sport, days_of_week: a.days_of_week ?? [], session_time: a.session_time ?? '08:00', notes: a.notes ?? '' })
     setError(null); setAssignmentModalOpen(true)
   }
   async function handleSaveAssignment() {
     if (!assignmentForm.coach_id || !assignmentForm.sport) { setError('Jurulatih dan sukan wajib dipilih.'); return }
     setSaving(true); setError(null)
-    const payload = { coach_id: assignmentForm.coach_id, sport: assignmentForm.sport, days_of_week: assignmentForm.days_of_week || null, notes: assignmentForm.notes || null }
+    const payload = { coach_id: assignmentForm.coach_id, sport: assignmentForm.sport, days_of_week: assignmentForm.days_of_week || null, session_time: assignmentForm.session_time || null, notes: assignmentForm.notes || null }
     if (editingAssignment) {
       const { error } = await supabase.from('coach_assignments').update(payload).eq('id', editingAssignment.id)
       if (error) { setError(error.message); setSaving(false); return }
@@ -270,7 +271,7 @@ export default function StrengthPage() {
             </button>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {[
               { label: 'Hadir', value: summary.present, color: 'text-[#3A9E6A]' },
               { label: 'Tidak Hadir', value: summary.absent, color: 'text-[#D44040]' },
@@ -468,6 +469,7 @@ export default function StrengthPage() {
                                 <div className="text-[10px] leading-tight bg-[rgba(245,106,0,0.08)] border border-[rgba(245,106,0,0.2)] text-[#F56A00] rounded px-1.5 py-1">
                                   <p className="font-semibold truncate">{a.sport}</p>
                                   <p className="text-[#888] truncate">{a.coach?.full_name?.split(' ')[0]}</p>
+                                  {a.session_time && <p className="text-[#888] font-mono text-[9px]">{a.session_time}</p>}
                                 </div>
                               </div>
                             ))}
@@ -492,6 +494,7 @@ export default function StrengthPage() {
                       <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[rgba(245,106,0,0.08)] text-[#F56A00] border border-[rgba(245,106,0,0.2)] shrink-0">{a.sport}</span>
                       <span className="text-[12px] text-[#444] truncate">{a.coach?.full_name ?? '—'}</span>
                       <span className="text-[11px] text-[#aaa]">{a.days_of_week?.join(', ') ?? '—'}</span>
+                      {a.session_time && <span className="text-[11px] font-mono text-[#aaa]">@ {a.session_time}</span>}
                     </div>
                     {isAdmin && (
                       <div className="flex gap-3 shrink-0">
@@ -510,17 +513,23 @@ export default function StrengthPage() {
       {/* ── MODAL: ATTENDANCE ── */}
       {attendanceModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm md:max-w-md mx-4">
             <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
               <h3 className="font-bold text-[#111]">{editingRecord ? 'Edit Rekod Sesi' : 'Rekod Sesi Baharu'}</h3>
               <button onClick={() => setAttendanceModalOpen(false)} className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
             </div>
             <div className="px-6 py-5 space-y-4">
               {error && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-600">{error}</div>}
+              <Field label="Sukan">
+                <select value={modalFilterSport} onChange={e => { setModalFilterSport(e.target.value); setAttendanceForm(f => ({ ...f, athlete_id: '' })) }} className={inputCls}>
+                  <option value="">Semua Sukan</option>
+                  {allSports.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </Field>
               <Field label="Atlet" required>
                 <select value={attendanceForm.athlete_id} onChange={e => setAttendanceForm(f => ({ ...f, athlete_id: e.target.value }))} className={inputCls}>
                   <option value="">— Pilih atlet —</option>
-                  {athletes.map(a => <option key={a.id} value={a.id}>{a.name} ({a.sport})</option>)}
+                  {(modalFilterSport ? athletes.filter(a => a.sport === modalFilterSport) : athletes).map(a => <option key={a.id} value={a.id}>{a.name} ({a.sport})</option>)}
                 </select>
               </Field>
               <div className="grid grid-cols-2 gap-4">
@@ -555,14 +564,14 @@ export default function StrengthPage() {
       {/* ── MODAL: PROGRAM ── */}
       {programModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm md:max-w-lg">
             <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
               <h3 className="font-bold text-[#111]">{editingProgram ? 'Edit Program' : 'Program Baharu'}</h3>
               <button onClick={() => setProgramModalOpen(false)} className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
             </div>
             <div className="px-6 py-5 space-y-4">
               {error && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-600">{error}</div>}
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Field label="Sukan" required>
                   <select value={programForm.sport} onChange={e => setProgramForm(f => ({ ...f, sport: e.target.value }))} className={inputCls}>
                     <option value="">— Pilih —</option>
@@ -601,7 +610,7 @@ export default function StrengthPage() {
       {/* ── MODAL: ASSIGNMENT ── */}
       {assignmentModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm md:max-w-md">
             <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
               <h3 className="font-bold text-[#111]">{editingAssignment ? 'Edit Tugasan' : 'Tugasan Baharu'}</h3>
               <button onClick={() => setAssignmentModalOpen(false)} className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
@@ -639,6 +648,9 @@ export default function StrengthPage() {
                     </label>
                   ))}
                 </div>
+              </Field>
+              <Field label="Masa Sesi">
+                <input type="time" value={assignmentForm.session_time} onChange={e => setAssignmentForm(f => ({ ...f, session_time: e.target.value }))} className={inputCls} />
               </Field>
               <Field label="Nota">
                 <textarea value={assignmentForm.notes} onChange={e => setAssignmentForm(f => ({ ...f, notes: e.target.value.toUpperCase() }))} className={`${inputCls} resize-none`} rows={3} placeholder="MAKLUMAT TAMBAHAN..." />
