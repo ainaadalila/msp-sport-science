@@ -22,6 +22,17 @@ function AccessDeniedPage() {
   )
 }
 
+// Roles that implicitly grant module access
+const roleModuleMap: Record<UserRole, (keyof ModulePermissions)[]> = {
+  superadmin: ['athletes', 'inbody', 'supplement', 'physio', 'fitness', 'strength', 'reports', 'psychology', 'supplement_coordinator', 'supplement_supporter', 'supplement_approver'],
+  admin: ['athletes', 'inbody', 'supplement', 'physio', 'fitness', 'strength', 'reports', 'psychology', 'supplement_coordinator', 'supplement_supporter', 'supplement_approver'],
+  coach: ['athletes', 'strength'],
+  physio: ['athletes', 'physio'],
+  psikologis: ['athletes', 'psychology'],
+  penolong_pegawai: ['athletes'],
+  pegawai_belia_sukan: ['athletes'],
+}
+
 export function ProtectedRoute({ children, roles, module }: Props) {
   const { user, profile, loading } = useAuth()
 
@@ -29,9 +40,14 @@ export function ProtectedRoute({ children, roles, module }: Props) {
   if (!user) return <Navigate to="/login" replace />
   if (roles && profile && !roles.includes(profile.role)) return <Navigate to="/" replace />
 
-  const isSuperAdmin = profile?.role === 'superadmin'
-  if (module && !isSuperAdmin && profile && !profile.module_permissions?.[module]) {
-    return <AccessDeniedPage />
+  if (module && profile) {
+    const isSuperAdmin = profile.role === 'superadmin'
+    const hasExplicitPermission = profile.module_permissions?.[module]
+    const hasImplicitPermission = roleModuleMap[profile.role]?.includes(module)
+
+    if (!isSuperAdmin && !hasExplicitPermission && !hasImplicitPermission) {
+      return <AccessDeniedPage />
+    }
   }
 
   return <>{children}</>

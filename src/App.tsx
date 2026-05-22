@@ -45,7 +45,7 @@ export default function App() {
             <Route path="performance/supplement" element={<ProtectedRoute module="supplement"><SupplementPage /></ProtectedRoute>} />
             <Route path="rehabilitation/physio" element={<ProtectedRoute module="physio"><PhysioPage /></ProtectedRoute>} />
             <Route path="rehabilitation/physio/cases" element={<ProtectedRoute module="physio"><PhysioCasePage /></ProtectedRoute>} />
-            <Route path="psychology/rating" element={<ProtectedRoute><PsychologyRatingPage /></ProtectedRoute>} />
+            <Route path="psychology/rating" element={<ProtectedRoute module="psychology"><PsychologyRatingPage /></ProtectedRoute>} />
             <Route path="reports" element={<ProtectedRoute module="reports"><ReportsPage /></ProtectedRoute>} />
             <Route
               path="admin/users"

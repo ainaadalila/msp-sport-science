@@ -1,4 +1,4 @@
-export type UserRole = 'superadmin' | 'admin' | 'coach' | 'physio' | 'medical' | 'athlete'
+export type UserRole = 'superadmin' | 'admin' | 'coach' | 'physio' | 'psikologis' | 'penolong_pegawai' | 'pegawai_belia_sukan'
 
 export interface ModulePermissions {
   athletes: boolean
@@ -8,6 +8,7 @@ export interface ModulePermissions {
   fitness: boolean
   strength: boolean
   reports: boolean
+  psychology: boolean
   supplement_coordinator: boolean
   supplement_supporter: boolean
   supplement_approver: boolean

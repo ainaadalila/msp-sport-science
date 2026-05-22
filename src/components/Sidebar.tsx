@@ -230,7 +230,7 @@ export default function Sidebar() {
 
 const roleLabel: Record<string, string> = {
   superadmin: 'Superadmin', admin: 'Admin', coach: 'Jurulatih',
-  physio: 'Fisioterapis', medical: 'Perubatan', athlete: 'Atlet',
+  physio: 'Fisioterapis', psikologis: 'Psikologis', penolong_pegawai: 'Penolong Pegawai Belia & Sukan', pegawai_belia_sukan: 'Pegawai Belia & Sukan',
 }
 
 const groupLabelCls = 'text-[10px] font-semibold uppercase tracking-widest text-[#aaa] px-3 mb-1'
