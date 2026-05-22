@@ -12,20 +12,21 @@ interface UserProfile {
   created_at: string
 }
 
-const ROLES = ['superadmin', 'admin', 'coach', 'physio', 'medical', 'athlete'] as const
+const ROLES = ['superadmin', 'admin', 'coach', 'physio', 'psikologis', 'penolong_pegawai', 'pegawai_belia_sukan'] as const
 type Role = typeof ROLES[number]
 
 const roleLabel: Record<string, string> = {
   superadmin: 'Superadmin', admin: 'Admin', coach: 'Jurulatih',
-  physio: 'Fisioterapis', medical: 'Perubatan', athlete: 'Atlet',
+  physio: 'Fisioterapis', psikologis: 'Psikologis', penolong_pegawai: 'Penolong Pegawai Belia & Sukan', pegawai_belia_sukan: 'Pegawai Belia & Sukan',
 }
 const roleStyle: Record<string, string> = {
   superadmin: 'bg-purple-50 text-purple-700 border border-purple-200',
   admin: 'bg-blue-50 text-[#3A7EC8] border border-blue-200',
   coach: 'bg-[rgba(245,106,0,0.08)] text-[#F56A00] border border-[rgba(245,106,0,0.2)]',
   physio: 'bg-green-50 text-[#3A9E6A] border border-green-200',
-  medical: 'bg-teal-50 text-teal-700 border border-teal-200',
-  athlete: 'bg-gray-100 text-[#888] border border-gray-200',
+  psikologis: 'bg-pink-50 text-pink-700 border border-pink-200',
+  penolong_pegawai: 'bg-indigo-50 text-indigo-700 border border-indigo-200',
+  pegawai_belia_sukan: 'bg-cyan-50 text-cyan-700 border border-cyan-200',
 }
 
 export default function UserManagementPage() {
@@ -38,8 +39,28 @@ export default function UserManagementPage() {
   const [search, setSearch] = useState('')
 
   const defaultModulePermissions: ModulePermissions = {
-    athletes: true, inbody: true, supplement: true, physio: true, fitness: true, strength: true, reports: true,
+    athletes: true, inbody: true, supplement: true, physio: true, fitness: true, strength: true, reports: true, psychology: true,
     supplement_coordinator: false, supplement_supporter: false, supplement_approver: false
+  }
+
+  // Get module permissions based on role
+  function getDefaultModulesByRole(role: Role): ModulePermissions {
+    const baseModules: ModulePermissions = {
+      athletes: true, inbody: false, supplement: false, physio: false, fitness: false, strength: false, reports: false, psychology: false,
+      supplement_coordinator: false, supplement_supporter: false, supplement_approver: false
+    }
+
+    if (role === 'superadmin' || role === 'admin') {
+      return { ...baseModules, inbody: true, supplement: true, physio: true, fitness: true, strength: true, reports: true, psychology: true, supplement_coordinator: true, supplement_supporter: true, supplement_approver: true }
+    } else if (role === 'coach') {
+      return { ...baseModules, strength: true }
+    } else if (role === 'physio') {
+      return { ...baseModules, physio: true }
+    } else if (role === 'psikologis') {
+      return { ...baseModules, psychology: true }
+    }
+    // penolong_pegawai and pegawai_belia_sukan: only athletes (manual selection for others)
+    return baseModules
   }
 
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null)
@@ -48,7 +69,7 @@ export default function UserManagementPage() {
   const [saveError, setSaveError] = useState<string | null>(null)
 
   const [createOpen, setCreateOpen] = useState(false)
-  const [createForm, setCreateForm] = useState({ email: '', full_name: '', password: '', role: 'admin' as Role, showPw: false, module_permissions: {} as ModulePermissions })
+  const [createForm, setCreateForm] = useState({ email: '', full_name: '', password: '', role: 'admin' as Role, showPw: false, module_permissions: defaultModulePermissions })
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const [createSuccess, setCreateSuccess] = useState(false)
@@ -242,7 +263,10 @@ export default function UserManagementPage() {
                 <label className={labelCls}>Peranan</label>
                 <select
                   value={editForm.role}
-                  onChange={e => setEditForm(f => ({ ...f, role: e.target.value as Role }))}
+                  onChange={e => {
+                    const newRole = e.target.value as Role
+                    setEditForm(f => ({ ...f, role: newRole, module_permissions: getDefaultModulesByRole(newRole) }))
+                  }}
                   className={inputCls}
                 >
                   {ROLES.filter(r => isSuperAdmin || r !== 'superadmin').map(r => (
@@ -256,7 +280,7 @@ export default function UserManagementPage() {
                 <div className="space-y-3">
                   <p className="text-[11px] font-semibold text-[#888] uppercase tracking-widest">Akses Modul</p>
                   <div className="grid grid-cols-2 gap-2">
-                    {(['athletes', 'inbody', 'supplement', 'physio', 'fitness', 'strength', 'reports'] as const).map(m => (
+                    {(['athletes', 'inbody', 'supplement', 'physio', 'fitness', 'strength', 'reports', 'psychology'] as const).map(m => (
                       <label key={m} className="flex items-center gap-2 cursor-not-allowed opacity-60">
                         <input type="checkbox" checked={true} disabled className="rounded" />
                         <span className="text-sm text-[#666]">{moduleLabel[m]}</span>
@@ -277,7 +301,7 @@ export default function UserManagementPage() {
                 <div className="space-y-3">
                   <p className="text-[11px] font-semibold text-[#888] uppercase tracking-widest">Akses Modul</p>
                   <div className="grid grid-cols-2 gap-2">
-                    {(['athletes', 'inbody', 'supplement', 'physio', 'fitness', 'strength', 'reports'] as const).map(m => (
+                    {(['athletes', 'inbody', 'supplement', 'physio', 'fitness', 'strength', 'reports', 'psychology'] as const).map(m => (
                       <label key={m} className="flex items-center gap-2 cursor-pointer">
                         <input
                           type="checkbox"
@@ -359,7 +383,10 @@ export default function UserManagementPage() {
                   </div>
                   <div>
                     <label className={labelCls}>Peranan</label>
-                    <select value={createForm.role} onChange={e => setCreateForm(f => ({ ...f, role: e.target.value as Role }))} className={inputCls}>
+                    <select value={createForm.role} onChange={e => {
+                      const newRole = e.target.value as Role
+                      setCreateForm(f => ({ ...f, role: newRole, module_permissions: getDefaultModulesByRole(newRole) }))
+                    }} className={inputCls}>
                       {ROLES.map(r => <option key={r} value={r}>{roleLabel[r]}</option>)}
                     </select>
                   </div>
@@ -368,7 +395,7 @@ export default function UserManagementPage() {
                   <div className="space-y-3">
                     <p className="text-[11px] font-semibold text-[#888] uppercase tracking-widest">Akses Modul</p>
                     <div className="grid grid-cols-2 gap-2">
-                      {(['athletes', 'inbody', 'supplement', 'physio', 'fitness', 'strength', 'reports'] as const).map(m => (
+                      {(['athletes', 'inbody', 'supplement', 'physio', 'fitness', 'strength', 'reports', 'psychology'] as const).map(m => (
                         <label key={m} className="flex items-center gap-2 cursor-pointer">
                           <input
                             type="checkbox"
@@ -422,6 +449,7 @@ const moduleLabel: Record<string, string> = {
   fitness: 'Ujian Kecergasan',
   strength: 'Strength & Conditioning',
   reports: 'Laporan',
+  psychology: 'Penilaian Psikologi',
   supplement_coordinator: 'Penyelaras Semak',
   supplement_supporter: 'Penyokong',
   supplement_approver: 'Pegawai Pelulus',
