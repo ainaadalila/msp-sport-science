@@ -213,6 +213,16 @@ export default function AthletesPage() {
       if (error) { setError(error.message); setSaving(false); return }
       await logAction(profile!.id, 'update_athlete', 'athletes', editing.id)
     } else {
+      const { data: existing } = await supabase
+        .from('athletes')
+        .select('id, name')
+        .eq('ic_number', form.ic_number.trim())
+        .maybeSingle()
+      if (existing) {
+        setError(`Atlet dengan No. IC ini sudah wujud: ${existing.name}`)
+        setSaving(false)
+        return
+      }
       const { data, error } = await supabase.from('athletes').insert(payload).select('id').single()
       if (error) { setError(error.message); setSaving(false); return }
       await logAction(profile!.id, 'create_athlete', 'athletes', data.id)

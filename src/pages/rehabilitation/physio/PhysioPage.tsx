@@ -402,16 +402,23 @@ export default function PhysioPage() {
                     </select>
                   </Field>
                   <Field label="Atlet" required>
-                    <select value={bookingForm.athlete_id} onChange={e => setBookingField('athlete_id', e.target.value)} className={inputCls}>
+                    <select value={bookingForm.athlete_id} onChange={e => { setBookingField('athlete_id', e.target.value); setBookingField('case_id', '') }} className={inputCls}>
                       <option value="">— Pilih atlet —</option>
                       {modalAthletes.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                     </select>
                   </Field>
                 </div>
                 <Field label="Kes (Opsional)">
-                  <select value={bookingForm.case_id} onChange={e => setBookingField('case_id', e.target.value)} className={inputCls}>
+                  <select value={bookingForm.case_id} onChange={e => setBookingField('case_id', e.target.value)} className={inputCls} disabled={!bookingForm.athlete_id}>
                     <option value="">— Tanpa kes —</option>
-                    {cases.map(c => <option key={c.id} value={c.id}>{c.athlete?.name}{c.injury_type ? ` - ${c.injury_type}` : ''} - {new Date(c.open_date + 'T00:00:00').toLocaleDateString('ms-MY', { day: 'numeric', month: 'short', year: '2-digit' })}</option>)}
+                    {cases
+                      .filter(c => c.athlete_id === bookingForm.athlete_id)
+                      .map(c => (
+                        <option key={c.id} value={c.id}>
+                          {c.injury_type ?? 'Tiada diagnosis'} — {new Date(c.open_date + 'T00:00:00').toLocaleDateString('ms-MY', { day: 'numeric', month: 'short', year: '2-digit' })}
+                        </option>
+                      ))
+                    }
                   </select>
                 </Field>
               </div>

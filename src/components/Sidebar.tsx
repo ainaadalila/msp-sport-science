@@ -12,7 +12,7 @@ interface NavItem {
 
 const expandableGroups: Record<string, NavItem[]> = {
   kecergasan: [
-    { label: 'Strength & Conditioning', path: '/fitness/strength', module: 'strength' },
+    { label: 'Latihan Suaian Fizikal', path: '/fitness/strength', module: 'strength' },
     { label: 'Ujian Kecergasan', path: '/fitness/testing', module: 'fitness' },
     { label: 'Konfigurasi Ujian', path: '/fitness/config', module: 'fitness' },
   ],
@@ -25,7 +25,7 @@ const expandableGroups: Record<string, NavItem[]> = {
     { label: 'Pengurusan Kes', path: '/rehabilitation/physio/cases', module: 'physio' },
   ],
   psikologi: [
-    { label: 'Penilaian Psikologi', path: '/psychology/rating' },
+    { label: 'Penilaian Psikologi', path: '/psychology/rating', module: 'psychology' },
   ],
 }
 
@@ -41,7 +41,7 @@ export default function Sidebar() {
   const isSuperAdmin = profile?.role === 'superadmin'
 
   const can = (mod: keyof ModulePermissions) =>
-    isSuperAdmin || (profile?.module_permissions?.[mod] ?? true)
+    isSuperAdmin || (profile?.module_permissions?.[mod] ?? false)
 
   // Auto-expand group if a child route is active
   function isGroupActive(key: string) {

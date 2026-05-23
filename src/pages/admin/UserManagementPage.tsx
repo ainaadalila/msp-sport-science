@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
-import { adminClient } from '../../lib/adminClient'
+import { createUserAdmin } from '../../lib/adminClient'
 import { useAuth } from '../../context/AuthContext'
 import type { ModulePermissions } from '../../types'
 
@@ -69,12 +69,25 @@ export default function UserManagementPage() {
   const [saveError, setSaveError] = useState<string | null>(null)
 
   const [createOpen, setCreateOpen] = useState(false)
-  const [createForm, setCreateForm] = useState({ email: '', full_name: '', password: '', role: 'admin' as Role, showPw: false, module_permissions: defaultModulePermissions })
+  const getInitialCreateForm = () => {
+    const role = 'admin' as Role
+    return { email: '', full_name: '', password: '', role, showPw: false, module_permissions: getDefaultModulesByRole(role) }
+  }
+  const [createForm, setCreateForm] = useState(getInitialCreateForm())
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const [createSuccess, setCreateSuccess] = useState(false)
 
   useEffect(() => { fetchUsers() }, [])
+
+  // Reset create form when modal opens
+  useEffect(() => {
+    if (createOpen) {
+      setCreateForm(getInitialCreateForm())
+      setCreateError(null)
+      setCreateSuccess(false)
+    }
+  }, [createOpen])
 
   async function fetchUsers() {
     setLoading(true)
@@ -84,6 +97,7 @@ export default function UserManagementPage() {
   }
 
   function openEdit(u: UserProfile) {
+    console.log('Opening edit for user:', u.full_name, 'Permissions:', u.module_permissions)
     setEditingUser(u)
     setEditForm({ full_name: u.full_name ?? '', role: u.role as Role, module_permissions: u.module_permissions || defaultModulePermissions })
     setSaveError(null)
@@ -93,9 +107,11 @@ export default function UserManagementPage() {
     if (!editingUser) return
     setSaving(true)
     setSaveError(null)
+    // Always use the role to determine module permissions
+    const finalModulePermissions = getDefaultModulesByRole(editForm.role)
     const { error } = await supabase
       .from('profiles')
-      .update({ full_name: editForm.full_name || null, role: editForm.role, module_permissions: editForm.module_permissions })
+      .update({ full_name: editForm.full_name || null, role: editForm.role, module_permissions: finalModulePermissions })
       .eq('id', editingUser.id)
     if (error) { setSaveError(error.message); setSaving(false); return }
     setSaving(false)
@@ -103,7 +119,9 @@ export default function UserManagementPage() {
     fetchUsers()
   }
 
-  async function handleCreate() {
+  async function handleCreate(e?: React.MouseEvent) {
+    console.log('handleCreate called', e)
+    e?.preventDefault()
     setCreateError(null)
     if (!createForm.email.trim() || !createForm.full_name.trim() || !createForm.password) {
       setCreateError('Sila isi semua medan.')
@@ -114,24 +132,27 @@ export default function UserManagementPage() {
       return
     }
     setCreating(true)
-    const { error } = await adminClient.auth.admin.createUser({
-      email: createForm.email.trim(),
-      password: createForm.password,
-      email_confirm: true,
-      user_metadata: {
-        full_name: createForm.full_name.trim().toUpperCase(),
-        role: createForm.role,
-        module_permissions: createForm.module_permissions,
-      },
-    })
-    if (error) {
-      setCreateError(error.message)
+    // Always use the role to determine module permissions
+    const finalModulePermissions = getDefaultModulesByRole(createForm.role)
+    console.log('Creating user with role:', createForm.role, 'Permissions:', finalModulePermissions)
+    try {
+      console.log('Calling createUserAdmin...')
+      await createUserAdmin(
+        createForm.email.trim(),
+        createForm.password,
+        {
+          full_name: createForm.full_name.trim().toUpperCase(),
+          role: createForm.role,
+        },
+        finalModulePermissions
+      )
       setCreating(false)
-      return
+      setCreateSuccess(true)
+      fetchUsers()
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : 'Failed to create user')
+      setCreating(false)
     }
-    setCreating(false)
-    setCreateSuccess(true)
-    fetchUsers()
   }
 
   const filtered = users.filter(u => {
@@ -280,52 +301,74 @@ export default function UserManagementPage() {
                 <div className="space-y-3">
                   <p className="text-[11px] font-semibold text-[#888] uppercase tracking-widest">Akses Modul</p>
                   <div className="grid grid-cols-2 gap-2">
-                    {(['athletes', 'inbody', 'supplement', 'physio', 'fitness', 'strength', 'reports', 'psychology'] as const).map(m => (
-                      <label key={m} className="flex items-center gap-2 cursor-not-allowed opacity-60">
-                        <input type="checkbox" checked={true} disabled className="rounded" />
-                        <span className="text-sm text-[#666]">{moduleLabel[m]}</span>
-                      </label>
-                    ))}
+                    {(['athletes', 'inbody', 'supplement', 'physio', 'fitness', 'strength', 'reports', 'psychology'] as const).map(m => {
+                      const isChecked = editForm.module_permissions[m] || false
+                      return (
+                        <div key={m} className={`flex items-center gap-2 px-2 py-1.5 rounded ${isChecked ? 'bg-orange-100 text-[#F56A00] border border-orange-300' : 'bg-gray-100 text-gray-500 border border-gray-200'}`}>
+                          <span className="text-lg">{isChecked ? '✓' : '−'}</span>
+                          <span className="text-sm font-medium">{moduleLabel[m]}</span>
+                        </div>
+                      )
+                    })}
                   </div>
                   <p className="text-[11px] font-semibold text-[#888] uppercase tracking-widest mt-3">Kebenaran Aliran Suplemen</p>
                   <div className="grid grid-cols-2 gap-2">
-                    {(['supplement_coordinator', 'supplement_supporter', 'supplement_approver'] as const).map(m => (
-                      <label key={m} className="flex items-center gap-2 cursor-not-allowed opacity-60">
-                        <input type="checkbox" checked={true} disabled className="rounded" />
-                        <span className="text-sm text-[#666]">{moduleLabel[m]}</span>
-                      </label>
-                    ))}
+                    {(['supplement_coordinator', 'supplement_supporter', 'supplement_approver'] as const).map(m => {
+                      const isChecked = editForm.module_permissions[m] || false
+                      return (
+                        <div key={m} className={`flex items-center gap-2 px-2 py-1.5 rounded ${isChecked ? 'bg-orange-100 text-[#F56A00] border border-orange-300' : 'bg-gray-100 text-gray-500 border border-gray-200'}`}>
+                          <span className="text-lg">{isChecked ? '✓' : '−'}</span>
+                          <span className="text-sm font-medium">{moduleLabel[m]}</span>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               ) : (
                 <div className="space-y-3">
                   <p className="text-[11px] font-semibold text-[#888] uppercase tracking-widest">Akses Modul</p>
                   <div className="grid grid-cols-2 gap-2">
-                    {(['athletes', 'inbody', 'supplement', 'physio', 'fitness', 'strength', 'reports', 'psychology'] as const).map(m => (
-                      <label key={m} className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={editForm.module_permissions[m] ?? true}
-                          onChange={e => setEditForm(f => ({ ...f, module_permissions: { ...f.module_permissions, [m]: e.target.checked } }))}
-                          className="rounded"
-                        />
-                        <span className="text-sm text-[#666]">{moduleLabel[m]}</span>
-                      </label>
-                    ))}
+                    {(['athletes', 'inbody', 'supplement', 'physio', 'fitness', 'strength', 'reports', 'psychology'] as const).map(m => {
+                      const isChecked = editForm.module_permissions[m] || false
+                      return (
+                        <label key={m} className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={e => setEditForm(f => ({ ...f, module_permissions: { ...f.module_permissions, [m]: e.target.checked } }))}
+                            style={{
+                              width: '18px',
+                              height: '18px',
+                              cursor: 'pointer',
+                              accentColor: '#F56A00',
+                            }}
+                          />
+                          <span className="text-sm text-[#666]">{moduleLabel[m]}</span>
+                        </label>
+                      )
+                    })}
                   </div>
                   <p className="text-[11px] font-semibold text-[#888] uppercase tracking-widest mt-3">Kebenaran Aliran Suplemen</p>
                   <div className="grid grid-cols-2 gap-2">
-                    {(['supplement_coordinator', 'supplement_supporter', 'supplement_approver'] as const).map(m => (
-                      <label key={m} className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={editForm.module_permissions[m] ?? false}
-                          onChange={e => setEditForm(f => ({ ...f, module_permissions: { ...f.module_permissions, [m]: e.target.checked } }))}
-                          className="rounded"
-                        />
-                        <span className="text-sm text-[#666]">{moduleLabel[m]}</span>
-                      </label>
-                    ))}
+                    {(['supplement_coordinator', 'supplement_supporter', 'supplement_approver'] as const).map(m => {
+                      const isChecked = editForm.module_permissions[m] || false
+                      return (
+                        <label key={m} className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={e => setEditForm(f => ({ ...f, module_permissions: { ...f.module_permissions, [m]: e.target.checked } }))}
+                            style={{
+                              width: '18px',
+                              height: '18px',
+                              cursor: 'pointer',
+                              accentColor: '#F56A00',
+                            }}
+                          />
+                          <span className="text-sm text-[#666]">{moduleLabel[m]}</span>
+                        </label>
+                      )
+                    })}
                   </div>
                 </div>
               )}
@@ -395,31 +438,37 @@ export default function UserManagementPage() {
                   <div className="space-y-3">
                     <p className="text-[11px] font-semibold text-[#888] uppercase tracking-widest">Akses Modul</p>
                     <div className="grid grid-cols-2 gap-2">
-                      {(['athletes', 'inbody', 'supplement', 'physio', 'fitness', 'strength', 'reports', 'psychology'] as const).map(m => (
-                        <label key={m} className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={createForm.module_permissions[m] ?? true}
-                            onChange={e => setCreateForm(f => ({ ...f, module_permissions: { ...f.module_permissions, [m]: e.target.checked } }))}
-                            className="rounded"
-                          />
-                          <span className="text-sm text-[#666]">{moduleLabel[m]}</span>
-                        </label>
-                      ))}
+                      {(['athletes', 'inbody', 'supplement', 'physio', 'fitness', 'strength', 'reports', 'psychology'] as const).map(m => {
+                        const isChecked = createForm.module_permissions[m] || false
+                        return (
+                          <button
+                            key={m}
+                            type="button"
+                            onClick={() => setCreateForm(f => ({ ...f, module_permissions: { ...f.module_permissions, [m]: !f.module_permissions[m] } }))}
+                            className={`flex items-center gap-2 px-2 py-1.5 rounded text-sm font-medium transition cursor-pointer ${isChecked ? 'bg-orange-100 text-[#F56A00] border border-orange-300' : 'bg-gray-100 text-gray-500 border border-gray-200'}`}
+                          >
+                            <span className="text-lg">{isChecked ? '✓' : '−'}</span>
+                            {moduleLabel[m]}
+                          </button>
+                        )
+                      })}
                     </div>
                     <p className="text-[11px] font-semibold text-[#888] uppercase tracking-widest mt-3">Kebenaran Aliran Suplemen</p>
                     <div className="grid grid-cols-2 gap-2">
-                      {(['supplement_coordinator', 'supplement_supporter', 'supplement_approver'] as const).map(m => (
-                        <label key={m} className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={createForm.module_permissions[m] ?? false}
-                            onChange={e => setCreateForm(f => ({ ...f, module_permissions: { ...f.module_permissions, [m]: e.target.checked } }))}
-                            className="rounded"
-                          />
-                          <span className="text-sm text-[#666]">{moduleLabel[m]}</span>
-                        </label>
-                      ))}
+                      {(['supplement_coordinator', 'supplement_supporter', 'supplement_approver'] as const).map(m => {
+                        const isChecked = createForm.module_permissions[m] || false
+                        return (
+                          <button
+                            key={m}
+                            type="button"
+                            onClick={() => setCreateForm(f => ({ ...f, module_permissions: { ...f.module_permissions, [m]: !f.module_permissions[m] } }))}
+                            className={`flex items-center gap-2 px-2 py-1.5 rounded text-sm font-medium transition cursor-pointer ${isChecked ? 'bg-orange-100 text-[#F56A00] border border-orange-300' : 'bg-gray-100 text-gray-500 border border-gray-200'}`}
+                          >
+                            <span className="text-lg">{isChecked ? '✓' : '−'}</span>
+                            {moduleLabel[m]}
+                          </button>
+                        )
+                      })}
                     </div>
                   </div>
                 </>
@@ -447,7 +496,7 @@ const moduleLabel: Record<string, string> = {
   supplement: 'Suplemen',
   physio: 'Fisioterapi',
   fitness: 'Ujian Kecergasan',
-  strength: 'Strength & Conditioning',
+  strength: 'Latihan Suaian Fizikal',
   reports: 'Laporan',
   psychology: 'Penilaian Psikologi',
   supplement_coordinator: 'Penyelaras Semak',
