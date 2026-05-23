@@ -233,12 +233,7 @@ export default function PsychologyRatingPage() {
     <div className="space-y-4">
 
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <p className="text-[12px] text-[#888]">{filteredRatings.length} rekod</p>
-        <button onClick={fetchRatings} disabled={loading} className="bg-gray-200 hover:bg-gray-300 text-[#111] text-sm font-semibold px-4 py-2 rounded-lg transition disabled:opacity-50">
-          {loading ? 'Memuatkan...' : '+ Impor CSV'}
-        </button>
-      </div>
+      <p className="text-[12px] text-[#888]">{filteredRatings.length} rekod</p>
 
       {/* Stats Section */}
       {!loading && (

@@ -295,7 +295,7 @@ export default function AthleteProfilePage() {
 
         {/* S&C Attendance */}
         <SummaryCard
-          title="Strength & Conditioning"
+          title="Latihan Suaian Fizikal"
           date={scRecords[0]?.session_date ? fmtDate(scRecords[0].session_date) : null}
           empty={scRecords.length === 0}
           linkTo="/fitness/strength"

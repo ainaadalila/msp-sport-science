@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
 import { logAction } from '../../../lib/audit'
+import StructuredProgramBuilder from './StructuredProgramBuilder'
+import type { StructuredProgramData } from '../../../types'
 
 interface Athlete { id: string; name: string; sport: string }
 interface Coach { id: string; full_name: string }
@@ -16,6 +18,10 @@ interface SCRecord {
 interface SCProgram {
   id: string; sport: string; month: number; year: number
   content: string; coach_id: string | null
+  program_type: 'text' | 'structured'
+  structured_data: StructuredProgramData | null
+  start_date: string | null
+  end_date: string | null
   coach?: { full_name: string }
 }
 
@@ -33,6 +39,10 @@ interface AttendanceForm {
 
 interface ProgramForm {
   sport: string; month: number; year: number; content: string
+  program_type: 'text' | 'structured'
+  structured_data: StructuredProgramData
+  start_date: string
+  end_date: string
 }
 
 interface AssignmentForm {
@@ -53,8 +63,11 @@ const emptyAttendanceForm: AttendanceForm = {
   athlete_id: '', session_date: new Date().toISOString().slice(0, 10),
   attendance: 'present', training_program: '', notes: '',
 }
+const emptyStructuredData: StructuredProgramData = { phase: '', training_goals: [''], sessions: [] }
+
 const emptyProgramForm: ProgramForm = {
   sport: '', month: new Date().getMonth() + 1, year: new Date().getFullYear(), content: '',
+  program_type: 'text', structured_data: emptyStructuredData, start_date: '', end_date: '',
 }
 const emptyAssignmentForm: AssignmentForm = {
   coach_id: '', sport: '', days_of_week: [], session_time: '08:00', notes: '',
@@ -94,6 +107,7 @@ export default function StrengthPage() {
   const [editingProgram, setEditingProgram] = useState<SCProgram | null>(null)
   const [programForm, setProgramForm] = useState<ProgramForm>(emptyProgramForm)
   const [confirmDeleteProgram, setConfirmDeleteProgram] = useState<SCProgram | null>(null)
+  const [viewProgram, setViewProgram] = useState<SCProgram | null>(null)
 
   // Tab 3 — Jadual Jurulatih
   const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth() + 1)
@@ -164,13 +178,27 @@ export default function StrengthPage() {
   }
   function openEditProgram(p: SCProgram) {
     setEditingProgram(p)
-    setProgramForm({ sport: p.sport, month: p.month, year: p.year, content: p.content })
+    setProgramForm({
+      sport: p.sport, month: p.month, year: p.year, content: p.content,
+      program_type: p.program_type ?? 'text',
+      structured_data: p.structured_data ?? { phase: '', training_goals: [''], sessions: [] },
+      start_date: p.start_date ?? '', end_date: p.end_date ?? '',
+    })
     setError(null); setProgramModalOpen(true)
   }
   async function handleSaveProgram() {
-    if (!programForm.sport || !programForm.content) { setError('Sukan dan kandungan program wajib diisi.'); return }
+    if (!programForm.sport) { setError('Sukan wajib dipilih.'); return }
+    if (programForm.program_type === 'text' && !programForm.content) { setError('Kandungan program wajib diisi.'); return }
+    if (programForm.program_type === 'structured' && programForm.structured_data.sessions.length === 0) { setError('Sila tambah sekurang-kurangnya satu sesi.'); return }
     setSaving(true); setError(null)
-    const payload = { sport: programForm.sport, month: programForm.month, year: programForm.year, content: programForm.content, coach_id: profile?.id ?? null }
+    const payload = {
+      sport: programForm.sport, month: programForm.month, year: programForm.year,
+      content: programForm.program_type === 'text' ? programForm.content : '',
+      program_type: programForm.program_type,
+      structured_data: programForm.program_type === 'structured' ? programForm.structured_data : null,
+      start_date: programForm.start_date || null, end_date: programForm.end_date || null,
+      coach_id: profile?.id ?? null,
+    }
     if (editingProgram) {
       const { error } = await supabase.from('sc_programs').update(payload).eq('id', editingProgram.id)
       if (error) { setError(error.message); setSaving(false); return }
@@ -398,13 +426,33 @@ export default function StrengthPage() {
                         <div key={p.id} className="group">
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
-                              <p className="text-[11px] font-semibold text-[#F56A00]">{p.sport}</p>
-                              <p className="text-[12px] text-[#444] mt-0.5 line-clamp-3">{p.content}</p>
+                              <div className="flex items-center gap-1.5 mb-0.5">
+                                <p className="text-[11px] font-semibold text-[#F56A00]">{p.sport}</p>
+                                {p.program_type === 'structured' && (
+                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[rgba(245,106,0,0.1)] text-[#F56A00] border border-[rgba(245,106,0,0.2)]">MINGGUAN</span>
+                                )}
+                              </div>
+                              {p.program_type === 'structured' && p.structured_data ? (
+                                <>
+                                  {p.structured_data.phase && <p className="text-[11px] font-medium text-[#444]">{p.structured_data.phase}</p>}
+                                  {(p.start_date || p.end_date) && (
+                                    <p className="text-[11px] text-[#888] mt-0.5">
+                                      {p.start_date ? fmtProgramDate(p.start_date) : '—'} → {p.end_date ? fmtProgramDate(p.end_date) : '—'}
+                                    </p>
+                                  )}
+                                  <p className="text-[11px] text-[#888] mt-0.5">{p.structured_data.sessions.length} sesi</p>
+                                </>
+                              ) : (
+                                <p className="text-[12px] text-[#444] mt-0.5 line-clamp-3">{p.content}</p>
+                              )}
                               {p.coach?.full_name && (
                                 <p className="text-[10px] text-[#aaa] mt-1">{p.coach.full_name}</p>
                               )}
                             </div>
-                            <div className="flex gap-2 shrink-0 opacity-0 group-hover:opacity-100 transition">
+                            <div className="flex flex-col gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition items-end">
+                              {p.program_type === 'structured' && (
+                                <button onClick={() => setViewProgram(p)} className="text-xs text-[#3A7EC8] hover:underline font-medium">Lihat</button>
+                              )}
                               <button onClick={() => openEditProgram(p)} className="text-xs text-[#F56A00] hover:underline">Edit</button>
                               {isAdmin && <button onClick={() => setConfirmDeleteProgram(p)} className="text-xs text-[#D44040] hover:underline">Padam</button>}
                             </div>
@@ -564,13 +612,31 @@ export default function StrengthPage() {
       {/* ── MODAL: PROGRAM ── */}
       {programModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm md:max-w-lg">
-            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
+          <div className={`bg-white rounded-2xl shadow-xl w-full flex flex-col max-h-[90vh] ${programForm.program_type === 'structured' ? 'max-w-4xl' : 'max-w-lg'}`}>
+            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between shrink-0">
               <h3 className="font-bold text-[#111]">{editingProgram ? 'Edit Program' : 'Program Baharu'}</h3>
               <button onClick={() => setProgramModalOpen(false)} className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
             </div>
-            <div className="px-6 py-5 space-y-4">
+            <div className="px-6 py-5 space-y-4 overflow-y-auto flex-1">
               {error && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-600">{error}</div>}
+
+              {/* Program type toggle */}
+              <div>
+                <label className="block text-[10px] font-semibold uppercase tracking-widest text-[#888] mb-1.5">Jenis Program</label>
+                <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
+                  {(['text', 'structured'] as const).map(type => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => setProgramForm(f => ({ ...f, program_type: type }))}
+                      className={`px-3 py-1.5 text-[12px] font-semibold rounded-md transition ${programForm.program_type === type ? 'bg-white text-[#F56A00] shadow-sm' : 'text-[#888] hover:text-[#444]'}`}
+                    >
+                      {type === 'text' ? 'Teks' : 'Berstruktur (Mingguan)'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Field label="Sukan" required>
                   <select value={programForm.sport} onChange={e => setProgramForm(f => ({ ...f, sport: e.target.value }))} className={inputCls}>
@@ -587,17 +653,35 @@ export default function StrengthPage() {
                   <input type="number" value={programForm.year} onChange={e => setProgramForm(f => ({ ...f, year: +e.target.value }))} className={inputCls} placeholder="2026" />
                 </Field>
               </div>
-              <Field label="Kandungan Program" required>
-                <textarea
-                  value={programForm.content}
-                  onChange={e => setProgramForm(f => ({ ...f, content: e.target.value.toUpperCase() }))}
-                  className={`${inputCls} resize-none`}
-                  rows={6}
-                  placeholder="HURAIKAN PROGRAM LATIHAN UNTUK BULAN INI..."
-                />
-              </Field>
+
+              {programForm.program_type === 'text' ? (
+                <Field label="Kandungan Program" required>
+                  <textarea
+                    value={programForm.content}
+                    onChange={e => setProgramForm(f => ({ ...f, content: e.target.value.toUpperCase() }))}
+                    className={`${inputCls} resize-none`}
+                    rows={6}
+                    placeholder="HURAIKAN PROGRAM LATIHAN UNTUK BULAN INI..."
+                  />
+                </Field>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <Field label="Tarikh Mula">
+                      <input type="date" value={programForm.start_date} onChange={e => setProgramForm(f => ({ ...f, start_date: e.target.value }))} className={inputCls} />
+                    </Field>
+                    <Field label="Tarikh Tamat">
+                      <input type="date" value={programForm.end_date} onChange={e => setProgramForm(f => ({ ...f, end_date: e.target.value }))} className={inputCls} />
+                    </Field>
+                  </div>
+                  <StructuredProgramBuilder
+                    value={programForm.structured_data}
+                    onChange={sd => setProgramForm(f => ({ ...f, structured_data: sd }))}
+                  />
+                </>
+              )}
             </div>
-            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 shrink-0">
               <button onClick={() => setProgramModalOpen(false)} className="px-4 py-2 text-sm text-[#888] hover:text-[#111] transition">Batal</button>
               <button onClick={handleSaveProgram} disabled={saving} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
                 {saving ? 'Menyimpan...' : 'Simpan'}
@@ -666,6 +750,110 @@ export default function StrengthPage() {
         </div>
       )}
 
+      {/* ── MODAL: VIEW STRUCTURED PROGRAM ── */}
+      {viewProgram && viewProgram.structured_data && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col">
+            <div className="px-6 py-5 border-b border-gray-100 flex items-start justify-between gap-4 shrink-0">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <h3 className="font-bold text-[#111]">{viewProgram.sport}</h3>
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[rgba(245,106,0,0.1)] text-[#F56A00] border border-[rgba(245,106,0,0.2)]">MINGGUAN</span>
+                </div>
+                {viewProgram.structured_data.phase && (
+                  <p className="text-[13px] font-semibold text-[#F56A00]">{viewProgram.structured_data.phase}</p>
+                )}
+                <p className="text-[12px] text-[#888] mt-0.5">
+                  {MONTHS[viewProgram.month - 1]} {viewProgram.year}
+                  {viewProgram.start_date && ` • ${fmtProgramDate(viewProgram.start_date)}`}
+                  {viewProgram.end_date && ` – ${fmtProgramDate(viewProgram.end_date)}`}
+                </p>
+                {viewProgram.structured_data.training_goals.filter(Boolean).length > 0 && (
+                  <ul className="mt-2 space-y-0.5">
+                    {viewProgram.structured_data.training_goals.filter(Boolean).map((g, i) => (
+                      <li key={i} className="text-[11px] text-[#444]">{i + 1}. {g}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <button onClick={() => { setViewProgram(null); openEditProgram(viewProgram) }} className="text-sm text-[#F56A00] hover:underline font-medium">Edit</button>
+                <button onClick={() => setViewProgram(null)} className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 space-y-5">
+              {viewProgram.structured_data.sessions.map(session => (
+                <div key={session.session_number} className="border border-gray-200 rounded-xl overflow-hidden">
+                  <div className="px-4 py-3 bg-gray-50 border-b border-gray-100 flex items-center gap-2">
+                    <span className="text-[11px] font-bold text-[#F56A00]">SESI #{session.session_number}</span>
+                    <span className="text-[12px] font-semibold text-[#111]">{session.day}</span>
+                    {session.session_type && <span className="text-[11px] text-[#888]">— {session.session_type}</span>}
+                  </div>
+                  <div className="p-4 space-y-4">
+                    {session.warmup.filter(Boolean).length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-[#888] mb-1.5">Pemanasan</p>
+                        <ol className="space-y-0.5">
+                          {session.warmup.filter(Boolean).map((w, i) => (
+                            <li key={i} className="text-[12px] text-[#444]">{i + 1}. {w}</li>
+                          ))}
+                        </ol>
+                      </div>
+                    )}
+                    {session.exercises.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-[#888] mb-1.5">Latihan</p>
+                        <div className="overflow-x-auto rounded-lg border border-gray-100">
+                          <table className="w-full text-[12px] min-w-[500px]">
+                            <thead>
+                              <tr className="border-b border-gray-100 bg-gray-50">
+                                <th className="text-left px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-[#888] w-[180px]">Latihan</th>
+                                {[1, 2, 3, 4].map(w => (
+                                  <th key={w} className="text-center px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-[#F56A00]">Minggu {w}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {session.exercises.map((ex, ei) => (
+                                <tr key={ei} className="border-b border-gray-50 last:border-0">
+                                  <td className="px-3 py-2 font-medium text-[#111]">{ex.name || '—'}</td>
+                                  {ex.weeks.map((week, wi) => {
+                                    const parts = [
+                                      week.reps && week.sets ? `${week.reps}x${week.sets}` : (week.reps || week.sets || ''),
+                                      week.rest,
+                                      week.intensity,
+                                    ].filter(Boolean)
+                                    return (
+                                      <td key={wi} className="px-3 py-2 text-center text-[#444] font-mono text-[11px]">
+                                        {parts.join(' / ') || '—'}
+                                      </td>
+                                    )
+                                  })}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                    {session.core.filter(Boolean).length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-[#888] mb-1.5">Core</p>
+                        <ol className="space-y-0.5">
+                          {session.core.filter(Boolean).map((c, i) => (
+                            <li key={i} className="text-[12px] text-[#444]">{i + 1}. {c}</li>
+                          ))}
+                        </ol>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── CONFIRM DELETE: ATTENDANCE ── */}
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
@@ -720,6 +908,10 @@ export default function StrengthPage() {
 
 const filterCls = 'bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-[#444] outline-none focus:border-[#F56A00]'
 const inputCls = 'w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2.5 text-sm text-[#111] outline-none transition focus:border-[#F56A00] focus:bg-white'
+
+function fmtProgramDate(d: string) {
+  return new Date(d + 'T00:00:00').toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric' })
+}
 
 function buildCalendarWeeks(year: number, month: number): (number | null)[][] {
   const firstDow = (new Date(year, month - 1, 1).getDay() + 6) % 7 // Mon=0

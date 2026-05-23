@@ -135,6 +135,26 @@ export interface PhysioCase {
   athlete?: { name: string; sport: string } | null
 }
 
+export interface WeeklyExercise {
+  name: string
+  weeks: Array<{ sets: string; reps: string; rest: string; intensity: string }>
+}
+
+export interface ProgramSession {
+  session_number: number
+  day: string
+  session_type: string
+  warmup: string[]
+  exercises: WeeklyExercise[]
+  core: string[]
+}
+
+export interface StructuredProgramData {
+  phase: string
+  training_goals: string[]
+  sessions: ProgramSession[]
+}
+
 export interface StrengthConditioning {
   id: string
   athlete_id: string
