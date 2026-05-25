@@ -135,6 +135,8 @@ export default function StrengthPage() {
   const [scheduleSlots, setScheduleSlots] = useState<ScheduleSlotForm[]>([
     { day_of_week: 0, start_time: '09:00', end_time: '11:00' },
   ])
+  const [scheduleModalMode, setScheduleModalMode] = useState<'single' | 'multiple'>('single')
+  const [singleSlotForm, setSingleSlotForm] = useState({ coach_id: '', sport: '', day_of_week: 0, start_time: '09:00', end_time: '11:00' })
   const [confirmDeleteSchedule, setConfirmDeleteSchedule] = useState<CoachSchedule | null>(null)
 
   useEffect(() => { fetchAll() }, [])
@@ -248,8 +250,10 @@ export default function StrengthPage() {
   // --- SCHEDULE ---
   function openAddSchedule() {
     setEditingSchedule(null)
+    setScheduleModalMode('single')
     setScheduleForm({ coach_id: '', valid_from: new Date().toISOString().slice(0, 10), repeats: false, repeat_pattern: 'weekly', repeat_until: '', sport: '' })
     setScheduleSlots([{ day_of_week: 0, start_time: '09:00', end_time: '11:00' }])
+    setSingleSlotForm({ coach_id: '', sport: '', day_of_week: 0, start_time: '09:00', end_time: '11:00' })
     setError(null)
     setScheduleModalOpen(true)
   }
@@ -264,6 +268,55 @@ export default function StrengthPage() {
     setError(null)
     setScheduleModalOpen(true)
   }
+  async function handleSaveSingleSlot() {
+    if (!singleSlotForm.coach_id || !singleSlotForm.sport) {
+      setError('Jurulatih dan sukan wajib dipilih.')
+      return
+    }
+    setSaving(true); setError(null)
+
+    try {
+      const coach = coaches.find(c => c.id === singleSlotForm.coach_id)
+      const scheduleName = coach ? `${coach.full_name} - ${singleSlotForm.sport}` : singleSlotForm.sport
+
+      const schedulePayload = {
+        coach_id: singleSlotForm.coach_id,
+        sport: singleSlotForm.sport,
+        schedule_name: scheduleName,
+        valid_from: new Date().toISOString().slice(0, 10),
+        repeats: false,
+        repeat_pattern: null,
+        repeat_until: null,
+      }
+
+      const { data: schedule, error: schedError } = await supabase
+        .from('coach_schedules')
+        .insert([schedulePayload])
+        .select('id')
+
+      if (schedError) throw new Error(`Insert schedule failed: ${schedError.message}`)
+      if (!schedule || schedule.length === 0) throw new Error('No schedule returned from insert')
+
+      const scheduleId = schedule[0].id
+      const slotPayload = {
+        schedule_id: scheduleId,
+        day_of_week: singleSlotForm.day_of_week,
+        start_time: singleSlotForm.start_time,
+        end_time: singleSlotForm.end_time,
+      }
+
+      const { error: slotError } = await supabase.from('coach_schedule_slots').insert([slotPayload])
+      if (slotError) throw new Error(`Insert slot failed: ${slotError.message}`)
+
+      await logAction(profile!.id, 'create_coach_schedule', 'coach_schedules', scheduleId)
+      setSaving(false); setScheduleModalOpen(false); fetchAll()
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err)
+      setError(`Error: ${errorMsg}`)
+      setSaving(false)
+    }
+  }
+
   async function handleSaveSchedule() {
     if (!scheduleForm.coach_id || !scheduleForm.valid_from || !scheduleForm.sport) {
       setError('Jurulatih, tarikh mula, dan sukan wajib dipilih.')
@@ -833,85 +886,141 @@ export default function StrengthPage() {
               <h3 className="font-bold text-[#111]">{editingSchedule ? 'Edit Jadual' : 'Jadual Baharu'}</h3>
               <button onClick={() => setScheduleModalOpen(false)} className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
             </div>
+
+            {!editingSchedule && (
+              <div className="flex gap-1 border-b border-gray-200 px-6 pt-4 bg-gray-50">
+                {(['single', 'multiple'] as const).map(mode => (
+                  <button
+                    key={mode}
+                    onClick={() => setScheduleModalMode(mode)}
+                    className={`px-4 py-2 text-sm font-semibold border-b-2 transition ${
+                      scheduleModalMode === mode
+                        ? 'border-[#F56A00] text-[#F56A00]'
+                        : 'border-transparent text-[#888] hover:text-[#111]'
+                    }`}
+                  >
+                    {mode === 'single' ? 'Tambah Slot Tunggal' : 'Tambah Slot Berbilang'}
+                  </button>
+                ))}
+              </div>
+            )}
+
             <div className="px-6 py-5 space-y-4">
               {error && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-600">{error}</div>}
 
-              <Field label="Jurulatih" required>
-                <select value={scheduleForm.coach_id} onChange={e => setScheduleForm(f => ({ ...f, coach_id: e.target.value }))} className={inputCls}>
-                  <option value="">— Pilih Jurulatih —</option>
-                  {coaches.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
-                </select>
-              </Field>
+              {scheduleModalMode === 'single' ? (
+                /* ── SINGLE SLOT MODE ── */
+                <>
+                  <Field label="Jurulatih" required>
+                    <select value={singleSlotForm.coach_id} onChange={e => setSingleSlotForm(f => ({ ...f, coach_id: e.target.value }))} className={inputCls}>
+                      <option value="">— Pilih Jurulatih —</option>
+                      {coaches.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
+                    </select>
+                  </Field>
 
-              <div className="grid grid-cols-2 gap-4">
-                <Field label="Tarikh Mula" required>
-                  <input type="date" value={scheduleForm.valid_from} onChange={e => setScheduleForm(f => ({ ...f, valid_from: e.target.value }))} className={inputCls} />
-                </Field>
-                <Field label="Sukan" required>
-                  <select value={scheduleForm.sport} onChange={e => setScheduleForm(f => ({ ...f, sport: e.target.value }))} className={inputCls}>
-                    <option value="">— Pilih —</option>
-                    {allSports.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </Field>
-              </div>
+                  <Field label="Sukan" required>
+                    <select value={singleSlotForm.sport} onChange={e => setSingleSlotForm(f => ({ ...f, sport: e.target.value }))} className={inputCls}>
+                      <option value="">— Pilih Sukan —</option>
+                      {allSports.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </Field>
 
-              <Field label="Slot Hari/Masa">
-                <div className="space-y-3">
-                  {scheduleSlots.map((slot, idx) => (
-                    <div key={idx} className="flex gap-2 items-end">
-                      <select value={slot.day_of_week} onChange={e => updateScheduleSlot(idx, 'day_of_week', parseInt(e.target.value))} className="flex-1 bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2.5 text-sm text-[#111] outline-none focus:border-[#F56A00] focus:bg-white">
-                        {DAY_NAMES.map((day, i) => <option key={i} value={i}>{day}</option>)}
+                  <Field label="Hari" required>
+                    <select value={singleSlotForm.day_of_week} onChange={e => setSingleSlotForm(f => ({ ...f, day_of_week: parseInt(e.target.value) }))} className={inputCls}>
+                      {DAY_NAMES.map((day, i) => <option key={i} value={i}>{day}</option>)}
+                    </select>
+                  </Field>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <Field label="Masa Mula" required>
+                      <input type="time" value={singleSlotForm.start_time} onChange={e => setSingleSlotForm(f => ({ ...f, start_time: e.target.value }))} className={inputCls} />
+                    </Field>
+                    <Field label="Masa Akhir" required>
+                      <input type="time" value={singleSlotForm.end_time} onChange={e => setSingleSlotForm(f => ({ ...f, end_time: e.target.value }))} className={inputCls} />
+                    </Field>
+                  </div>
+                </>
+              ) : (
+                /* ── MULTIPLE SLOTS MODE ── */
+                <>
+                  <Field label="Jurulatih" required>
+                    <select value={scheduleForm.coach_id} onChange={e => setScheduleForm(f => ({ ...f, coach_id: e.target.value }))} className={inputCls}>
+                      <option value="">— Pilih Jurulatih —</option>
+                      {coaches.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
+                    </select>
+                  </Field>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <Field label="Tarikh Mula" required>
+                      <input type="date" value={scheduleForm.valid_from} onChange={e => setScheduleForm(f => ({ ...f, valid_from: e.target.value }))} className={inputCls} />
+                    </Field>
+                    <Field label="Sukan" required>
+                      <select value={scheduleForm.sport} onChange={e => setScheduleForm(f => ({ ...f, sport: e.target.value }))} className={inputCls}>
+                        <option value="">— Pilih —</option>
+                        {allSports.map(s => <option key={s} value={s}>{s}</option>)}
                       </select>
-                      <input type="time" value={slot.start_time} onChange={e => updateScheduleSlot(idx, 'start_time', e.target.value)} className="w-24 bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2.5 text-sm text-[#111] outline-none focus:border-[#F56A00] focus:bg-white" />
-                      <span className="text-[#888]">–</span>
-                      <input type="time" value={slot.end_time} onChange={e => updateScheduleSlot(idx, 'end_time', e.target.value)} className="w-24 bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2.5 text-sm text-[#111] outline-none focus:border-[#F56A00] focus:bg-white" />
-                      {scheduleSlots.length > 1 && (
-                        <button type="button" onClick={() => removeScheduleSlot(idx)} className="px-3 py-2.5 text-red-600 hover:bg-red-50 rounded-lg transition text-sm font-medium">
-                          ✕
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                  <button type="button" onClick={addScheduleSlot} className="text-[13px] text-[#F56A00] hover:text-[#D45A00] font-semibold transition">
-                    + Tambah Slot
-                  </button>
-                </div>
-              </Field>
+                    </Field>
+                  </div>
 
-              <div className="border-t border-gray-100 pt-4">
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={scheduleForm.repeats}
-                    onChange={e => setScheduleForm(f => ({ ...f, repeats: e.target.checked, repeat_until: '' }))}
-                    className="w-4 h-4 rounded border-[#E8E8E8] cursor-pointer accent-[#F56A00]"
-                  />
-                  <span className="text-sm font-semibold text-[#111]">Jadual Berulang</span>
-                </label>
-              </div>
-
-              {scheduleForm.repeats && (
-                <div className="space-y-4 bg-gray-50 border border-gray-100 rounded-lg p-4">
-                  <Field label="Corak Pengulangan" required>
-                    <div className="flex gap-2">
-                      {(['weekly', 'bi-weekly', 'custom'] as const).map(pattern => (
-                        <label key={pattern} className={`flex-1 px-3 py-2.5 rounded-lg border text-[12px] font-semibold cursor-pointer transition text-center ${scheduleForm.repeat_pattern === pattern ? 'bg-[#F56A00] border-[#F56A00] text-white' : 'bg-white border-[#E8E8E8] text-[#888] hover:border-[#D0D0D0]'}`}>
-                          <input type="radio" name="pattern" value={pattern} checked={scheduleForm.repeat_pattern === pattern} onChange={() => setScheduleForm(f => ({ ...f, repeat_pattern: pattern }))} className="hidden" />
-                          {pattern === 'weekly' ? 'Mingguan' : pattern === 'bi-weekly' ? 'Dua Mingguan' : 'Tersuai'}
-                        </label>
+                  <Field label="Slot Hari/Masa">
+                    <div className="space-y-3">
+                      {scheduleSlots.map((slot, idx) => (
+                        <div key={idx} className="flex gap-2 items-end">
+                          <select value={slot.day_of_week} onChange={e => updateScheduleSlot(idx, 'day_of_week', parseInt(e.target.value))} className="flex-1 bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2.5 text-sm text-[#111] outline-none focus:border-[#F56A00] focus:bg-white">
+                            {DAY_NAMES.map((day, i) => <option key={i} value={i}>{day}</option>)}
+                          </select>
+                          <input type="time" value={slot.start_time} onChange={e => updateScheduleSlot(idx, 'start_time', e.target.value)} className="w-24 bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2.5 text-sm text-[#111] outline-none focus:border-[#F56A00] focus:bg-white" />
+                          <span className="text-[#888]">–</span>
+                          <input type="time" value={slot.end_time} onChange={e => updateScheduleSlot(idx, 'end_time', e.target.value)} className="w-24 bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2.5 text-sm text-[#111] outline-none focus:border-[#F56A00] focus:bg-white" />
+                          {scheduleSlots.length > 1 && (
+                            <button type="button" onClick={() => removeScheduleSlot(idx)} className="px-3 py-2.5 text-red-600 hover:bg-red-50 rounded-lg transition text-sm font-medium">
+                              ✕
+                            </button>
+                          )}
+                        </div>
                       ))}
+                      <button type="button" onClick={addScheduleSlot} className="text-[13px] text-[#F56A00] hover:text-[#D45A00] font-semibold transition">
+                        + Tambah Slot
+                      </button>
                     </div>
                   </Field>
-                  <Field label="Berakhir Pada" required>
-                    <input type="date" value={scheduleForm.repeat_until} onChange={e => setScheduleForm(f => ({ ...f, repeat_until: e.target.value }))} className={inputCls} />
-                  </Field>
-                </div>
+
+                  <div className="border-t border-gray-100 pt-4">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={scheduleForm.repeats}
+                        onChange={e => setScheduleForm(f => ({ ...f, repeats: e.target.checked, repeat_until: '' }))}
+                        className="w-4 h-4 rounded border-[#E8E8E8] cursor-pointer accent-[#F56A00]"
+                      />
+                      <span className="text-sm font-semibold text-[#111]">Jadual Berulang</span>
+                    </label>
+                  </div>
+
+                  {scheduleForm.repeats && (
+                    <div className="space-y-4 bg-gray-50 border border-gray-100 rounded-lg p-4">
+                      <Field label="Corak Pengulangan" required>
+                        <div className="flex gap-2">
+                          {(['weekly', 'bi-weekly', 'custom'] as const).map(pattern => (
+                            <label key={pattern} className={`flex-1 px-3 py-2.5 rounded-lg border text-[12px] font-semibold cursor-pointer transition text-center ${scheduleForm.repeat_pattern === pattern ? 'bg-[#F56A00] border-[#F56A00] text-white' : 'bg-white border-[#E8E8E8] text-[#888] hover:border-[#D0D0D0]'}`}>
+                              <input type="radio" name="pattern" value={pattern} checked={scheduleForm.repeat_pattern === pattern} onChange={() => setScheduleForm(f => ({ ...f, repeat_pattern: pattern }))} className="hidden" />
+                              {pattern === 'weekly' ? 'Mingguan' : pattern === 'bi-weekly' ? 'Dua Mingguan' : 'Tersuai'}
+                            </label>
+                          ))}
+                        </div>
+                      </Field>
+                      <Field label="Berakhir Pada" required>
+                        <input type="date" value={scheduleForm.repeat_until} onChange={e => setScheduleForm(f => ({ ...f, repeat_until: e.target.value }))} className={inputCls} />
+                      </Field>
+                    </div>
+                  )}
+                </>
               )}
             </div>
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 sticky bottom-0 bg-white">
               <button onClick={() => setScheduleModalOpen(false)} className="px-4 py-2 text-sm text-[#888] hover:text-[#111] transition">Batal</button>
-              <button onClick={handleSaveSchedule} disabled={saving} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
-                {saving ? 'Menyimpan...' : 'Simpan'}
+              <button onClick={scheduleModalMode === 'single' ? handleSaveSingleSlot : handleSaveSchedule} disabled={saving} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
+                {saving ? 'Menyimpan...' : scheduleModalMode === 'single' ? 'Tambah Slot' : 'Simpan'}
               </button>
             </div>
           </div>
