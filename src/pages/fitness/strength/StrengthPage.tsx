@@ -86,7 +86,6 @@ const emptyProgramForm: ProgramForm = {
 export default function StrengthPage() {
   const { profile } = useAuth()
   const { can } = usePermissions()
-  const isAdmin = profile?.role === 'superadmin' || profile?.role === 'admin'
 
   const [activeTab, setActiveTab] = useState<'kehadiran' | 'program' | 'jadual'>('jadual')
   const [loading, setLoading] = useState(true)
@@ -118,6 +117,9 @@ export default function StrengthPage() {
   const [viewProgram, setViewProgram] = useState<SCProgram | null>(null)
 
   // Tab 3 — Jadual Jurulatih (Coach Schedules)
+  const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth() + 1)
+  const [calendarYear, setCalendarYear] = useState(new Date().getFullYear())
+  const [selectedDay, setSelectedDay] = useState<number | null>(null)
   const [schedules, setSchedules] = useState<CoachSchedule[]>([])
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false)
   const [editingSchedule, setEditingSchedule] = useState<CoachSchedule | null>(null)
@@ -548,8 +550,20 @@ export default function StrengthPage() {
       {/* ── TAB 3: JADUAL JURULATIH ── */}
       {activeTab === 'jadual' && (
         <>
-          <div className="flex items-center justify-between">
-            <p className="text-[12px] text-[#888]">{schedules.length} jadual</p>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => { const d = new Date(calendarYear, calendarMonth - 2); setCalendarMonth(d.getMonth() + 1); setCalendarYear(d.getFullYear()); setSelectedDay(null) }}
+                className="p-1.5 rounded-lg border border-gray-200 hover:border-[#F56A00] text-[#888] hover:text-[#F56A00] transition text-sm leading-none"
+              >‹</button>
+              <p className="text-sm font-semibold text-[#111] w-32 text-center">
+                {MONTHS[calendarMonth - 1]} {calendarYear}
+              </p>
+              <button
+                onClick={() => { const d = new Date(calendarYear, calendarMonth); setCalendarMonth(d.getMonth() + 1); setCalendarYear(d.getFullYear()); setSelectedDay(null) }}
+                className="p-1.5 rounded-lg border border-gray-200 hover:border-[#F56A00] text-[#888] hover:text-[#F56A00] transition text-sm leading-none"
+              >›</button>
+            </div>
             {can('strength', 'create') && (
               <button onClick={openAddSchedule} className="bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
                 + Jadual Baharu
@@ -557,62 +571,158 @@ export default function StrengthPage() {
             )}
           </div>
 
-          {schedules.length === 0 ? (
-            <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
-              <p className="text-[13px] text-[#888]">Tiada jadual jurulatih</p>
-            </div>
-          ) : (
-            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-100">
-                    {['Nama Jadual', 'Sukan', 'Tarikh Mula', 'Hari/Masa', 'Berulang', 'Akhir'].map(h => (
-                      <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-wider text-[#888] px-4 py-3">{h}</th>
-                    ))}
-                    {isAdmin && <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-[#888] px-4 py-3">Tindakan</th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {schedules.map(s => (
-                    <tr key={s.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
-                      <td className="px-4 py-3 font-semibold text-[#111]">{s.schedule_name}</td>
-                      <td className="px-4 py-3 text-[#444]">{s.sport}</td>
-                      <td className="px-4 py-3 text-[#444] font-mono text-[12px]">{new Date(s.valid_from + 'T00:00:00').toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
-                      <td className="px-4 py-3 text-[#444]">
-                        <div className="text-[12px] space-y-0.5">
-                          {s.slots?.map((slot, i) => (
-                            <div key={i} className="text-[#666]">
-                              {DAY_NAMES[slot.day_of_week]} {slot.start_time}–{slot.end_time}
-                            </div>
-                          ))}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-[#444]">
-                        {s.repeats ? (
-                          <span className="inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
-                            {s.repeat_pattern === 'weekly' ? 'Mingguan' : s.repeat_pattern === 'bi-weekly' ? 'Dua Mingguan' : 'Tersuai'}
-                          </span>
-                        ) : (
-                          <span className="text-[#aaa]">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-[#444] font-mono text-[12px]">
-                        {s.repeat_until ? new Date(s.repeat_until + 'T00:00:00').toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
-                      </td>
-                      {isAdmin && (
-                        <td className="px-4 py-3 text-[#444]">
-                          <div className="flex gap-3">
-                            {can('strength', 'update') && <button onClick={() => openEditSchedule(s)} className="text-xs text-[#F56A00] hover:underline font-medium">Edit</button>}
-                            {can('strength', 'delete') && <button onClick={() => setConfirmDeleteSchedule(s)} className="text-xs text-[#D44040] hover:underline font-medium">Padam</button>}
-                          </div>
-                        </td>
-                      )}
-                    </tr>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* Calendar */}
+            <div className="lg:col-span-1">
+              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                {/* Day headers */}
+                <div className="grid grid-cols-7 border-b border-gray-100 bg-gray-50">
+                  {DAY_NAMES.map(d => (
+                    <div key={d} className="px-2 py-2 text-center text-[9px] font-semibold uppercase tracking-wider text-[#888]">{d[0]}</div>
                   ))}
-                </tbody>
-              </table>
+                </div>
+                {/* Calendar weeks */}
+                {buildCalendarWeeks(calendarYear, calendarMonth).map((week, wi) => (
+                  <div key={wi} className="grid grid-cols-7 border-b border-gray-50 last:border-0">
+                    {week.map((day, di) => {
+                      const dayNum = day ? new Date(calendarYear, calendarMonth - 1, day).getDay() : null
+                      const dayOfWeek = dayNum !== null ? (dayNum + 6) % 7 : null
+                      const dateStr = day ? `${calendarYear}-${String(calendarMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}` : null
+
+                      // Get schedules for this day
+                      const daySchedules = dateStr && schedules.length > 0
+                        ? schedules.filter(s => {
+                            const validFrom = new Date(s.valid_from)
+                            const validTo = s.repeat_until ? new Date(s.repeat_until) : null
+                            const currentDate = new Date(dateStr)
+
+                            if (currentDate < validFrom) return false
+                            if (validTo && currentDate > validTo) return false
+                            if (!s.slots) return false
+
+                            const slotExists = s.slots.some(slot => slot.day_of_week === dayOfWeek)
+                            return slotExists
+                          })
+                        : []
+
+                      const isSelected = selectedDay === day
+
+                      return (
+                        <div
+                          key={di}
+                          onClick={() => day && setSelectedDay(selectedDay === day ? null : day)}
+                          className={`min-h-[60px] p-1.5 border-r border-gray-50 last:border-0 cursor-pointer transition ${
+                            !day ? 'bg-gray-50/50' : isSelected ? 'bg-[rgba(245,106,0,0.05)] border-b-2 border-b-[#F56A00]' : 'hover:bg-gray-50'
+                          }`}
+                        >
+                          {day && (
+                            <>
+                              <p className={`text-[11px] font-semibold mb-1 ${isSelected ? 'text-[#F56A00]' : 'text-[#aaa]'}`}>{day}</p>
+                              {daySchedules.length > 0 && (
+                                <div className="flex flex-wrap gap-0.5">
+                                  {[...new Set(daySchedules.map(s => s.sport))].map((sport, idx) => {
+                                    const colors = ['bg-orange-400', 'bg-blue-400', 'bg-green-400', 'bg-purple-400', 'bg-pink-400']
+                                    return (
+                                      <div
+                                        key={sport}
+                                        className={`w-1.5 h-1.5 rounded-full ${colors[idx % colors.length]}`}
+                                        title={sport}
+                                      />
+                                    )
+                                  })}
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                ))}
+              </div>
             </div>
-          )}
+
+            {/* Schedule Details Sidebar */}
+            <div className="lg:col-span-2">
+              {selectedDay ? (
+                (() => {
+                  const dateStr = `${calendarYear}-${String(calendarMonth).padStart(2, '0')}-${String(selectedDay).padStart(2, '0')}`
+                  const currentDate = new Date(dateStr)
+                  const dayOfWeek = (currentDate.getDay() + 6) % 7
+
+                  const daySchedules = schedules.filter(s => {
+                    const validFrom = new Date(s.valid_from)
+                    const validTo = s.repeat_until ? new Date(s.repeat_until) : null
+
+                    if (currentDate < validFrom) return false
+                    if (validTo && currentDate > validTo) return false
+                    if (!s.slots) return false
+
+                    return s.slots.some(slot => slot.day_of_week === dayOfWeek)
+                  })
+
+                  return (
+                    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden h-fit">
+                      <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
+                        <p className="text-sm font-semibold text-[#111]">
+                          {DAY_NAMES[dayOfWeek]}, {new Date(dateStr + 'T00:00:00').toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric' })}
+                        </p>
+                        <p className="text-[11px] text-[#888] mt-1">{daySchedules.length} jadual</p>
+                      </div>
+
+                      {daySchedules.length === 0 ? (
+                        <div className="p-4 text-center text-[13px] text-[#888]">Tiada jadual untuk hari ini</div>
+                      ) : (
+                        <div className="divide-y divide-gray-100">
+                          {daySchedules.map(s => {
+                            const slot = s.slots?.find(sl => sl.day_of_week === dayOfWeek)
+                            return (
+                              <div key={s.id} className="p-4 hover:bg-gray-50 transition">
+                                <div className="flex items-start justify-between gap-3 mb-2">
+                                  <div>
+                                    <p className="text-sm font-semibold text-[#111]">{s.schedule_name}</p>
+                                    <p className="text-[12px] text-[#888]">{s.sport}</p>
+                                  </div>
+                                  {s.repeats && (
+                                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 whitespace-nowrap">
+                                      {s.repeat_pattern === 'weekly' ? 'Mingguan' : s.repeat_pattern === 'bi-weekly' ? 'Dua Minggu' : 'Tersuai'}
+                                    </span>
+                                  )}
+                                </div>
+
+                                {slot && (
+                                  <p className="text-sm font-mono text-[#F56A00] mb-3">
+                                    {slot.start_time} – {slot.end_time}
+                                  </p>
+                                )}
+
+                                <div className="flex gap-2">
+                                  {can('strength', 'update') && (
+                                    <button onClick={() => openEditSchedule(s)} className="flex-1 px-2 py-1 text-[11px] font-semibold text-[#F56A00] border border-[#F56A00] rounded hover:bg-[rgba(245,106,0,0.05)] transition">
+                                      Edit
+                                    </button>
+                                  )}
+                                  {can('strength', 'delete') && (
+                                    <button onClick={() => setConfirmDeleteSchedule(s)} className="flex-1 px-2 py-1 text-[11px] font-semibold text-[#D44040] border border-[#D44040] rounded hover:bg-red-50 transition">
+                                      Padam
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()
+              ) : (
+                <div className="bg-white rounded-xl border border-gray-200 p-8 text-center h-fit">
+                  <p className="text-[13px] text-[#888]">Pilih hari untuk melihat jadual</p>
+                </div>
+              )}
+            </div>
+          </div>
         </>
       )}
 
@@ -1002,6 +1112,18 @@ function fmtProgramDate(d: string) {
   return new Date(d + 'T00:00:00').toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
+function buildCalendarWeeks(year: number, month: number): (number | null)[][] {
+  const firstDow = (new Date(year, month - 1, 1).getDay() + 6) % 7
+  const daysInMonth = new Date(year, month, 0).getDate()
+  const cells: (number | null)[] = [
+    ...Array(firstDow).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ]
+  while (cells.length % 7 !== 0) cells.push(null)
+  const weeks: (number | null)[][] = []
+  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7))
+  return weeks
+}
 
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
