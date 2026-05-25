@@ -503,6 +503,45 @@ create policy "Admins can read all audit logs"
 
 
 -- =============================================================
+-- 13. COACH SCHEDULES (Latihan Suaian Fizikal / Strength Training)
+-- =============================================================
+create table coach_schedules (
+  id uuid default gen_random_uuid() primary key,
+  coach_id uuid references profiles(id) on delete cascade not null,
+  sport text not null,
+  schedule_name text not null,
+  valid_from date not null,
+  repeats boolean default false,
+  repeat_pattern text check (repeat_pattern in ('weekly', 'bi-weekly', 'custom')) default null,
+  repeat_until date default null,
+  created_at timestamptz default now()
+);
+
+create table coach_schedule_slots (
+  id uuid default gen_random_uuid() primary key,
+  schedule_id uuid references coach_schedules(id) on delete cascade not null,
+  slot_date date not null,
+  start_time time not null,
+  end_time time not null,
+  created_at timestamptz default now(),
+  unique (schedule_id, slot_date, start_time)
+);
+
+-- RLS Policies for coach schedules
+create policy "Coaches can manage own schedules"
+  on coach_schedules for all using (coach_id = auth.uid() or get_my_role() in ('superadmin', 'admin'));
+create policy "All authenticated can read coach schedules"
+  on coach_schedules for select using (auth.role() = 'authenticated');
+
+create policy "Coaches can manage own schedule slots"
+  on coach_schedule_slots for all using (
+    schedule_id in (select id from coach_schedules where coach_id = auth.uid()) or get_my_role() in ('superadmin', 'admin')
+  );
+create policy "All authenticated can read schedule slots"
+  on coach_schedule_slots for select using (auth.role() = 'authenticated');
+
+
+-- =============================================================
 -- MIGRATION: Upgrade existing users to CRUD permissions (run once)
 -- =============================================================
 -- If you have existing users with boolean module_permissions, run this to convert to CRUD format:

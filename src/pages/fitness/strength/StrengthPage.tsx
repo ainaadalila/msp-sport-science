@@ -36,7 +36,7 @@ interface CoachSchedule {
 
 interface CoachScheduleSlot {
   id: string; schedule_id: string
-  day_of_week: number; start_time: string; end_time: string
+  slot_date: string; start_time: string; end_time: string
 }
 
 interface ScheduleForm {
@@ -46,7 +46,7 @@ interface ScheduleForm {
 }
 
 interface ScheduleSlotForm {
-  day_of_week: number; start_time: string; end_time: string
+  slot_date: string; start_time: string; end_time: string
 }
 
 interface AttendanceForm {
@@ -133,10 +133,10 @@ export default function StrengthPage() {
     repeats: false, repeat_pattern: 'weekly', repeat_until: '', sport: '',
   })
   const [scheduleSlots, setScheduleSlots] = useState<ScheduleSlotForm[]>([
-    { day_of_week: 0, start_time: '09:00', end_time: '11:00' },
+    { slot_date: new Date().toISOString().slice(0, 10), start_time: '09:00', end_time: '11:00' },
   ])
   const [scheduleModalMode, setScheduleModalMode] = useState<'single' | 'multiple'>('single')
-  const [singleSlotForm, setSingleSlotForm] = useState({ coach_id: '', sport: '', day_of_week: 0, start_time: '09:00', end_time: '11:00' })
+  const [singleSlotForm, setSingleSlotForm] = useState({ coach_id: '', sport: '', slot_date: new Date().toISOString().slice(0, 10), start_time: '09:00', end_time: '11:00' })
   const [confirmDeleteSchedule, setConfirmDeleteSchedule] = useState<CoachSchedule | null>(null)
   const [confirmDeleteSlot, setConfirmDeleteSlot] = useState<{ schedule: CoachSchedule; slot: CoachScheduleSlot } | null>(null)
 
@@ -237,12 +237,13 @@ export default function StrengthPage() {
 
   // --- SCHEDULE SLOTS ---
   function addScheduleSlot() {
-    setScheduleSlots([...scheduleSlots, { day_of_week: 0, start_time: '09:00', end_time: '11:00' }])
+    const today = new Date().toISOString().slice(0, 10)
+    setScheduleSlots([...scheduleSlots, { slot_date: today, start_time: '09:00', end_time: '11:00' }])
   }
   function removeScheduleSlot(index: number) {
     setScheduleSlots(scheduleSlots.filter((_, i) => i !== index))
   }
-  function updateScheduleSlot(index: number, field: 'day_of_week' | 'start_time' | 'end_time', value: any) {
+  function updateScheduleSlot(index: number, field: 'slot_date' | 'start_time' | 'end_time', value: any) {
     const updated = [...scheduleSlots]
     updated[index] = { ...updated[index], [field]: value }
     setScheduleSlots(updated)
@@ -252,9 +253,10 @@ export default function StrengthPage() {
   function openAddSchedule() {
     setEditingSchedule(null)
     setScheduleModalMode('single')
-    setScheduleForm({ coach_id: '', valid_from: new Date().toISOString().slice(0, 10), repeats: false, repeat_pattern: 'weekly', repeat_until: '', sport: '' })
-    setScheduleSlots([{ day_of_week: 0, start_time: '09:00', end_time: '11:00' }])
-    setSingleSlotForm({ coach_id: '', sport: '', day_of_week: 0, start_time: '09:00', end_time: '11:00' })
+    const today = new Date().toISOString().slice(0, 10)
+    setScheduleForm({ coach_id: '', valid_from: today, repeats: false, repeat_pattern: 'weekly', repeat_until: '', sport: '' })
+    setScheduleSlots([{ slot_date: today, start_time: '09:00', end_time: '11:00' }])
+    setSingleSlotForm({ coach_id: '', sport: '', slot_date: today, start_time: '09:00', end_time: '11:00' })
     setError(null)
     setScheduleModalOpen(true)
   }
@@ -290,7 +292,7 @@ export default function StrengthPage() {
       const scheduleId = schedule[0].id
       const slotPayload = {
         schedule_id: scheduleId,
-        day_of_week: singleSlotForm.day_of_week,
+        slot_date: singleSlotForm.slot_date,
         start_time: singleSlotForm.start_time,
         end_time: singleSlotForm.end_time,
       }
@@ -338,7 +340,7 @@ export default function StrengthPage() {
 
         const slotsPayload = scheduleSlots.map(slot => ({
           schedule_id: editingSchedule.id,
-          day_of_week: slot.day_of_week,
+          slot_date: slot.slot_date,
           start_time: slot.start_time,
           end_time: slot.end_time,
         }))
@@ -359,7 +361,7 @@ export default function StrengthPage() {
         const scheduleId = schedule[0].id
         const slotsPayload = scheduleSlots.map(slot => ({
           schedule_id: scheduleId,
-          day_of_week: slot.day_of_week,
+          slot_date: slot.slot_date,
           start_time: slot.start_time,
           end_time: slot.end_time,
         }))
@@ -687,18 +689,14 @@ export default function StrengthPage() {
                       {Array.from({ length: 7 }).map((_, dayIdx) => {
                         const date = new Date(weekStartDate)
                         date.setDate(date.getDate() + dayIdx)
-                        const dayOfWeek = (date.getDay() + 6) % 7
                         const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 
-                        // Find schedules for this time slot
+                        // Find slots for this specific date and time
                         const slotSchedules = schedules.filter(s => {
-                          if (dateStr < s.valid_from) return false
-                          if (s.repeat_until && dateStr > s.repeat_until) return false
                           if (!s.slots) return false
-
                           return s.slots.some(slot => {
-                            if (slot.day_of_week !== dayOfWeek) return false
-                            // Check if this time overlaps with the schedule
+                            if (slot.slot_date !== dateStr) return false
+                            // Check if this slot's start time matches the current hour row
                             const [startHour] = slot.start_time.split(':').map(Number)
                             return startHour === hour
                           })
@@ -712,7 +710,7 @@ export default function StrengthPage() {
                             {slotSchedules.length > 0 ? (
                               <div className="space-y-1">
                                 {slotSchedules.map(s => {
-                                  const slot = s.slots!.find(sl => sl.day_of_week === dayOfWeek && Number(sl.start_time.split(':')[0]) === hour)
+                                  const slot = s.slots!.find(sl => sl.slot_date === dateStr && Number(sl.start_time.split(':')[0]) === hour)
                                   return (
                                     <div
                                       key={s.id}
@@ -923,10 +921,8 @@ export default function StrengthPage() {
                     </select>
                   </Field>
 
-                  <Field label="Hari" required>
-                    <select value={singleSlotForm.day_of_week} onChange={e => setSingleSlotForm(f => ({ ...f, day_of_week: parseInt(e.target.value) }))} className={inputCls}>
-                      {DAY_NAMES.map((day, i) => <option key={i} value={i}>{day}</option>)}
-                    </select>
+                  <Field label="Tarikh" required>
+                    <input type="date" value={singleSlotForm.slot_date} onChange={e => setSingleSlotForm(f => ({ ...f, slot_date: e.target.value }))} className={inputCls} />
                   </Field>
 
                   <div className="grid grid-cols-2 gap-4">
@@ -960,13 +956,11 @@ export default function StrengthPage() {
                     </Field>
                   </div>
 
-                  <Field label="Slot Hari/Masa">
+                  <Field label="Slot Tarikh/Masa">
                     <div className="space-y-3">
                       {scheduleSlots.map((slot, idx) => (
                         <div key={idx} className="flex gap-2 items-end">
-                          <select value={slot.day_of_week} onChange={e => updateScheduleSlot(idx, 'day_of_week', parseInt(e.target.value))} className="flex-1 bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2.5 text-sm text-[#111] outline-none focus:border-[#F56A00] focus:bg-white">
-                            {DAY_NAMES.map((day, i) => <option key={i} value={i}>{day}</option>)}
-                          </select>
+                          <input type="date" value={slot.slot_date} onChange={e => updateScheduleSlot(idx, 'slot_date', e.target.value)} className="flex-1 bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2.5 text-sm text-[#111] outline-none focus:border-[#F56A00] focus:bg-white" />
                           <input type="time" value={slot.start_time} onChange={e => updateScheduleSlot(idx, 'start_time', e.target.value)} className="w-24 bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2.5 text-sm text-[#111] outline-none focus:border-[#F56A00] focus:bg-white" />
                           <span className="text-[#888]">–</span>
                           <input type="time" value={slot.end_time} onChange={e => updateScheduleSlot(idx, 'end_time', e.target.value)} className="w-24 bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2.5 text-sm text-[#111] outline-none focus:border-[#F56A00] focus:bg-white" />
@@ -1186,7 +1180,7 @@ export default function StrengthPage() {
               {confirmDeleteSlot.schedule.schedule_name}
             </p>
             <p className="text-[12px] text-[#666] mb-6">
-              {DAY_NAMES[confirmDeleteSlot.slot.day_of_week]} {confirmDeleteSlot.slot.start_time}–{confirmDeleteSlot.slot.end_time}
+              {new Date(confirmDeleteSlot.slot.slot_date + 'T00:00:00').toLocaleDateString('ms-MY', { weekday: 'long', day: '2-digit', month: 'short' })} {confirmDeleteSlot.slot.start_time}–{confirmDeleteSlot.slot.end_time}
             </p>
 
             <div className="space-y-3">
