@@ -1180,7 +1180,7 @@ export default function StrengthPage() {
       {/* ── CONFIRM DELETE: SLOT ── */}
       {confirmDeleteSlot && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 text-center">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
             <p className="text-sm font-semibold text-[#111] mb-1">Padam slot ini?</p>
             <p className="text-[13px] text-[#888] mb-2">
               {confirmDeleteSlot.schedule.schedule_name}
@@ -1188,9 +1188,14 @@ export default function StrengthPage() {
             <p className="text-[12px] text-[#666] mb-6">
               {DAY_NAMES[confirmDeleteSlot.slot.day_of_week]} {confirmDeleteSlot.slot.start_time}–{confirmDeleteSlot.slot.end_time}
             </p>
-            <div className="flex gap-3 justify-center">
-              <button onClick={() => setConfirmDeleteSlot(null)} className="px-4 py-2 text-sm text-[#888] border border-gray-200 rounded-lg hover:border-gray-400 transition">Batal</button>
-              <button onClick={() => handleDeleteSlot(confirmDeleteSlot.schedule, confirmDeleteSlot.slot)} className="px-4 py-2 text-sm font-semibold text-white bg-[#D44040] hover:bg-red-700 rounded-lg transition">Padam</button>
+
+            <div className="space-y-3">
+              <p className="text-[11px] text-[#888] font-semibold">Pilih tindakan:</p>
+              <div className="flex gap-2">
+                <button onClick={() => setConfirmDeleteSlot(null)} className="flex-1 px-4 py-2 text-sm text-[#888] border border-gray-200 rounded-lg hover:border-gray-400 transition">Batal</button>
+                <button onClick={() => handleDeleteSlot(confirmDeleteSlot.schedule, confirmDeleteSlot.slot)} className="flex-1 px-4 py-2 text-sm font-semibold text-white bg-[#F56A00] hover:bg-[#D45A00] rounded-lg transition">Padam Slot Sahaja</button>
+                <button onClick={() => { handleDeleteSchedule(confirmDeleteSlot.schedule); setConfirmDeleteSlot(null) }} className="flex-1 px-4 py-2 text-sm font-semibold text-white bg-[#D44040] hover:bg-red-700 rounded-lg transition">Padam Seluruh Jadual</button>
+              </div>
             </div>
           </div>
         </div>
