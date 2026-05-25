@@ -321,6 +321,8 @@ create table audit_logs (
 alter table profiles enable row level security;
 alter table athletes enable row level security;
 alter table fitness_tests enable row level security;
+alter table fitness_test_sessions enable row level security;
+alter table fitness_test_results enable row level security;
 alter table inbody_records enable row level security;
 alter table supplements enable row level security;
 alter table supplement_requests enable row level security;
@@ -347,9 +349,9 @@ create policy "Admins can update profiles"
 -- athletes
 create policy "Admins full access to athletes"
   on athletes for all using (get_my_role() in ('superadmin', 'admin'));
-create policy "Coach reads own athletes"
+create policy "Coach reads all athletes"
   on athletes for select using (
-    get_my_role() = 'coach' and coach_id = auth.uid()
+    get_my_role() = 'coach'
   );
 create policy "Physio/medical reads athletes"
   on athletes for select using (
@@ -363,10 +365,13 @@ create policy "Athlete reads own record"
 -- fitness_tests
 create policy "Admins full access to fitness_tests"
   on fitness_tests for all using (get_my_role() in ('superadmin', 'admin'));
-create policy "Coach reads fitness_tests for own athletes"
+create policy "Coach reads all fitness_tests"
   on fitness_tests for select using (
-    get_my_role() = 'coach' and
-    athlete_id in (select id from athletes where coach_id = auth.uid())
+    get_my_role() = 'coach'
+  );
+create policy "Medical reads all fitness_tests"
+  on fitness_tests for select using (
+    get_my_role() = 'medical'
   );
 create policy "Staff can insert fitness_tests"
   on fitness_tests for insert with check (
@@ -377,6 +382,30 @@ create policy "Athlete reads own fitness_tests"
     get_my_role() = 'athlete' and athlete_id = auth.uid()
   );
 
+-- fitness_test_sessions
+create policy "Admins full access to fitness_test_sessions"
+  on fitness_test_sessions for all using (get_my_role() in ('superadmin', 'admin'));
+create policy "Coach reads all fitness_test_sessions"
+  on fitness_test_sessions for select using (get_my_role() = 'coach');
+create policy "Medical reads all fitness_test_sessions"
+  on fitness_test_sessions for select using (get_my_role() = 'medical');
+create policy "Staff can insert fitness_test_sessions"
+  on fitness_test_sessions for insert with check (
+    get_my_role() in ('superadmin', 'admin', 'coach', 'medical')
+  );
+
+-- fitness_test_results
+create policy "Admins full access to fitness_test_results"
+  on fitness_test_results for all using (get_my_role() in ('superadmin', 'admin'));
+create policy "Coach reads all fitness_test_results"
+  on fitness_test_results for select using (get_my_role() = 'coach');
+create policy "Medical reads all fitness_test_results"
+  on fitness_test_results for select using (get_my_role() = 'medical');
+create policy "Staff can insert fitness_test_results"
+  on fitness_test_results for insert with check (
+    get_my_role() in ('superadmin', 'admin', 'coach', 'medical')
+  );
+
 -- inbody_records
 create policy "Admins full access to inbody_records"
   on inbody_records for all using (get_my_role() in ('superadmin', 'admin'));
@@ -384,10 +413,13 @@ create policy "Medical/coach can insert inbody_records"
   on inbody_records for insert with check (
     get_my_role() in ('medical', 'coach', 'admin', 'superadmin')
   );
-create policy "Coach reads inbody for own athletes"
+create policy "Coach reads all inbody_records"
   on inbody_records for select using (
-    get_my_role() = 'coach' and
-    athlete_id in (select id from athletes where coach_id = auth.uid())
+    get_my_role() = 'coach'
+  );
+create policy "Medical reads all inbody_records"
+  on inbody_records for select using (
+    get_my_role() = 'medical'
   );
 create policy "Athlete reads own inbody"
   on inbody_records for select using (
@@ -405,20 +437,19 @@ create policy "Admins/medical full access to supplement_requests"
   on supplement_requests for all using (get_my_role() in ('superadmin', 'admin', 'medical'));
 create policy "Coach can request supplements"
   on supplement_requests for insert with check (get_my_role() = 'coach');
-create policy "Coach reads own requests"
-  on supplement_requests for select using (requested_by = auth.uid());
+create policy "Coach reads all requests"
+  on supplement_requests for select using (get_my_role() = 'coach');
 
 -- physio_slots
 create policy "Admins full access to physio_slots"
   on physio_slots for all using (get_my_role() in ('superadmin', 'admin'));
-create policy "Physio manages own slots"
+create policy "Physio manages all slots"
   on physio_slots for all using (
-    get_my_role() = 'physio' and physiotherapist_id = auth.uid()
+    get_my_role() = 'physio'
   );
-create policy "Coach reads physio slots for own athletes"
+create policy "Coach reads all physio slots"
   on physio_slots for select using (
-    get_my_role() = 'coach' and
-    athlete_id in (select id from athletes where coach_id = auth.uid())
+    get_my_role() = 'coach'
   );
 
 -- sc_programs
@@ -426,13 +457,13 @@ create policy "Admins full access to sc_programs"
   on sc_programs for all using (get_my_role() in ('superadmin', 'admin'));
 create policy "Coaches can read sc_programs"
   on sc_programs for select using (get_my_role() = 'coach');
-create policy "Coaches can insert own sc_programs"
+create policy "Coaches can insert sc_programs"
   on sc_programs for insert with check (
-    get_my_role() = 'coach' and coach_id = auth.uid()
+    get_my_role() = 'coach'
   );
-create policy "Coaches can update own sc_programs"
+create policy "Coaches can update sc_programs"
   on sc_programs for update using (
-    get_my_role() = 'coach' and coach_id = auth.uid()
+    get_my_role() = 'coach'
   );
 
 -- coach_assignments
@@ -444,9 +475,9 @@ create policy "All authenticated users can read coach_assignments"
 -- strength_conditioning
 create policy "Admins full access to strength_conditioning"
   on strength_conditioning for all using (get_my_role() in ('superadmin', 'admin'));
-create policy "Coach manages own strength_conditioning"
+create policy "Coach accesses all strength_conditioning"
   on strength_conditioning for all using (
-    get_my_role() = 'coach' and recorded_by = auth.uid()
+    get_my_role() = 'coach'
   );
 
 -- audit_logs

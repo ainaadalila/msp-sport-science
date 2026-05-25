@@ -40,8 +40,12 @@ export default function Sidebar() {
   const isAdmin = profile?.role === 'superadmin' || profile?.role === 'admin'
   const isSuperAdmin = profile?.role === 'superadmin'
 
-  const can = (mod: keyof ModulePermissions) =>
-    isSuperAdmin || (profile?.module_permissions?.[mod] ?? false)
+  const can = (mod: keyof ModulePermissions) => {
+    if (isSuperAdmin) return true
+    const perm = profile?.module_permissions?.[mod]
+    if (typeof perm === 'boolean') return perm
+    return perm?.read ?? false
+  }
 
   // Auto-expand group if a child route is active
   function isGroupActive(key: string) {
@@ -212,6 +216,7 @@ export default function Sidebar() {
           <div>
             <p className={groupLabelCls}>Pentadbiran</p>
             <NavLink to="/admin/users" className={({ isActive }) => navItemCls(isActive)}>Pengurusan Pengguna</NavLink>
+            <NavLink to="/admin/audit" className={({ isActive }) => navItemCls(isActive)}>Log Audit</NavLink>
           </div>
         )}
       </nav>

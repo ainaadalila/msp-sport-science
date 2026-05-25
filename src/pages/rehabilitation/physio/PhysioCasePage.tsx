@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import jsPDF from 'jspdf'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
+import { usePermissions } from '../../../hooks/usePermissions'
 import { logAction } from '../../../lib/audit'
 
 interface Athlete {
@@ -64,8 +65,9 @@ function getPainColor(score: number): string {
 
 export default function PhysioCasePage() {
   const { profile } = useAuth()
+  const { can } = usePermissions()
   const isAdmin = profile?.role === 'superadmin' || profile?.role === 'admin'
-  const isPhysio = profile?.role === 'physio'
+  const canEdit = can('physio_cases', 'update')
 
   const [tab, setTab] = useState<Tab>('active')
   const [cases, setCases] = useState<PhysioCase[]>([])
@@ -351,7 +353,6 @@ export default function PhysioCasePage() {
   const activeCases = cases.filter(c => c.status === 'active')
   const closedCases = cases.filter(c => c.status === 'closed')
   const displayCases = tab === 'active' ? activeCases : closedCases
-  const canEdit = isAdmin || isPhysio
 
   const allSports = [...new Set(athletes.map(a => a.sport))].sort()
   const modalAthletes = createFormSport ? athletes.filter(a => a.sport === createFormSport) : athletes
@@ -362,7 +363,7 @@ export default function PhysioCasePage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <p className="text-[12px] text-[#888]">{cases.length} kes</p>
-        {canEdit && (
+        {can('physio_cases', 'create') && (
           <button onClick={() => { setCreateModal(true); setCreateFormSport('') }} className="bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
             + Kes Baharu
           </button>

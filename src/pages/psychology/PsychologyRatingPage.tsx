@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
+import { usePermissions } from '../../hooks/usePermissions'
 import type { PhysioRating } from '../../types'
 import Papa from 'papaparse'
 
@@ -38,6 +39,8 @@ const SCALE_LABEL = {
 }
 
 export default function PsychologyRatingPage() {
+  const { can } = usePermissions()
+
   const [ratings, setRatings] = useState<PhysioRating[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -266,23 +269,25 @@ export default function PsychologyRatingPage() {
       ) : (
         <div className="space-y-3">
           {/* Upload Section */}
-          <div className="flex gap-2 items-center">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".csv"
-              onChange={handleFileUpload}
-              disabled={uploading}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm"
-            />
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-              className="px-6 py-2 bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold rounded-lg transition disabled:opacity-50"
-            >
-              {uploading ? 'Memproses...' : 'Pilih File'}
-            </button>
-          </div>
+          {can('psychology', 'create') && (
+            <div className="flex gap-2 items-center">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv"
+                onChange={handleFileUpload}
+                disabled={uploading}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm"
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="px-6 py-2 bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold rounded-lg transition disabled:opacity-50"
+              >
+                {uploading ? 'Memproses...' : 'Pilih File'}
+              </button>
+            </div>
+          )}
           {uploadError && <p className="text-red-600 text-sm">{uploadError}</p>}
 
           {/* Phase Filter */}

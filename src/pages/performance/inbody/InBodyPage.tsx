@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
+import { usePermissions } from '../../../hooks/usePermissions'
 import { logAction } from '../../../lib/audit'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
@@ -135,7 +136,7 @@ function InBodyScoreGauge({ score }: { score: number | null }) {
 
 export default function InBodyPage() {
   const { profile } = useAuth()
-  const isAdmin = profile?.role === 'superadmin' || profile?.role === 'admin'
+  const { can } = usePermissions()
 
   const [records, setRecords] = useState<InBodyRecord[]>([])
   const [athletes, setAthletes] = useState<Athlete[]>([])
@@ -353,9 +354,11 @@ export default function InBodyPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <p className="text-[12px] text-[#888]">{records.length} rekod penilaian</p>
-        <button onClick={openAdd} className="bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
-          + Rekod InBody
-        </button>
+        {can('inbody', 'create') && (
+          <button onClick={openAdd} className="bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
+            + Rekod InBody
+          </button>
+        )}
       </div>
 
       {/* Tab Switcher */}
@@ -448,8 +451,8 @@ export default function InBodyPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-3 justify-end">
-                        <button onClick={() => openEdit(r)} className="text-xs text-[#F56A00] hover:underline font-medium">Edit</button>
-                        {isAdmin && <button onClick={() => setConfirmDelete(r)} className="text-xs text-[#D44040] hover:underline font-medium">Padam</button>}
+                        {can('inbody', 'update') && <button onClick={() => openEdit(r)} className="text-xs text-[#F56A00] hover:underline font-medium">Edit</button>}
+                        {can('inbody', 'delete') && <button onClick={() => setConfirmDelete(r)} className="text-xs text-[#D44040] hover:underline font-medium">Padam</button>}
                       </div>
                     </td>
                   </tr>

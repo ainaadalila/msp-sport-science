@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
+import { usePermissions } from '../../../hooks/usePermissions'
 import { logAction } from '../../../lib/audit'
 
 interface Supplement {
@@ -60,7 +61,7 @@ function fmtDate(d: string) {
 
 export default function SupplementPage() {
   const { profile } = useAuth()
-  const isAdmin = profile?.role === 'superadmin' || profile?.role === 'admin'
+  const { can } = usePermissions()
   const isCoordinator = profile?.module_permissions?.supplement_coordinator ?? false
   const isSupporter = profile?.module_permissions?.supplement_supporter ?? false
   const isApprover = profile?.module_permissions?.supplement_approver ?? false
@@ -321,7 +322,7 @@ export default function SupplementPage() {
       <div className="flex items-center justify-between">
         <p className="text-[12px] text-[#888]">{supplements.length} jenis suplemen · {requests.length} permohonan</p>
         <div className="flex gap-2">
-          {tab === 'inventory' && isAdmin && (
+          {tab === 'inventory' && can('supplement', 'create') && (
             <button onClick={openAddSup} className="bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
               + Tambah Suplemen
             </button>
@@ -386,12 +387,10 @@ export default function SupplementPage() {
                       {isExpiringSoon && <span className="ml-2 text-[10px] font-semibold">⚠️ Segera luput</span>}
                     </td>
                     <td className="px-5 py-3">
-                      {isAdmin && (
-                        <div className="flex gap-3 justify-end">
-                          <button onClick={() => openEditSup(s)} className="text-xs text-[#F56A00] hover:underline font-medium">Edit</button>
-                          <button onClick={() => setConfirmDelSup(s)} className="text-xs text-[#D44040] hover:underline font-medium">Padam</button>
-                        </div>
-                      )}
+                      <div className="flex gap-3 justify-end">
+                        {can('supplement', 'update') && <button onClick={() => openEditSup(s)} className="text-xs text-[#F56A00] hover:underline font-medium">Edit</button>}
+                        {can('supplement', 'delete') && <button onClick={() => setConfirmDelSup(s)} className="text-xs text-[#D44040] hover:underline font-medium">Padam</button>}
+                      </div>
                     </td>
                   </tr>
                 )

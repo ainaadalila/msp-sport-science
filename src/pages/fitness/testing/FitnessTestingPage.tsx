@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
+import { usePermissions } from '../../../hooks/usePermissions'
 import { logAction } from '../../../lib/audit'
 import type { Athlete, FitnessTestSession, SportFitnessTest, FitnessTestNorm } from '../../../types'
 
@@ -28,7 +29,8 @@ interface SessionWithResults {
 
 export default function FitnessTestingPage() {
   const { profile } = useAuth()
-  const canRecord = profile?.role === 'superadmin' || profile?.role === 'admin' || profile?.role === 'coach'
+  const { can } = usePermissions()
+  const canRecord = can('fitness', 'create')
 
   const [athletes, setAthletes] = useState<Athlete[]>([])
   const [selectedAthlete, setSelectedAthlete] = useState<Athlete | null>(null)

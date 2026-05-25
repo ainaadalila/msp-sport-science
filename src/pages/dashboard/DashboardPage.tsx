@@ -88,7 +88,7 @@ function formatAction(action: string) {
 }
 
 export default function DashboardPage() {
-  const { session } = useAuth()
+  const { session, profile } = useAuth()
   const [stats, setStats] = useState<Stats>({
     totalAthletes: 0,
     activeAthletes: 0,
@@ -203,7 +203,8 @@ export default function DashboardPage() {
       {/* Main grid */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-5">
 
-        {/* Recent activity */}
+        {/* Recent activity - admin only */}
+        {(profile?.role === 'superadmin' || profile?.role === 'admin') && (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100">
             <h3 className="text-sm font-semibold text-[#111]">Aktiviti Terkini</h3>
@@ -235,6 +236,7 @@ export default function DashboardPage() {
             </table>
           )}
         </div>
+        )}
 
         {/* Right col */}
         <div className="flex flex-col gap-4">

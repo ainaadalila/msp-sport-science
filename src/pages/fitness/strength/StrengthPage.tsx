@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
+import { usePermissions } from '../../../hooks/usePermissions'
 import { logAction } from '../../../lib/audit'
 import StructuredProgramBuilder from './StructuredProgramBuilder'
 import type { StructuredProgramData } from '../../../types'
 
 interface Athlete { id: string; name: string; sport: string }
-interface Coach { id: string; full_name: string }
 
 interface SCRecord {
   id: string; athlete_id: string; session_date: string
@@ -25,10 +25,27 @@ interface SCProgram {
   coach?: { full_name: string }
 }
 
-interface CoachAssignment {
+interface CoachSchedule {
   id: string; coach_id: string; sport: string
-  days_of_week: string[] | null; session_time: string | null; notes: string | null
-  coach?: { full_name: string }
+  schedule_name: string; valid_from: string
+  repeats: boolean; repeat_pattern: 'weekly' | 'bi-weekly' | 'custom' | null
+  repeat_until: string | null
+  slots?: CoachScheduleSlot[]
+}
+
+interface CoachScheduleSlot {
+  id: string; schedule_id: string
+  day_of_week: number; start_time: string; end_time: string
+}
+
+interface ScheduleForm {
+  schedule_name: string; valid_from: string
+  repeats: boolean; repeat_pattern: 'weekly' | 'bi-weekly' | 'custom'
+  repeat_until: string; sport: string
+}
+
+interface ScheduleSlotForm {
+  day_of_week: number; start_time: string; end_time: string
 }
 
 interface AttendanceForm {
@@ -43,10 +60,6 @@ interface ProgramForm {
   structured_data: StructuredProgramData
   start_date: string
   end_date: string
-}
-
-interface AssignmentForm {
-  coach_id: string; sport: string; days_of_week: string[]; session_time: string; notes: string
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mac', 'Apr', 'Mei', 'Jun', 'Jul', 'Ogos', 'Sep', 'Okt', 'Nov', 'Dis']
@@ -69,14 +82,11 @@ const emptyProgramForm: ProgramForm = {
   sport: '', month: new Date().getMonth() + 1, year: new Date().getFullYear(), content: '',
   program_type: 'text', structured_data: emptyStructuredData, start_date: '', end_date: '',
 }
-const emptyAssignmentForm: AssignmentForm = {
-  coach_id: '', sport: '', days_of_week: [], session_time: '08:00', notes: '',
-}
 
 export default function StrengthPage() {
   const { profile } = useAuth()
+  const { can } = usePermissions()
   const isAdmin = profile?.role === 'superadmin' || profile?.role === 'admin'
-  const isCoach = profile?.role === 'coach'
 
   const [activeTab, setActiveTab] = useState<'kehadiran' | 'program' | 'jadual'>('jadual')
   const [loading, setLoading] = useState(true)
@@ -84,8 +94,6 @@ export default function StrengthPage() {
   const [error, setError] = useState<string | null>(null)
 
   const [athletes, setAthletes] = useState<Athlete[]>([])
-  const [coaches, setCoaches] = useState<Coach[]>([])
-  const [assignments, setAssignments] = useState<CoachAssignment[]>([])
 
   // Tab 1 — Kehadiran
   const [records, setRecords] = useState<SCRecord[]>([])
@@ -109,37 +117,37 @@ export default function StrengthPage() {
   const [confirmDeleteProgram, setConfirmDeleteProgram] = useState<SCProgram | null>(null)
   const [viewProgram, setViewProgram] = useState<SCProgram | null>(null)
 
-  // Tab 3 — Jadual Jurulatih
-  const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth() + 1)
-  const [calendarYear, setCalendarYear] = useState(new Date().getFullYear())
-  const [assignmentModalOpen, setAssignmentModalOpen] = useState(false)
-  const [editingAssignment, setEditingAssignment] = useState<CoachAssignment | null>(null)
-  const [assignmentForm, setAssignmentForm] = useState<AssignmentForm>(emptyAssignmentForm)
-  const [confirmDeleteAssignment, setConfirmDeleteAssignment] = useState<CoachAssignment | null>(null)
+  // Tab 3 — Jadual Jurulatih (Coach Schedules)
+  const [schedules, setSchedules] = useState<CoachSchedule[]>([])
+  const [scheduleModalOpen, setScheduleModalOpen] = useState(false)
+  const [editingSchedule, setEditingSchedule] = useState<CoachSchedule | null>(null)
+  const [scheduleForm, setScheduleForm] = useState<ScheduleForm>({
+    schedule_name: '', valid_from: new Date().toISOString().slice(0, 10),
+    repeats: false, repeat_pattern: 'weekly', repeat_until: '', sport: '',
+  })
+  const [scheduleSlots, setScheduleSlots] = useState<ScheduleSlotForm[]>([
+    { day_of_week: 0, start_time: '09:00', end_time: '11:00' },
+  ])
+  const [confirmDeleteSchedule, setConfirmDeleteSchedule] = useState<CoachSchedule | null>(null)
 
   useEffect(() => { fetchAll() }, [])
 
   async function fetchAll() {
     setLoading(true)
-    const [recRes, athRes, progRes, assignRes, coachRes] = await Promise.all([
+    const [recRes, athRes, progRes, schedRes] = await Promise.all([
       supabase.from('strength_conditioning').select('*, athlete:athletes(name, sport)').order('session_date', { ascending: false }),
       supabase.from('athletes').select('id, name, sport').order('name'),
       supabase.from('sc_programs').select('*, coach:profiles(full_name)').order('year', { ascending: false }).order('month'),
-      supabase.from('coach_assignments').select('*, coach:profiles(full_name)').order('sport'),
-      supabase.from('profiles').select('id, full_name').eq('role', 'coach').order('full_name'),
+      supabase.from('coach_schedules').select('*, slots:coach_schedule_slots(*)').order('valid_from', { ascending: false }),
     ])
     setRecords(recRes.data ?? [])
     setAthletes(athRes.data ?? [])
     setPrograms(progRes.data ?? [])
-    setAssignments(assignRes.data ?? [])
-    setCoaches(coachRes.data ?? [])
+    setSchedules(schedRes.data ?? [])
     setLoading(false)
   }
 
   const allSports = [...new Set(athletes.map(a => a.sport))].sort()
-  const myAssignedSports = isCoach
-    ? assignments.filter(a => a.coach_id === profile?.id).map(a => a.sport)
-    : allSports
 
   // --- ATTENDANCE ---
   function openAddAttendance() {
@@ -173,7 +181,7 @@ export default function StrengthPage() {
   // --- PROGRAM ---
   function openAddProgram() {
     setEditingProgram(null)
-    setProgramForm({ ...emptyProgramForm, sport: myAssignedSports[0] ?? '' })
+    setProgramForm(emptyProgramForm)
     setError(null); setProgramModalOpen(true)
   }
   function openEditProgram(p: SCProgram) {
@@ -215,33 +223,99 @@ export default function StrengthPage() {
     setConfirmDeleteProgram(null); fetchAll()
   }
 
-  // --- ASSIGNMENT ---
-  function openAddAssignment() {
-    setEditingAssignment(null); setAssignmentForm(emptyAssignmentForm); setError(null); setAssignmentModalOpen(true)
+  // --- SCHEDULE SLOTS ---
+  function addScheduleSlot() {
+    setScheduleSlots([...scheduleSlots, { day_of_week: 0, start_time: '09:00', end_time: '11:00' }])
   }
-  function openEditAssignment(a: CoachAssignment) {
-    setEditingAssignment(a)
-    setAssignmentForm({ coach_id: a.coach_id, sport: a.sport, days_of_week: a.days_of_week ?? [], session_time: a.session_time ?? '08:00', notes: a.notes ?? '' })
-    setError(null); setAssignmentModalOpen(true)
+  function removeScheduleSlot(index: number) {
+    setScheduleSlots(scheduleSlots.filter((_, i) => i !== index))
   }
-  async function handleSaveAssignment() {
-    if (!assignmentForm.coach_id || !assignmentForm.sport) { setError('Jurulatih dan sukan wajib dipilih.'); return }
-    setSaving(true); setError(null)
-    const payload = { coach_id: assignmentForm.coach_id, sport: assignmentForm.sport, days_of_week: assignmentForm.days_of_week || null, session_time: assignmentForm.session_time || null, notes: assignmentForm.notes || null }
-    if (editingAssignment) {
-      const { error } = await supabase.from('coach_assignments').update(payload).eq('id', editingAssignment.id)
-      if (error) { setError(error.message); setSaving(false); return }
-      await logAction(profile!.id, 'update_coach_assignment', 'coach_assignments', editingAssignment.id)
-    } else {
-      const { data, error } = await supabase.from('coach_assignments').insert(payload).select('id').single()
-      if (error) { setError(error.message); setSaving(false); return }
-      await logAction(profile!.id, 'create_coach_assignment', 'coach_assignments', data.id)
+  function updateScheduleSlot(index: number, field: 'day_of_week' | 'start_time' | 'end_time', value: any) {
+    const updated = [...scheduleSlots]
+    updated[index] = { ...updated[index], [field]: value }
+    setScheduleSlots(updated)
+  }
+
+  // --- SCHEDULE ---
+  function openAddSchedule() {
+    setEditingSchedule(null)
+    setScheduleForm({ schedule_name: '', valid_from: new Date().toISOString().slice(0, 10), repeats: false, repeat_pattern: 'weekly', repeat_until: '', sport: '' })
+    setScheduleSlots([{ day_of_week: 0, start_time: '09:00', end_time: '11:00' }])
+    setError(null)
+    setScheduleModalOpen(true)
+  }
+  function openEditSchedule(s: CoachSchedule) {
+    setEditingSchedule(s)
+    setScheduleForm({
+      schedule_name: s.schedule_name, valid_from: s.valid_from, repeats: s.repeats,
+      repeat_pattern: (s.repeat_pattern as 'weekly' | 'bi-weekly' | 'custom') ?? 'weekly',
+      repeat_until: s.repeat_until ?? '', sport: s.sport,
+    })
+    setScheduleSlots((s.slots ?? []).map(slot => ({ day_of_week: slot.day_of_week, start_time: slot.start_time, end_time: slot.end_time })))
+    setError(null)
+    setScheduleModalOpen(true)
+  }
+  async function handleSaveSchedule() {
+    if (!scheduleForm.schedule_name || !scheduleForm.valid_from || !scheduleForm.sport) {
+      setError('Nama jadual, tarikh mula, dan sukan wajib diisi.')
+      return
     }
-    setSaving(false); setAssignmentModalOpen(false); fetchAll()
+    if (scheduleSlots.length === 0) { setError('Sila tambah sekurang-kurangnya satu slot hari/masa.'); return }
+    if (scheduleForm.repeats && !scheduleForm.repeat_until) { setError('Sila tentukan tarikh akhir untuk jadual berulang.'); return }
+    setSaving(true); setError(null)
+
+    const payload = {
+      coach_id: profile?.id,
+      sport: scheduleForm.sport,
+      schedule_name: scheduleForm.schedule_name,
+      valid_from: scheduleForm.valid_from,
+      repeats: scheduleForm.repeats,
+      repeat_pattern: scheduleForm.repeats ? scheduleForm.repeat_pattern : null,
+      repeat_until: scheduleForm.repeats ? scheduleForm.repeat_until : null,
+    }
+
+    try {
+      if (editingSchedule) {
+        const { error } = await supabase.from('coach_schedules').update(payload).eq('id', editingSchedule.id)
+        if (error) throw error
+        await supabase.from('coach_schedule_slots').delete().eq('schedule_id', editingSchedule.id)
+        const slotsPayload = scheduleSlots.map(slot => ({
+          schedule_id: editingSchedule.id,
+          day_of_week: slot.day_of_week,
+          start_time: slot.start_time,
+          end_time: slot.end_time,
+        }))
+        const { error: slotsError } = await supabase.from('coach_schedule_slots').insert(slotsPayload)
+        if (slotsError) throw slotsError
+        await logAction(profile!.id, 'update_coach_schedule', 'coach_schedules', editingSchedule.id)
+      } else {
+        const { data: schedule, error: schedError } = await supabase.from('coach_schedules').insert(payload).select('id').single()
+        if (schedError) throw schedError
+        const slotsPayload = scheduleSlots.map(slot => ({
+          schedule_id: schedule.id,
+          day_of_week: slot.day_of_week,
+          start_time: slot.start_time,
+          end_time: slot.end_time,
+        }))
+        const { error: slotsError } = await supabase.from('coach_schedule_slots').insert(slotsPayload)
+        if (slotsError) throw slotsError
+        await logAction(profile!.id, 'create_coach_schedule', 'coach_schedules', schedule.id)
+      }
+      setSaving(false); setScheduleModalOpen(false); fetchAll()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error saving schedule')
+      setSaving(false)
+    }
   }
-  async function handleDeleteAssignment(a: CoachAssignment) {
-    await supabase.from('coach_assignments').delete().eq('id', a.id)
-    setConfirmDeleteAssignment(null); fetchAll()
+  async function handleDeleteSchedule(s: CoachSchedule) {
+    try {
+      await supabase.from('coach_schedules').delete().eq('id', s.id)
+      await logAction(profile!.id, 'delete_coach_schedule', 'coach_schedules', s.id)
+      setConfirmDeleteSchedule(null)
+      fetchAll()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error deleting schedule')
+    }
   }
 
   // --- DERIVED ---
@@ -257,7 +331,6 @@ export default function StrengthPage() {
   })
 
   const visiblePrograms = programs.filter(p =>
-    (!isCoach || myAssignedSports.includes(p.sport)) &&
     (!filterProgramSport || p.sport === filterProgramSport) &&
     (!filterProgramYear || p.year === +filterProgramYear)
   )
@@ -294,9 +367,11 @@ export default function StrengthPage() {
         <>
           <div className="flex items-center justify-between">
             <p className="text-[12px] text-[#888]">{records.length} rekod sesi</p>
-            <button onClick={openAddAttendance} className="bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
-              + Rekod Sesi
-            </button>
+            {can('strength', 'create') && (
+              <button onClick={openAddAttendance} className="bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
+                + Rekod Sesi
+              </button>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -368,8 +443,8 @@ export default function StrengthPage() {
                       <td className="px-4 py-3 text-[#888] max-w-[160px] truncate">{r.notes ?? '—'}</td>
                       <td className="px-4 py-3">
                         <div className="flex gap-3 justify-end">
-                          <button onClick={() => openEditAttendance(r)} className="text-xs text-[#F56A00] hover:underline font-medium">Edit</button>
-                          {isAdmin && <button onClick={() => setConfirmDelete(r)} className="text-xs text-[#D44040] hover:underline font-medium">Padam</button>}
+                          {can('strength', 'update') && <button onClick={() => openEditAttendance(r)} className="text-xs text-[#F56A00] hover:underline font-medium">Edit</button>}
+                          {can('strength', 'delete') && <button onClick={() => setConfirmDelete(r)} className="text-xs text-[#D44040] hover:underline font-medium">Padam</button>}
                         </div>
                       </td>
                     </tr>
@@ -386,15 +461,17 @@ export default function StrengthPage() {
         <>
           <div className="flex items-center justify-between">
             <p className="text-[12px] text-[#888]">{visiblePrograms.length} program</p>
-            <button onClick={openAddProgram} className="bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
-              + Program Baharu
-            </button>
+            {can('strength', 'create') && (
+              <button onClick={openAddProgram} className="bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
+                + Program Baharu
+              </button>
+            )}
           </div>
 
           <div className="flex flex-wrap gap-2">
             <select value={filterProgramSport} onChange={e => setFilterProgramSport(e.target.value)} className={filterCls}>
               <option value="">Semua Sukan</option>
-              {(isCoach ? myAssignedSports : allSports).map(s => <option key={s} value={s}>{s}</option>)}
+              {allSports.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
             <select value={filterProgramYear} onChange={e => setFilterProgramYear(e.target.value)} className={filterCls}>
               {(programYears.length > 0 ? programYears : [new Date().getFullYear()]).map(y => (
@@ -453,8 +530,8 @@ export default function StrengthPage() {
                               {p.program_type === 'structured' && (
                                 <button onClick={() => setViewProgram(p)} className="text-xs text-[#3A7EC8] hover:underline font-medium">Lihat</button>
                               )}
-                              <button onClick={() => openEditProgram(p)} className="text-xs text-[#F56A00] hover:underline">Edit</button>
-                              {isAdmin && <button onClick={() => setConfirmDeleteProgram(p)} className="text-xs text-[#D44040] hover:underline">Padam</button>}
+                              {can('strength', 'update') && <button onClick={() => openEditProgram(p)} className="text-xs text-[#F56A00] hover:underline">Edit</button>}
+                              {can('strength', 'delete') && <button onClick={() => setConfirmDeleteProgram(p)} className="text-xs text-[#D44040] hover:underline">Padam</button>}
                             </div>
                           </div>
                         </div>
@@ -472,87 +549,68 @@ export default function StrengthPage() {
       {activeTab === 'jadual' && (
         <>
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => { const d = new Date(calendarYear, calendarMonth - 2); setCalendarMonth(d.getMonth() + 1); setCalendarYear(d.getFullYear()) }}
-                className="p-1.5 rounded-lg border border-gray-200 hover:border-[#F56A00] text-[#888] hover:text-[#F56A00] transition text-sm leading-none"
-              >‹</button>
-              <p className="text-sm font-semibold text-[#111] w-32 text-center">
-                {MONTHS[calendarMonth - 1]} {calendarYear}
-              </p>
-              <button
-                onClick={() => { const d = new Date(calendarYear, calendarMonth); setCalendarMonth(d.getMonth() + 1); setCalendarYear(d.getFullYear()) }}
-                className="p-1.5 rounded-lg border border-gray-200 hover:border-[#F56A00] text-[#888] hover:text-[#F56A00] transition text-sm leading-none"
-              >›</button>
-            </div>
-            {isAdmin && (
-              <button onClick={openAddAssignment} className="bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
-                + Tambah Tugasan
+            <p className="text-[12px] text-[#888]">{schedules.length} jadual</p>
+            {can('strength', 'create') && (
+              <button onClick={openAddSchedule} className="bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
+                + Jadual Baharu
               </button>
             )}
           </div>
 
-          {/* Calendar grid */}
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            {/* Day headers */}
-            <div className="grid grid-cols-7 border-b border-gray-100">
-              {DAY_NAMES.map(d => (
-                <div key={d} className="px-2 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-[#888]">{d}</div>
-              ))}
+          {schedules.length === 0 ? (
+            <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
+              <p className="text-[13px] text-[#888]">Tiada jadual jurulatih</p>
             </div>
-            {/* Weeks */}
-            {buildCalendarWeeks(calendarYear, calendarMonth).map((week, wi) => (
-              <div key={wi} className="grid grid-cols-7 border-b border-gray-50 last:border-0">
-                {week.map((day, di) => {
-                  const dayName = day ? DAY_NAMES[(new Date(calendarYear, calendarMonth - 1, day).getDay() + 6) % 7] : null
-                  const dayAssignments = dayName ? assignments.filter(a => a.days_of_week?.includes(dayName)) : []
-                  return (
-                    <div key={di} className={`min-h-[80px] p-2 border-r border-gray-50 last:border-0 ${!day ? 'bg-gray-50/50' : ''}`}>
-                      {day && (
-                        <>
-                          <p className="text-[11px] font-mono text-[#aaa] mb-1">{day}</p>
-                          <div className="space-y-1">
-                            {dayAssignments.map(a => (
-                              <div key={a.id} className="group relative">
-                                <div className="text-[10px] leading-tight bg-[rgba(245,106,0,0.08)] border border-[rgba(245,106,0,0.2)] text-[#F56A00] rounded px-1.5 py-1">
-                                  <p className="font-semibold truncate">{a.sport}</p>
-                                  <p className="text-[#888] truncate">{a.coach?.full_name?.split(' ')[0]}</p>
-                                  {a.session_time && <p className="text-[#888] font-mono text-[9px]">{a.session_time}</p>}
-                                </div>
-                              </div>
-                            ))}
+          ) : (
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100">
+                    {['Nama Jadual', 'Sukan', 'Tarikh Mula', 'Hari/Masa', 'Berulang', 'Akhir'].map(h => (
+                      <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-wider text-[#888] px-4 py-3">{h}</th>
+                    ))}
+                    {isAdmin && <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-[#888] px-4 py-3">Tindakan</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {schedules.map(s => (
+                    <tr key={s.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
+                      <td className="px-4 py-3 font-semibold text-[#111]">{s.schedule_name}</td>
+                      <td className="px-4 py-3 text-[#444]">{s.sport}</td>
+                      <td className="px-4 py-3 text-[#444] font-mono text-[12px]">{new Date(s.valid_from + 'T00:00:00').toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
+                      <td className="px-4 py-3 text-[#444]">
+                        <div className="text-[12px] space-y-0.5">
+                          {s.slots?.map((slot, i) => (
+                            <div key={i} className="text-[#666]">
+                              {DAY_NAMES[slot.day_of_week]} {slot.start_time}–{slot.end_time}
+                            </div>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-[#444]">
+                        {s.repeats ? (
+                          <span className="inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                            {s.repeat_pattern === 'weekly' ? 'Mingguan' : s.repeat_pattern === 'bi-weekly' ? 'Dua Mingguan' : 'Tersuai'}
+                          </span>
+                        ) : (
+                          <span className="text-[#aaa]">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-[#444] font-mono text-[12px]">
+                        {s.repeat_until ? new Date(s.repeat_until + 'T00:00:00').toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                      </td>
+                      {isAdmin && (
+                        <td className="px-4 py-3 text-[#444]">
+                          <div className="flex gap-3">
+                            {can('strength', 'update') && <button onClick={() => openEditSchedule(s)} className="text-xs text-[#F56A00] hover:underline font-medium">Edit</button>}
+                            {can('strength', 'delete') && <button onClick={() => setConfirmDeleteSchedule(s)} className="text-xs text-[#D44040] hover:underline font-medium">Padam</button>}
                           </div>
-                        </>
+                        </td>
                       )}
-                    </div>
-                  )
-                })}
-              </div>
-            ))}
-          </div>
-
-          {/* Assignments legend */}
-          {assignments.length > 0 && (
-            <div className="bg-white rounded-xl border border-gray-200 p-4">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-[#888] mb-3">Senarai Tugasan</p>
-              <div className="space-y-2">
-                {assignments.map(a => (
-                  <div key={a.id} className="flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[rgba(245,106,0,0.08)] text-[#F56A00] border border-[rgba(245,106,0,0.2)] shrink-0">{a.sport}</span>
-                      <span className="text-[12px] text-[#444] truncate">{a.coach?.full_name ?? '—'}</span>
-                      <span className="text-[11px] text-[#aaa]">{a.days_of_week?.join(', ') ?? '—'}</span>
-                      {a.session_time && <span className="text-[11px] font-mono text-[#aaa]">@ {a.session_time}</span>}
-                    </div>
-                    {isAdmin && (
-                      <div className="flex gap-3 shrink-0">
-                        <button onClick={() => openEditAssignment(a)} className="text-xs text-[#F56A00] hover:underline font-medium">Edit</button>
-                        <button onClick={() => setConfirmDeleteAssignment(a)} className="text-xs text-[#D44040] hover:underline font-medium">Padam</button>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </>
@@ -641,7 +699,7 @@ export default function StrengthPage() {
                 <Field label="Sukan" required>
                   <select value={programForm.sport} onChange={e => setProgramForm(f => ({ ...f, sport: e.target.value }))} className={inputCls}>
                     <option value="">— Pilih —</option>
-                    {(isCoach ? myAssignedSports : allSports).map(s => <option key={s} value={s}>{s}</option>)}
+                    {allSports.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </Field>
                 <Field label="Bulan" required>
@@ -691,58 +749,89 @@ export default function StrengthPage() {
         </div>
       )}
 
-      {/* ── MODAL: ASSIGNMENT ── */}
-      {assignmentModalOpen && (
+      {/* ── MODAL: SCHEDULE ── */}
+      {scheduleModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm md:max-w-md">
-            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
-              <h3 className="font-bold text-[#111]">{editingAssignment ? 'Edit Tugasan' : 'Tugasan Baharu'}</h3>
-              <button onClick={() => setAssignmentModalOpen(false)} className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white">
+              <h3 className="font-bold text-[#111]">{editingSchedule ? 'Edit Jadual' : 'Jadual Baharu'}</h3>
+              <button onClick={() => setScheduleModalOpen(false)} className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
             </div>
             <div className="px-6 py-5 space-y-4">
               {error && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-600">{error}</div>}
-              <Field label="Jurulatih S&C" required>
-                <select value={assignmentForm.coach_id} onChange={e => setAssignmentForm(f => ({ ...f, coach_id: e.target.value }))} className={inputCls}>
-                  <option value="">— Pilih —</option>
-                  {coaches.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
-                </select>
+
+              <Field label="Nama Jadual" required>
+                <input type="text" value={scheduleForm.schedule_name} onChange={e => setScheduleForm(f => ({ ...f, schedule_name: e.target.value.toUpperCase() }))} className={inputCls} placeholder="Cth. SESI PAGI SENIN" />
               </Field>
-              <Field label="Sukan" required>
-                <select value={assignmentForm.sport} onChange={e => setAssignmentForm(f => ({ ...f, sport: e.target.value }))} className={inputCls}>
-                  <option value="">— Pilih —</option>
-                  {allSports.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </Field>
-              <Field label="Hari">
-                <div className="flex flex-wrap gap-2">
-                  {DAY_NAMES.map(day => (
-                    <label key={day} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[12px] font-medium cursor-pointer transition ${assignmentForm.days_of_week.includes(day) ? 'bg-[rgba(245,106,0,0.08)] border-[rgba(245,106,0,0.4)] text-[#F56A00]' : 'bg-[#F5F5F7] border-[#E8E8E8] text-[#888]'}`}>
-                      <input
-                        type="checkbox"
-                        className="hidden"
-                        checked={assignmentForm.days_of_week.includes(day)}
-                        onChange={e => setAssignmentForm(f => ({
-                          ...f,
-                          days_of_week: e.target.checked
-                            ? [...f.days_of_week, day]
-                            : f.days_of_week.filter(d => d !== day)
-                        }))}
-                      />
-                      {day}
-                    </label>
+
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Tarikh Mula" required>
+                  <input type="date" value={scheduleForm.valid_from} onChange={e => setScheduleForm(f => ({ ...f, valid_from: e.target.value }))} className={inputCls} />
+                </Field>
+                <Field label="Sukan" required>
+                  <select value={scheduleForm.sport} onChange={e => setScheduleForm(f => ({ ...f, sport: e.target.value }))} className={inputCls}>
+                    <option value="">— Pilih —</option>
+                    {allSports.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </Field>
+              </div>
+
+              <Field label="Slot Hari/Masa">
+                <div className="space-y-3">
+                  {scheduleSlots.map((slot, idx) => (
+                    <div key={idx} className="flex gap-2 items-end">
+                      <select value={slot.day_of_week} onChange={e => updateScheduleSlot(idx, 'day_of_week', parseInt(e.target.value))} className="flex-1 bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2.5 text-sm text-[#111] outline-none focus:border-[#F56A00] focus:bg-white">
+                        {DAY_NAMES.map((day, i) => <option key={i} value={i}>{day}</option>)}
+                      </select>
+                      <input type="time" value={slot.start_time} onChange={e => updateScheduleSlot(idx, 'start_time', e.target.value)} className="w-24 bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2.5 text-sm text-[#111] outline-none focus:border-[#F56A00] focus:bg-white" />
+                      <span className="text-[#888]">–</span>
+                      <input type="time" value={slot.end_time} onChange={e => updateScheduleSlot(idx, 'end_time', e.target.value)} className="w-24 bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2.5 text-sm text-[#111] outline-none focus:border-[#F56A00] focus:bg-white" />
+                      {scheduleSlots.length > 1 && (
+                        <button type="button" onClick={() => removeScheduleSlot(idx)} className="px-3 py-2.5 text-red-600 hover:bg-red-50 rounded-lg transition text-sm font-medium">
+                          ✕
+                        </button>
+                      )}
+                    </div>
                   ))}
+                  <button type="button" onClick={addScheduleSlot} className="text-[13px] text-[#F56A00] hover:text-[#D45A00] font-semibold transition">
+                    + Tambah Slot
+                  </button>
                 </div>
               </Field>
-              <Field label="Masa Sesi">
-                <input type="time" value={assignmentForm.session_time} onChange={e => setAssignmentForm(f => ({ ...f, session_time: e.target.value }))} className={inputCls} />
-              </Field>
-              <Field label="Nota">
-                <textarea value={assignmentForm.notes} onChange={e => setAssignmentForm(f => ({ ...f, notes: e.target.value.toUpperCase() }))} className={`${inputCls} resize-none`} rows={3} placeholder="MAKLUMAT TAMBAHAN..." />
-              </Field>
+
+              <div className="border-t border-gray-100 pt-4">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={scheduleForm.repeats}
+                    onChange={e => setScheduleForm(f => ({ ...f, repeats: e.target.checked, repeat_until: '' }))}
+                    className="w-4 h-4 rounded border-[#E8E8E8] cursor-pointer accent-[#F56A00]"
+                  />
+                  <span className="text-sm font-semibold text-[#111]">Jadual Berulang</span>
+                </label>
+              </div>
+
+              {scheduleForm.repeats && (
+                <div className="space-y-4 bg-gray-50 border border-gray-100 rounded-lg p-4">
+                  <Field label="Corak Pengulangan" required>
+                    <div className="flex gap-2">
+                      {(['weekly', 'bi-weekly', 'custom'] as const).map(pattern => (
+                        <label key={pattern} className={`flex-1 px-3 py-2.5 rounded-lg border text-[12px] font-semibold cursor-pointer transition text-center ${scheduleForm.repeat_pattern === pattern ? 'bg-[#F56A00] border-[#F56A00] text-white' : 'bg-white border-[#E8E8E8] text-[#888] hover:border-[#D0D0D0]'}`}>
+                          <input type="radio" name="pattern" value={pattern} checked={scheduleForm.repeat_pattern === pattern} onChange={() => setScheduleForm(f => ({ ...f, repeat_pattern: pattern }))} className="hidden" />
+                          {pattern === 'weekly' ? 'Mingguan' : pattern === 'bi-weekly' ? 'Dua Mingguan' : 'Tersuai'}
+                        </label>
+                      ))}
+                    </div>
+                  </Field>
+                  <Field label="Berakhir Pada" required>
+                    <input type="date" value={scheduleForm.repeat_until} onChange={e => setScheduleForm(f => ({ ...f, repeat_until: e.target.value }))} className={inputCls} />
+                  </Field>
+                </div>
+              )}
             </div>
-            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
-              <button onClick={() => setAssignmentModalOpen(false)} className="px-4 py-2 text-sm text-[#888] hover:text-[#111] transition">Batal</button>
-              <button onClick={handleSaveAssignment} disabled={saving} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 sticky bottom-0 bg-white">
+              <button onClick={() => setScheduleModalOpen(false)} className="px-4 py-2 text-sm text-[#888] hover:text-[#111] transition">Batal</button>
+              <button onClick={handleSaveSchedule} disabled={saving} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
                 {saving ? 'Menyimpan...' : 'Simpan'}
               </button>
             </div>
@@ -886,17 +975,17 @@ export default function StrengthPage() {
         </div>
       )}
 
-      {/* ── CONFIRM DELETE: ASSIGNMENT ── */}
-      {confirmDeleteAssignment && (
+      {/* ── CONFIRM DELETE: SCHEDULE ── */}
+      {confirmDeleteSchedule && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 text-center">
-            <p className="text-sm font-semibold text-[#111] mb-1">Padam tugasan ini?</p>
+            <p className="text-sm font-semibold text-[#111] mb-1">Padam jadual ini?</p>
             <p className="text-[13px] text-[#888] mb-6">
-              {confirmDeleteAssignment.coach?.full_name} — {confirmDeleteAssignment.sport}
+              {confirmDeleteSchedule.schedule_name} — {confirmDeleteSchedule.sport}
             </p>
             <div className="flex gap-3 justify-center">
-              <button onClick={() => setConfirmDeleteAssignment(null)} className="px-4 py-2 text-sm text-[#888] border border-gray-200 rounded-lg hover:border-gray-400 transition">Batal</button>
-              <button onClick={() => handleDeleteAssignment(confirmDeleteAssignment)} className="px-4 py-2 text-sm font-semibold text-white bg-[#D44040] hover:bg-red-700 rounded-lg transition">Padam</button>
+              <button onClick={() => setConfirmDeleteSchedule(null)} className="px-4 py-2 text-sm text-[#888] border border-gray-200 rounded-lg hover:border-gray-400 transition">Batal</button>
+              <button onClick={() => handleDeleteSchedule(confirmDeleteSchedule)} className="px-4 py-2 text-sm font-semibold text-white bg-[#D44040] hover:bg-red-700 rounded-lg transition">Padam</button>
             </div>
           </div>
         </div>
@@ -913,18 +1002,6 @@ function fmtProgramDate(d: string) {
   return new Date(d + 'T00:00:00').toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-function buildCalendarWeeks(year: number, month: number): (number | null)[][] {
-  const firstDow = (new Date(year, month - 1, 1).getDay() + 6) % 7 // Mon=0
-  const daysInMonth = new Date(year, month, 0).getDate()
-  const cells: (number | null)[] = [
-    ...Array(firstDow).fill(null),
-    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
-  ]
-  while (cells.length % 7 !== 0) cells.push(null)
-  const weeks: (number | null)[][] = []
-  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7))
-  return weeks
-}
 
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
