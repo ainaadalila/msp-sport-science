@@ -286,8 +286,10 @@ export default function StrengthPage() {
     try {
       if (editingSchedule) {
         const { error } = await supabase.from('coach_schedules').update(payload).eq('id', editingSchedule.id)
-        if (error) throw error
+        if (error) throw new Error(`Update failed: ${error.message}`)
+
         await supabase.from('coach_schedule_slots').delete().eq('schedule_id', editingSchedule.id)
+
         const slotsPayload = scheduleSlots.map(slot => ({
           schedule_id: editingSchedule.id,
           day_of_week: slot.day_of_week,
@@ -295,24 +297,36 @@ export default function StrengthPage() {
           end_time: slot.end_time,
         }))
         const { error: slotsError } = await supabase.from('coach_schedule_slots').insert(slotsPayload)
-        if (slotsError) throw slotsError
+        if (slotsError) throw new Error(`Insert slots failed: ${slotsError.message}`)
+
         await logAction(profile!.id, 'update_coach_schedule', 'coach_schedules', editingSchedule.id)
+        setSaving(false); setScheduleModalOpen(false); fetchAll()
       } else {
-        const { data: schedule, error: schedError } = await supabase.from('coach_schedules').insert(payload).select('id').single()
-        if (schedError) throw schedError
+        const { data: schedule, error: schedError } = await supabase
+          .from('coach_schedules')
+          .insert([payload])
+          .select('id')
+
+        if (schedError) throw new Error(`Insert schedule failed: ${schedError.message}`)
+        if (!schedule || schedule.length === 0) throw new Error('No schedule returned from insert')
+
+        const scheduleId = schedule[0].id
         const slotsPayload = scheduleSlots.map(slot => ({
-          schedule_id: schedule.id,
+          schedule_id: scheduleId,
           day_of_week: slot.day_of_week,
           start_time: slot.start_time,
           end_time: slot.end_time,
         }))
+
         const { error: slotsError } = await supabase.from('coach_schedule_slots').insert(slotsPayload)
-        if (slotsError) throw slotsError
-        await logAction(profile!.id, 'create_coach_schedule', 'coach_schedules', schedule.id)
+        if (slotsError) throw new Error(`Insert slots failed: ${slotsError.message}`)
+
+        await logAction(profile!.id, 'create_coach_schedule', 'coach_schedules', scheduleId)
+        setSaving(false); setScheduleModalOpen(false); fetchAll()
       }
-      setSaving(false); setScheduleModalOpen(false); fetchAll()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error saving schedule')
+      const errorMsg = err instanceof Error ? err.message : String(err)
+      setError(`Error: ${errorMsg}`)
       setSaving(false)
     }
   }
