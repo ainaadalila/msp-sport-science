@@ -119,9 +119,12 @@ export default function StrengthPage() {
   const [viewProgram, setViewProgram] = useState<SCProgram | null>(null)
 
   // Tab 3 — Jadual Jurulatih (Coach Schedules)
-  const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth() + 1)
-  const [calendarYear, setCalendarYear] = useState(new Date().getFullYear())
-  const [selectedDay, setSelectedDay] = useState<number | null>(null)
+  const [weekStartDate, setWeekStartDate] = useState(() => {
+    const today = new Date()
+    const day = today.getDay()
+    const diff = today.getDate() - day + (day === 0 ? -6 : 1)
+    return new Date(today.getFullYear(), today.getMonth(), diff)
+  })
   const [schedules, setSchedules] = useState<CoachSchedule[]>([])
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false)
   const [editingSchedule, setEditingSchedule] = useState<CoachSchedule | null>(null)
@@ -568,20 +571,20 @@ export default function StrengthPage() {
         </>
       )}
 
-      {/* ── TAB 3: JADUAL JURULATIH ── */}
+      {/* ── TAB 3: JADUAL JURULATIH (WEEKLY VIEW) ── */}
       {activeTab === 'jadual' && (
         <>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <button
-                onClick={() => { const d = new Date(calendarYear, calendarMonth - 2); setCalendarMonth(d.getMonth() + 1); setCalendarYear(d.getFullYear()); setSelectedDay(null) }}
+                onClick={() => setWeekStartDate(new Date(weekStartDate.getFullYear(), weekStartDate.getMonth(), weekStartDate.getDate() - 7))}
                 className="p-1.5 rounded-lg border border-gray-200 hover:border-[#F56A00] text-[#888] hover:text-[#F56A00] transition text-sm leading-none"
               >‹</button>
-              <p className="text-sm font-semibold text-[#111] w-32 text-center">
-                {MONTHS[calendarMonth - 1]} {calendarYear}
+              <p className="text-sm font-semibold text-[#111] w-48 text-center">
+                Week of {weekStartDate.toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric' })}
               </p>
               <button
-                onClick={() => { const d = new Date(calendarYear, calendarMonth); setCalendarMonth(d.getMonth() + 1); setCalendarYear(d.getFullYear()); setSelectedDay(null) }}
+                onClick={() => setWeekStartDate(new Date(weekStartDate.getFullYear(), weekStartDate.getMonth(), weekStartDate.getDate() + 7))}
                 className="p-1.5 rounded-lg border border-gray-200 hover:border-[#F56A00] text-[#888] hover:text-[#F56A00] transition text-sm leading-none"
               >›</button>
             </div>
@@ -592,152 +595,99 @@ export default function StrengthPage() {
             )}
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {/* Calendar */}
-            <div className="lg:col-span-1">
-              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                {/* Day headers */}
-                <div className="grid grid-cols-7 border-b border-gray-100 bg-gray-50">
-                  {DAY_NAMES.map(d => (
-                    <div key={d} className="px-2 py-2 text-center text-[9px] font-semibold uppercase tracking-wider text-[#888]">{d[0]}</div>
-                  ))}
-                </div>
-                {/* Calendar weeks */}
-                {buildCalendarWeeks(calendarYear, calendarMonth).map((week, wi) => (
-                  <div key={wi} className="grid grid-cols-7 border-b border-gray-50 last:border-0">
-                    {week.map((day, di) => {
-                      const dayNum = day ? new Date(calendarYear, calendarMonth - 1, day).getDay() : null
-                      const dayOfWeek = dayNum !== null ? (dayNum + 6) % 7 : null
-                      const dateStr = day ? `${calendarYear}-${String(calendarMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}` : null
+          {/* Weekly Grid */}
+          <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
+            <table className="w-full text-sm border-collapse">
+              {/* Header: Days of week */}
+              <thead>
+                <tr className="border-b border-gray-100 bg-gray-50">
+                  <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-[#888] w-16 border-r border-gray-100">MASA</th>
+                  {Array.from({ length: 7 }).map((_, i) => {
+                    const date = new Date(weekStartDate)
+                    date.setDate(date.getDate() + i)
+                    const dayOfWeek = (date.getDay() + 6) % 7
+                    return (
+                      <th key={i} className="px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-[#111] border-r border-gray-100 last:border-0">
+                        <div>{DAY_NAMES[dayOfWeek]}</div>
+                        <div className="text-[11px] font-normal text-[#888]">{date.getDate()}/{date.getMonth() + 1}</div>
+                      </th>
+                    )
+                  })}
+                </tr>
+              </thead>
 
-                      // Get schedules for this day
-                      const daySchedules = dateStr && schedules.length > 0
-                        ? schedules.filter(s => {
-                            // Use string comparison for dates (safer than Date objects)
-                            if (dateStr < s.valid_from) return false
-                            if (s.repeat_until && dateStr > s.repeat_until) return false
-                            if (!s.slots || s.slots.length === 0) return false
-
-                            const slotExists = s.slots.some(slot => slot.day_of_week === dayOfWeek)
-                            return slotExists
-                          })
-                        : []
-
-                      const isSelected = selectedDay === day
-
-                      return (
-                        <div
-                          key={di}
-                          onClick={() => day && setSelectedDay(selectedDay === day ? null : day)}
-                          className={`min-h-[60px] p-1.5 border-r border-gray-50 last:border-0 cursor-pointer transition ${
-                            !day ? 'bg-gray-50/50' : isSelected ? 'bg-[rgba(245,106,0,0.05)] border-b-2 border-b-[#F56A00]' : 'hover:bg-gray-50'
-                          }`}
-                        >
-                          {day && (
-                            <>
-                              <p className={`text-[11px] font-semibold mb-1 ${isSelected ? 'text-[#F56A00]' : 'text-[#aaa]'}`}>{day}</p>
-                              {daySchedules.length > 0 && (
-                                <div className="flex flex-wrap gap-0.5">
-                                  {[...new Set(daySchedules.map(s => s.sport))].map((sport, idx) => {
-                                    const colors = ['bg-orange-400', 'bg-blue-400', 'bg-green-400', 'bg-purple-400', 'bg-pink-400']
-                                    return (
-                                      <div
-                                        key={sport}
-                                        className={`w-1.5 h-1.5 rounded-full ${colors[idx % colors.length]}`}
-                                        title={sport}
-                                      />
-                                    )
-                                  })}
-                                </div>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Schedule Details Sidebar */}
-            <div className="lg:col-span-2">
-              {selectedDay ? (
-                (() => {
-                  const dateStr = `${calendarYear}-${String(calendarMonth).padStart(2, '0')}-${String(selectedDay).padStart(2, '0')}`
-                  const currentDate = new Date(dateStr + 'T00:00:00')
-                  const dayOfWeek = (currentDate.getDay() + 6) % 7
-
-                  const daySchedules = schedules.filter(s => {
-                    // Use string comparison for dates (safer than Date objects)
-                    if (dateStr < s.valid_from) return false
-                    if (s.repeat_until && dateStr > s.repeat_until) return false
-                    if (!s.slots || s.slots.length === 0) return false
-
-                    return s.slots.some(slot => slot.day_of_week === dayOfWeek)
-                  })
+              {/* Time slots: 08:00 - 18:00 */}
+              <tbody>
+                {Array.from({ length: 11 }).map((_, hourIdx) => {
+                  const hour = 8 + hourIdx
+                  const timeStr = `${String(hour).padStart(2, '0')}:00`
 
                   return (
-                    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden h-fit">
-                      <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
-                        <p className="text-sm font-semibold text-[#111]">
-                          {DAY_NAMES[dayOfWeek]}, {new Date(dateStr + 'T00:00:00').toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric' })}
-                        </p>
-                        <p className="text-[11px] text-[#888] mt-1">{daySchedules.length} jadual</p>
-                      </div>
+                    <tr key={hour} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/50">
+                      {/* Time label */}
+                      <td className="px-3 py-3 text-[11px] font-semibold text-[#888] border-r border-gray-100 bg-gray-50/50">
+                        {timeStr}
+                      </td>
 
-                      {daySchedules.length === 0 ? (
-                        <div className="p-4 text-center text-[13px] text-[#888]">Tiada jadual untuk hari ini</div>
-                      ) : (
-                        <div className="divide-y divide-gray-100">
-                          {daySchedules.map(s => {
-                            const slot = s.slots?.find(sl => sl.day_of_week === dayOfWeek)
-                            return (
-                              <div key={s.id} className="p-4 hover:bg-gray-50 transition">
-                                <div className="flex items-start justify-between gap-3 mb-2">
-                                  <div>
-                                    <p className="text-sm font-semibold text-[#111]">{s.schedule_name}</p>
-                                    <p className="text-[12px] text-[#888]">{s.sport}</p>
-                                  </div>
-                                  {s.repeats && (
-                                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 whitespace-nowrap">
-                                      {s.repeat_pattern === 'weekly' ? 'Mingguan' : s.repeat_pattern === 'bi-weekly' ? 'Dua Minggu' : 'Tersuai'}
-                                    </span>
-                                  )}
-                                </div>
+                      {/* Days */}
+                      {Array.from({ length: 7 }).map((_, dayIdx) => {
+                        const date = new Date(weekStartDate)
+                        date.setDate(date.getDate() + dayIdx)
+                        const dayOfWeek = (date.getDay() + 6) % 7
+                        const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 
-                                {slot && (
-                                  <p className="text-sm font-mono text-[#F56A00] mb-3">
-                                    {slot.start_time} – {slot.end_time}
-                                  </p>
-                                )}
+                        // Find schedules for this time slot
+                        const slotSchedules = schedules.filter(s => {
+                          if (dateStr < s.valid_from) return false
+                          if (s.repeat_until && dateStr > s.repeat_until) return false
+                          if (!s.slots) return false
 
-                                <div className="flex gap-2">
-                                  {can('strength', 'update') && (
-                                    <button onClick={() => openEditSchedule(s)} className="flex-1 px-2 py-1 text-[11px] font-semibold text-[#F56A00] border border-[#F56A00] rounded hover:bg-[rgba(245,106,0,0.05)] transition">
-                                      Edit
-                                    </button>
-                                  )}
-                                  {can('strength', 'delete') && (
-                                    <button onClick={() => setConfirmDeleteSchedule(s)} className="flex-1 px-2 py-1 text-[11px] font-semibold text-[#D44040] border border-[#D44040] rounded hover:bg-red-50 transition">
-                                      Padam
-                                    </button>
-                                  )}
-                                </div>
+                          return s.slots.some(slot => {
+                            if (slot.day_of_week !== dayOfWeek) return false
+                            // Check if this time overlaps with the schedule
+                            const [startHour] = slot.start_time.split(':').map(Number)
+                            return startHour === hour
+                          })
+                        })
+
+                        return (
+                          <td
+                            key={dayIdx}
+                            className="px-2 py-2 border-r border-gray-100 last:border-0 min-h-[60px] align-top"
+                          >
+                            {slotSchedules.length > 0 ? (
+                              <div className="space-y-1">
+                                {slotSchedules.map(s => {
+                                  const slot = s.slots!.find(sl => sl.day_of_week === dayOfWeek && Number(sl.start_time.split(':')[0]) === hour)
+                                  return (
+                                    <div
+                                      key={s.id}
+                                      className="bg-[rgba(245,106,0,0.1)] border border-[rgba(245,106,0,0.3)] rounded px-2 py-1.5 text-[11px] cursor-pointer hover:bg-[rgba(245,106,0,0.15)] transition group"
+                                    >
+                                      <p className="font-semibold text-[#F56A00] truncate">{s.schedule_name}</p>
+                                      <p className="text-[10px] text-[#666]">{s.sport}</p>
+                                      {slot && <p className="text-[10px] text-[#888] font-mono">{slot.start_time}–{slot.end_time}</p>}
+                                      <div className="hidden group-hover:flex gap-1 mt-1 pt-1 border-t border-[rgba(245,106,0,0.2)]">
+                                        {can('strength', 'update') && (
+                                          <button onClick={() => openEditSchedule(s)} className="flex-1 px-1 py-0.5 text-[10px] font-semibold text-[#F56A00] hover:underline">Edit</button>
+                                        )}
+                                        {can('strength', 'delete') && (
+                                          <button onClick={() => setConfirmDeleteSchedule(s)} className="flex-1 px-1 py-0.5 text-[10px] font-semibold text-[#D44040] hover:underline">Padam</button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )
+                                })}
                               </div>
-                            )
-                          })}
-                        </div>
-                      )}
-                    </div>
+                            ) : null}
+                          </td>
+                        )
+                      })}
+                    </tr>
                   )
-                })()
-              ) : (
-                <div className="bg-white rounded-xl border border-gray-200 p-8 text-center h-fit">
-                  <p className="text-[13px] text-[#888]">Pilih hari untuk melihat jadual</p>
-                </div>
-              )}
-            </div>
+                })}
+              </tbody>
+            </table>
           </div>
         </>
       )}
@@ -1129,19 +1079,6 @@ const inputCls = 'w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py
 
 function fmtProgramDate(d: string) {
   return new Date(d + 'T00:00:00').toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric' })
-}
-
-function buildCalendarWeeks(year: number, month: number): (number | null)[][] {
-  const firstDow = (new Date(year, month - 1, 1).getDay() + 6) % 7
-  const daysInMonth = new Date(year, month, 0).getDate()
-  const cells: (number | null)[] = [
-    ...Array(firstDow).fill(null),
-    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
-  ]
-  while (cells.length % 7 !== 0) cells.push(null)
-  const weeks: (number | null)[][] = []
-  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7))
-  return weeks
 }
 
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {

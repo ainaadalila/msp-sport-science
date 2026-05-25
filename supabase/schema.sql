@@ -10,7 +10,22 @@
 create table profiles (
   id uuid references auth.users(id) on delete cascade primary key,
   full_name text,
-  role text check (role in ('superadmin', 'admin', 'coach', 'physio', 'medical', 'athlete')) not null default 'admin',
+  role text check (role in ('superadmin', 'admin', 'coach', 'physio', 'psikologis', 'penolong_pegawai', 'pegawai_belia_sukan')) not null default 'admin',
+  module_permissions jsonb default '{
+    "athletes": {"read": true, "create": true, "update": true, "delete": true},
+    "strength": {"read": false, "create": false, "update": false, "delete": false},
+    "fitness": {"read": false, "create": false, "update": false, "delete": false},
+    "fitness_config": {"read": false, "create": false, "update": false, "delete": false},
+    "inbody": {"read": false, "create": false, "update": false, "delete": false},
+    "supplement": {"read": false, "create": false, "update": false, "delete": false},
+    "physio": {"read": false, "create": false, "update": false, "delete": false},
+    "physio_cases": {"read": false, "create": false, "update": false, "delete": false},
+    "psychology": {"read": false, "create": false, "update": false, "delete": false},
+    "reports": {"read": true, "create": false, "update": false, "delete": false},
+    "supplement_coordinator": false,
+    "supplement_supporter": false,
+    "supplement_approver": false
+  }'::jsonb,
   created_at timestamptz default now()
 );
 
@@ -485,6 +500,31 @@ create policy "Authenticated users can insert own audit logs"
   on audit_logs for insert with check (user_id = auth.uid());
 create policy "Admins can read all audit logs"
   on audit_logs for select using (get_my_role() in ('superadmin', 'admin'));
+
+
+-- =============================================================
+-- MIGRATION: Upgrade existing users to CRUD permissions (run once)
+-- =============================================================
+-- If you have existing users with boolean module_permissions, run this to convert to CRUD format:
+-- UPDATE profiles
+-- SET module_permissions = jsonb_build_object(
+--   'athletes',       jsonb_build_object('read', COALESCE((module_permissions->>'athletes')::boolean, false), 'create', false, 'update', false, 'delete', false),
+--   'strength',       jsonb_build_object('read', COALESCE((module_permissions->>'strength')::boolean, false), 'create', false, 'update', false, 'delete', false),
+--   'fitness',        jsonb_build_object('read', COALESCE((module_permissions->>'fitness')::boolean, false), 'create', false, 'update', false, 'delete', false),
+--   'fitness_config', jsonb_build_object('read', false, 'create', false, 'update', false, 'delete', false),
+--   'inbody',         jsonb_build_object('read', COALESCE((module_permissions->>'inbody')::boolean, false), 'create', false, 'update', false, 'delete', false),
+--   'supplement',     jsonb_build_object('read', COALESCE((module_permissions->>'supplement')::boolean, false), 'create', false, 'update', false, 'delete', false),
+--   'physio',         jsonb_build_object('read', COALESCE((module_permissions->>'physio')::boolean, false), 'create', false, 'update', false, 'delete', false),
+--   'physio_cases',   jsonb_build_object('read', COALESCE((module_permissions->>'physio')::boolean, false), 'create', false, 'update', false, 'delete', false),
+--   'psychology',     jsonb_build_object('read', COALESCE((module_permissions->>'psychology')::boolean, false), 'create', false, 'update', false, 'delete', false),
+--   'reports',        jsonb_build_object('read', COALESCE((module_permissions->>'reports')::boolean, false), 'create', false, 'update', false, 'delete', false),
+--   'supplement_coordinator', COALESCE((module_permissions->>'supplement_coordinator')::boolean, false),
+--   'supplement_supporter',   COALESCE((module_permissions->>'supplement_supporter')::boolean, false),
+--   'supplement_approver',    COALESCE((module_permissions->>'supplement_approver')::boolean, false)
+-- )
+-- WHERE module_permissions IS NOT NULL
+--   AND module_permissions ? 'athletes'
+--   AND NOT (module_permissions -> 'athletes' ? 'read');
 
 
 -- =============================================================
