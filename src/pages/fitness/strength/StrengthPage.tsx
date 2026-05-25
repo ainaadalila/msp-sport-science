@@ -613,13 +613,10 @@ export default function StrengthPage() {
                       // Get schedules for this day
                       const daySchedules = dateStr && schedules.length > 0
                         ? schedules.filter(s => {
-                            const validFrom = new Date(s.valid_from)
-                            const validTo = s.repeat_until ? new Date(s.repeat_until) : null
-                            const currentDate = new Date(dateStr)
-
-                            if (currentDate < validFrom) return false
-                            if (validTo && currentDate > validTo) return false
-                            if (!s.slots) return false
+                            // Use string comparison for dates (safer than Date objects)
+                            if (dateStr < s.valid_from) return false
+                            if (s.repeat_until && dateStr > s.repeat_until) return false
+                            if (!s.slots || s.slots.length === 0) return false
 
                             const slotExists = s.slots.some(slot => slot.day_of_week === dayOfWeek)
                             return slotExists
@@ -668,16 +665,14 @@ export default function StrengthPage() {
               {selectedDay ? (
                 (() => {
                   const dateStr = `${calendarYear}-${String(calendarMonth).padStart(2, '0')}-${String(selectedDay).padStart(2, '0')}`
-                  const currentDate = new Date(dateStr)
+                  const currentDate = new Date(dateStr + 'T00:00:00')
                   const dayOfWeek = (currentDate.getDay() + 6) % 7
 
                   const daySchedules = schedules.filter(s => {
-                    const validFrom = new Date(s.valid_from)
-                    const validTo = s.repeat_until ? new Date(s.repeat_until) : null
-
-                    if (currentDate < validFrom) return false
-                    if (validTo && currentDate > validTo) return false
-                    if (!s.slots) return false
+                    // Use string comparison for dates (safer than Date objects)
+                    if (dateStr < s.valid_from) return false
+                    if (s.repeat_until && dateStr > s.repeat_until) return false
+                    if (!s.slots || s.slots.length === 0) return false
 
                     return s.slots.some(slot => slot.day_of_week === dayOfWeek)
                   })
