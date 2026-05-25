@@ -269,7 +269,7 @@ export default function StrengthPage() {
 
     try {
       const coach = coaches.find(c => c.id === singleSlotForm.coach_id)
-      const scheduleName = coach ? `${coach.full_name} - ${singleSlotForm.sport}` : singleSlotForm.sport
+      const scheduleName = coach ? coach.full_name : 'Schedule'
 
       const schedulePayload = {
         coach_id: singleSlotForm.coach_id,
