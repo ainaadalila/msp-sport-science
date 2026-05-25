@@ -7,6 +7,7 @@ import StructuredProgramBuilder from './StructuredProgramBuilder'
 import type { StructuredProgramData } from '../../../types'
 
 interface Athlete { id: string; name: string; sport: string }
+interface Coach { id: string; full_name: string }
 
 interface SCRecord {
   id: string; athlete_id: string; session_date: string
@@ -39,7 +40,7 @@ interface CoachScheduleSlot {
 }
 
 interface ScheduleForm {
-  schedule_name: string; valid_from: string
+  coach_id: string; valid_from: string
   repeats: boolean; repeat_pattern: 'weekly' | 'bi-weekly' | 'custom'
   repeat_until: string; sport: string
 }
@@ -93,6 +94,7 @@ export default function StrengthPage() {
   const [error, setError] = useState<string | null>(null)
 
   const [athletes, setAthletes] = useState<Athlete[]>([])
+  const [coaches, setCoaches] = useState<Coach[]>([])
 
   // Tab 1 — Kehadiran
   const [records, setRecords] = useState<SCRecord[]>([])
@@ -124,7 +126,7 @@ export default function StrengthPage() {
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false)
   const [editingSchedule, setEditingSchedule] = useState<CoachSchedule | null>(null)
   const [scheduleForm, setScheduleForm] = useState<ScheduleForm>({
-    schedule_name: '', valid_from: new Date().toISOString().slice(0, 10),
+    coach_id: '', valid_from: new Date().toISOString().slice(0, 10),
     repeats: false, repeat_pattern: 'weekly', repeat_until: '', sport: '',
   })
   const [scheduleSlots, setScheduleSlots] = useState<ScheduleSlotForm[]>([
@@ -136,16 +138,18 @@ export default function StrengthPage() {
 
   async function fetchAll() {
     setLoading(true)
-    const [recRes, athRes, progRes, schedRes] = await Promise.all([
+    const [recRes, athRes, progRes, schedRes, coachRes] = await Promise.all([
       supabase.from('strength_conditioning').select('*, athlete:athletes(name, sport)').order('session_date', { ascending: false }),
       supabase.from('athletes').select('id, name, sport').order('name'),
       supabase.from('sc_programs').select('*, coach:profiles(full_name)').order('year', { ascending: false }).order('month'),
       supabase.from('coach_schedules').select('*, slots:coach_schedule_slots(*)').order('valid_from', { ascending: false }),
+      supabase.from('profiles').select('id, full_name').eq('role', 'coach').order('full_name'),
     ])
     setRecords(recRes.data ?? [])
     setAthletes(athRes.data ?? [])
     setPrograms(progRes.data ?? [])
     setSchedules(schedRes.data ?? [])
+    setCoaches(coachRes.data ?? [])
     setLoading(false)
   }
 
@@ -241,7 +245,7 @@ export default function StrengthPage() {
   // --- SCHEDULE ---
   function openAddSchedule() {
     setEditingSchedule(null)
-    setScheduleForm({ schedule_name: '', valid_from: new Date().toISOString().slice(0, 10), repeats: false, repeat_pattern: 'weekly', repeat_until: '', sport: '' })
+    setScheduleForm({ coach_id: '', valid_from: new Date().toISOString().slice(0, 10), repeats: false, repeat_pattern: 'weekly', repeat_until: '', sport: '' })
     setScheduleSlots([{ day_of_week: 0, start_time: '09:00', end_time: '11:00' }])
     setError(null)
     setScheduleModalOpen(true)
@@ -249,7 +253,7 @@ export default function StrengthPage() {
   function openEditSchedule(s: CoachSchedule) {
     setEditingSchedule(s)
     setScheduleForm({
-      schedule_name: s.schedule_name, valid_from: s.valid_from, repeats: s.repeats,
+      coach_id: s.coach_id, valid_from: s.valid_from, repeats: s.repeats,
       repeat_pattern: (s.repeat_pattern as 'weekly' | 'bi-weekly' | 'custom') ?? 'weekly',
       repeat_until: s.repeat_until ?? '', sport: s.sport,
     })
@@ -258,18 +262,21 @@ export default function StrengthPage() {
     setScheduleModalOpen(true)
   }
   async function handleSaveSchedule() {
-    if (!scheduleForm.schedule_name || !scheduleForm.valid_from || !scheduleForm.sport) {
-      setError('Nama jadual, tarikh mula, dan sukan wajib diisi.')
+    if (!scheduleForm.coach_id || !scheduleForm.valid_from || !scheduleForm.sport) {
+      setError('Jurulatih, tarikh mula, dan sukan wajib dipilih.')
       return
     }
     if (scheduleSlots.length === 0) { setError('Sila tambah sekurang-kurangnya satu slot hari/masa.'); return }
     if (scheduleForm.repeats && !scheduleForm.repeat_until) { setError('Sila tentukan tarikh akhir untuk jadual berulang.'); return }
     setSaving(true); setError(null)
 
+    const coach = coaches.find(c => c.id === scheduleForm.coach_id)
+    const scheduleName = coach ? `${coach.full_name} - ${scheduleForm.sport}` : scheduleForm.sport
+
     const payload = {
-      coach_id: profile?.id,
+      coach_id: scheduleForm.coach_id,
       sport: scheduleForm.sport,
-      schedule_name: scheduleForm.schedule_name,
+      schedule_name: scheduleName,
       valid_from: scheduleForm.valid_from,
       repeats: scheduleForm.repeats,
       repeat_pattern: scheduleForm.repeats ? scheduleForm.repeat_pattern : null,
@@ -870,8 +877,11 @@ export default function StrengthPage() {
             <div className="px-6 py-5 space-y-4">
               {error && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-600">{error}</div>}
 
-              <Field label="Nama Jadual" required>
-                <input type="text" value={scheduleForm.schedule_name} onChange={e => setScheduleForm(f => ({ ...f, schedule_name: e.target.value.toUpperCase() }))} className={inputCls} placeholder="Cth. SESI PAGI SENIN" />
+              <Field label="Jurulatih" required>
+                <select value={scheduleForm.coach_id} onChange={e => setScheduleForm(f => ({ ...f, coach_id: e.target.value }))} className={inputCls}>
+                  <option value="">— Pilih Jurulatih —</option>
+                  {coaches.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
+                </select>
               </Field>
 
               <div className="grid grid-cols-2 gap-4">
@@ -1091,7 +1101,7 @@ export default function StrengthPage() {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 text-center">
             <p className="text-sm font-semibold text-[#111] mb-1">Padam jadual ini?</p>
             <p className="text-[13px] text-[#888] mb-6">
-              {confirmDeleteSchedule.schedule_name} — {confirmDeleteSchedule.sport}
+              {confirmDeleteSchedule.schedule_name}
             </p>
             <div className="flex gap-3 justify-center">
               <button onClick={() => setConfirmDeleteSchedule(null)} className="px-4 py-2 text-sm text-[#888] border border-gray-200 rounded-lg hover:border-gray-400 transition">Batal</button>
