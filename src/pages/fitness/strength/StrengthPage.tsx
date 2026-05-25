@@ -138,6 +138,7 @@ export default function StrengthPage() {
   const [scheduleModalMode, setScheduleModalMode] = useState<'single' | 'multiple'>('single')
   const [singleSlotForm, setSingleSlotForm] = useState({ coach_id: '', sport: '', day_of_week: 0, start_time: '09:00', end_time: '11:00' })
   const [confirmDeleteSchedule, setConfirmDeleteSchedule] = useState<CoachSchedule | null>(null)
+  const [confirmDeleteSlot, setConfirmDeleteSlot] = useState<{ schedule: CoachSchedule; slot: CoachScheduleSlot } | null>(null)
 
   useEffect(() => { fetchAll() }, [])
 
@@ -254,17 +255,6 @@ export default function StrengthPage() {
     setScheduleForm({ coach_id: '', valid_from: new Date().toISOString().slice(0, 10), repeats: false, repeat_pattern: 'weekly', repeat_until: '', sport: '' })
     setScheduleSlots([{ day_of_week: 0, start_time: '09:00', end_time: '11:00' }])
     setSingleSlotForm({ coach_id: '', sport: '', day_of_week: 0, start_time: '09:00', end_time: '11:00' })
-    setError(null)
-    setScheduleModalOpen(true)
-  }
-  function openEditSchedule(s: CoachSchedule) {
-    setEditingSchedule(s)
-    setScheduleForm({
-      coach_id: s.coach_id, valid_from: s.valid_from, repeats: s.repeats,
-      repeat_pattern: (s.repeat_pattern as 'weekly' | 'bi-weekly' | 'custom') ?? 'weekly',
-      repeat_until: s.repeat_until ?? '', sport: s.sport,
-    })
-    setScheduleSlots((s.slots ?? []).map(slot => ({ day_of_week: slot.day_of_week, start_time: slot.start_time, end_time: slot.end_time })))
     setError(null)
     setScheduleModalOpen(true)
   }
@@ -394,6 +384,17 @@ export default function StrengthPage() {
       fetchAll()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error deleting schedule')
+    }
+  }
+
+  async function handleDeleteSlot(_schedule: CoachSchedule, slot: CoachScheduleSlot) {
+    try {
+      await supabase.from('coach_schedule_slots').delete().eq('id', slot.id)
+      await logAction(profile!.id, 'delete_coach_schedule_slot', 'coach_schedule_slots', slot.id)
+      setConfirmDeleteSlot(null)
+      fetchAll()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error deleting slot')
     }
   }
 
@@ -721,11 +722,8 @@ export default function StrengthPage() {
                                       <p className="text-[10px] text-[#666]">{s.sport}</p>
                                       {slot && <p className="text-[10px] text-[#888] font-mono">{slot.start_time}–{slot.end_time}</p>}
                                       <div className="hidden group-hover:flex gap-1 mt-1 pt-1 border-t border-[rgba(245,106,0,0.2)]">
-                                        {can('strength', 'update') && (
-                                          <button onClick={() => openEditSchedule(s)} className="flex-1 px-1 py-0.5 text-[10px] font-semibold text-[#F56A00] hover:underline">Edit</button>
-                                        )}
-                                        {can('strength', 'delete') && (
-                                          <button onClick={() => setConfirmDeleteSchedule(s)} className="flex-1 px-1 py-0.5 text-[10px] font-semibold text-[#D44040] hover:underline">Padam</button>
+                                        {can('strength', 'delete') && slot && (
+                                          <button onClick={() => setConfirmDeleteSlot({ schedule: s, slot })} className="flex-1 px-1 py-0.5 text-[10px] font-semibold text-[#D44040] hover:underline">Padam Slot</button>
                                         )}
                                       </div>
                                     </div>
@@ -1174,6 +1172,25 @@ export default function StrengthPage() {
             <div className="flex gap-3 justify-center">
               <button onClick={() => setConfirmDeleteSchedule(null)} className="px-4 py-2 text-sm text-[#888] border border-gray-200 rounded-lg hover:border-gray-400 transition">Batal</button>
               <button onClick={() => handleDeleteSchedule(confirmDeleteSchedule)} className="px-4 py-2 text-sm font-semibold text-white bg-[#D44040] hover:bg-red-700 rounded-lg transition">Padam</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── CONFIRM DELETE: SLOT ── */}
+      {confirmDeleteSlot && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 text-center">
+            <p className="text-sm font-semibold text-[#111] mb-1">Padam slot ini?</p>
+            <p className="text-[13px] text-[#888] mb-2">
+              {confirmDeleteSlot.schedule.schedule_name}
+            </p>
+            <p className="text-[12px] text-[#666] mb-6">
+              {DAY_NAMES[confirmDeleteSlot.slot.day_of_week]} {confirmDeleteSlot.slot.start_time}–{confirmDeleteSlot.slot.end_time}
+            </p>
+            <div className="flex gap-3 justify-center">
+              <button onClick={() => setConfirmDeleteSlot(null)} className="px-4 py-2 text-sm text-[#888] border border-gray-200 rounded-lg hover:border-gray-400 transition">Batal</button>
+              <button onClick={() => handleDeleteSlot(confirmDeleteSlot.schedule, confirmDeleteSlot.slot)} className="px-4 py-2 text-sm font-semibold text-white bg-[#D44040] hover:bg-red-700 rounded-lg transition">Padam</button>
             </div>
           </div>
         </div>
