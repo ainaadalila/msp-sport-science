@@ -250,6 +250,36 @@ export default function StrengthPage() {
   }
 
   // --- SCHEDULE ---
+  function expandRecurringSlots(
+    slots: ScheduleSlotForm[],
+    repeats: boolean,
+    repeatPattern: 'weekly' | 'bi-weekly' | 'custom' | null,
+    repeatUntil: string
+  ): ScheduleSlotForm[] {
+    if (!repeats || !repeatPattern || slots.length === 0) {
+      return slots
+    }
+
+    const expanded: ScheduleSlotForm[] = []
+    const increment = repeatPattern === 'weekly' ? 7 : repeatPattern === 'bi-weekly' ? 14 : 7
+
+    for (const slot of slots) {
+      let currentDate = new Date(slot.slot_date)
+      const untilDate = new Date(repeatUntil)
+
+      while (currentDate <= untilDate) {
+        expanded.push({
+          slot_date: currentDate.toISOString().split('T')[0],
+          start_time: slot.start_time,
+          end_time: slot.end_time,
+        })
+        currentDate.setDate(currentDate.getDate() + increment)
+      }
+    }
+
+    return expanded
+  }
+
   function openAddSchedule() {
     setEditingSchedule(null)
     setScheduleModalMode('single')
@@ -319,7 +349,7 @@ export default function StrengthPage() {
     setSaving(true); setError(null)
 
     const coach = coaches.find(c => c.id === scheduleForm.coach_id)
-    const scheduleName = coach ? `${coach.full_name} - ${scheduleForm.sport}` : scheduleForm.sport
+    const scheduleName = coach ? coach.full_name : scheduleForm.sport
 
     const payload = {
       coach_id: scheduleForm.coach_id,
@@ -331,6 +361,13 @@ export default function StrengthPage() {
       repeat_until: scheduleForm.repeats ? scheduleForm.repeat_until : null,
     }
 
+    const finalSlots = expandRecurringSlots(
+      scheduleSlots,
+      scheduleForm.repeats,
+      scheduleForm.repeats ? scheduleForm.repeat_pattern : null,
+      scheduleForm.repeat_until
+    )
+
     try {
       if (editingSchedule) {
         const { error } = await supabase.from('coach_schedules').update(payload).eq('id', editingSchedule.id)
@@ -338,7 +375,7 @@ export default function StrengthPage() {
 
         await supabase.from('coach_schedule_slots').delete().eq('schedule_id', editingSchedule.id)
 
-        const slotsPayload = scheduleSlots.map(slot => ({
+        const slotsPayload = finalSlots.map(slot => ({
           schedule_id: editingSchedule.id,
           slot_date: slot.slot_date,
           start_time: slot.start_time,
@@ -359,7 +396,7 @@ export default function StrengthPage() {
         if (!schedule || schedule.length === 0) throw new Error('No schedule returned from insert')
 
         const scheduleId = schedule[0].id
-        const slotsPayload = scheduleSlots.map(slot => ({
+        const slotsPayload = finalSlots.map(slot => ({
           schedule_id: scheduleId,
           slot_date: slot.slot_date,
           start_time: slot.start_time,
@@ -714,14 +751,14 @@ export default function StrengthPage() {
                                   return (
                                     <div
                                       key={s.id}
-                                      className="bg-[rgba(245,106,0,0.1)] border border-[rgba(245,106,0,0.3)] rounded px-2 py-1.5 text-[11px] cursor-pointer hover:bg-[rgba(245,106,0,0.15)] transition group"
+                                      className="bg-[rgba(245,106,0,0.1)] border border-[rgba(245,106,0,0.3)] rounded px-1.5 py-0.5 text-[9px] cursor-pointer hover:bg-[rgba(245,106,0,0.15)] transition group"
                                     >
-                                      <p className="font-semibold text-[#F56A00] truncate">{s.schedule_name}</p>
-                                      <p className="text-[10px] text-[#666]">{s.sport}</p>
-                                      {slot && <p className="text-[10px] text-[#888] font-mono">{slot.start_time}–{slot.end_time}</p>}
-                                      <div className="hidden group-hover:flex gap-1 mt-1 pt-1 border-t border-[rgba(245,106,0,0.2)]">
+                                      <p className="font-semibold text-[#F56A00] truncate leading-tight">{s.schedule_name}</p>
+                                      <p className="text-[8px] text-[#666] leading-tight">{s.sport}</p>
+                                      {slot && <p className="text-[8px] text-[#888] font-mono leading-tight">{slot.start_time}–{slot.end_time}</p>}
+                                      <div className="hidden group-hover:flex gap-0.5 mt-0.5 pt-0.5 border-t border-[rgba(245,106,0,0.2)]">
                                         {can('strength', 'delete') && slot && (
-                                          <button onClick={() => setConfirmDeleteSlot({ schedule: s, slot })} className="flex-1 px-1 py-0.5 text-[10px] font-semibold text-[#D44040] hover:underline">Padam Slot</button>
+                                          <button onClick={() => setConfirmDeleteSlot({ schedule: s, slot })} className="flex-1 px-0.5 py-0.5 text-[7px] font-semibold text-[#D44040] hover:underline">Padam</button>
                                         )}
                                       </div>
                                     </div>
