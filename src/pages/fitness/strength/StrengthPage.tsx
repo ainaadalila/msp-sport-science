@@ -765,8 +765,11 @@ export default function StrengthPage() {
                             <td
                               key={dayIdx}
                               rowSpan={rowspan}
-                              style={{ height: rowspan > 1 ? `${rowspan * 60}px` : undefined }}
-                              className="px-0 py-1 border-r border-gray-100 last:border-0 min-h-[60px] align-top"
+                              style={{
+                                height: `${rowspan * 60}px`,
+                                minHeight: `${rowspan * 60}px`
+                              }}
+                              className="px-0 py-1 border-r border-gray-100 last:border-0 align-top"
                             >
                               {slotSchedules.length > 0 ? (
                                 <div className="space-y-1 h-full flex flex-col">
