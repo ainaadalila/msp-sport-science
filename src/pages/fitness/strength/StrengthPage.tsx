@@ -768,13 +768,13 @@ export default function StrengthPage() {
                               className="px-0 py-1 border-r border-gray-100 last:border-0 min-h-[60px] align-top"
                             >
                               {slotSchedules.length > 0 ? (
-                                <div className="space-y-1">
+                                <div className="space-y-1 h-full flex flex-col">
                                   {slotSchedules.map(s => {
                                     const slot = s.slots!.find(sl => sl.slot_date === dateStr && Number(sl.start_time.split(':')[0]) === hour)
                                     return (
                                       <div
                                         key={s.id}
-                                        className="inline-block bg-[rgba(245,106,0,0.1)] border border-[rgba(245,106,0,0.3)] rounded px-1.5 py-0.5 text-[11px] cursor-pointer hover:bg-[rgba(245,106,0,0.15)] transition group whitespace-nowrap"
+                                        className="block bg-[rgba(245,106,0,0.1)] border border-[rgba(245,106,0,0.3)] rounded px-1.5 py-0.5 text-[11px] cursor-pointer hover:bg-[rgba(245,106,0,0.15)] transition group whitespace-nowrap"
                                       >
                                         <p className="font-semibold text-[#F56A00] truncate leading-tight">{s.schedule_name}</p>
                                         <p className="text-[10px] text-[#666] leading-tight">{s.sport}</p>
