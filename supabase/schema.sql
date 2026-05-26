@@ -532,6 +532,8 @@ create policy "Coaches can manage own schedules"
   on coach_schedules for all using (coach_id = auth.uid() or get_my_role() in ('superadmin', 'admin'));
 create policy "All authenticated can read coach schedules"
   on coach_schedules for select using (auth.role() = 'authenticated');
+create policy "Coaches and admins can delete schedules"
+  on coach_schedules for delete using (coach_id = auth.uid() or get_my_role() in ('superadmin', 'admin'));
 
 create policy "Coaches can manage own schedule slots"
   on coach_schedule_slots for all using (
@@ -539,6 +541,10 @@ create policy "Coaches can manage own schedule slots"
   );
 create policy "All authenticated can read schedule slots"
   on coach_schedule_slots for select using (auth.role() = 'authenticated');
+create policy "Coaches and admins can delete schedule slots"
+  on coach_schedule_slots for delete using (
+    schedule_id in (select id from coach_schedules where coach_id = auth.uid()) or get_my_role() in ('superadmin', 'admin')
+  );
 
 
 -- =============================================================
