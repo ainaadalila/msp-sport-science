@@ -1232,17 +1232,19 @@ export default function StrengthPage() {
               {new Date(confirmDeleteSlot.slot.slot_date + 'T00:00:00').toLocaleDateString('ms-MY', { weekday: 'long', day: '2-digit', month: 'short' })} {confirmDeleteSlot.slot.start_time}–{confirmDeleteSlot.slot.end_time}
             </p>
 
+            {error && <div className="px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-[12px] text-red-600 mb-4">{error}</div>}
+
             <div className="space-y-3">
               <p className="text-[11px] text-[#888] font-semibold">Pilih tindakan:</p>
               <div className="flex gap-2">
-                <button onClick={() => setConfirmDeleteSlot(null)} className="flex-1 px-4 py-2 text-sm text-[#888] border border-gray-200 rounded-lg hover:border-gray-400 transition">Batal</button>
-                <button onClick={() => handleDeleteSlot(confirmDeleteSlot.schedule, confirmDeleteSlot.slot)} className="flex-1 px-4 py-2 text-sm font-semibold text-white bg-[#F56A00] hover:bg-[#D45A00] rounded-lg transition">Padam Slot Sahaja</button>
+                <button onClick={() => setConfirmDeleteSlot(null)} disabled={saving} className="flex-1 px-4 py-2 text-sm text-[#888] border border-gray-200 rounded-lg hover:border-gray-400 transition disabled:opacity-50">Batal</button>
+                <button onClick={() => handleDeleteSlot(confirmDeleteSlot.schedule, confirmDeleteSlot.slot)} disabled={saving} className="flex-1 px-4 py-2 text-sm font-semibold text-white bg-[#F56A00] hover:bg-[#D45A00] rounded-lg transition disabled:opacity-50">Padam Slot Sahaja</button>
                 <button
-                  onClick={() => { handleDeleteSchedule(confirmDeleteSlot.schedule); setConfirmDeleteSlot(null) }}
-                  disabled={(confirmDeleteSlot.schedule.slots?.length ?? 0) <= 1}
+                  onClick={async () => { await handleDeleteSchedule(confirmDeleteSlot.schedule); setConfirmDeleteSlot(null) }}
+                  disabled={(confirmDeleteSlot.schedule.slots?.length ?? 0) <= 1 || saving}
                   className="flex-1 px-4 py-2 text-sm font-semibold text-white bg-[#D44040] hover:bg-red-700 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#D44040]"
                 >
-                  Padam Seluruh Jadual
+                  {saving ? 'Memuatkan...' : 'Padam Seluruh Jadual'}
                 </button>
               </div>
             </div>
