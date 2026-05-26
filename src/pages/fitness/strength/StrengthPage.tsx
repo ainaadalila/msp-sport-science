@@ -711,68 +711,91 @@ export default function StrengthPage() {
 
               {/* Time slots: 08:00 - 18:00 */}
               <tbody>
-                {Array.from({ length: 11 }).map((_, hourIdx) => {
-                  const hour = 8 + hourIdx
-                  const timeStr = `${String(hour).padStart(2, '0')}:00`
+                {(() => {
+                  const coveredCells = new Set<string>()
 
-                  return (
-                    <tr key={hour} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/50">
-                      {/* Time label */}
-                      <td className="px-3 py-3 text-[11px] font-semibold text-[#888] border-r border-gray-100 bg-gray-50/50">
-                        {timeStr}
-                      </td>
+                  return Array.from({ length: 11 }).map((_, hourIdx) => {
+                    const hour = 8 + hourIdx
+                    const timeStr = `${String(hour).padStart(2, '0')}:00`
 
-                      {/* Days */}
-                      {Array.from({ length: 7 }).map((_, dayIdx) => {
-                        const date = new Date(weekStartDate)
-                        date.setDate(date.getDate() + dayIdx)
-                        const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+                    return (
+                      <tr key={hour} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/50">
+                        {/* Time label */}
+                        <td className="px-3 py-3 text-[11px] font-semibold text-[#888] border-r border-gray-100 bg-gray-50/50">
+                          {timeStr}
+                        </td>
 
-                        // Find slots for this specific date and time
-                        const slotSchedules = schedules.filter(s => {
-                          if (!s.slots) return false
-                          return s.slots.some(slot => {
-                            if (slot.slot_date !== dateStr) return false
-                            // Check if this slot overlaps with the current hour row
-                            const [startHour] = slot.start_time.split(':').map(Number)
-                            const [endHour] = slot.end_time.split(':').map(Number)
-                            return startHour <= hour && endHour > hour
+                        {/* Days */}
+                        {Array.from({ length: 7 }).map((_, dayIdx) => {
+                          const date = new Date(weekStartDate)
+                          date.setDate(date.getDate() + dayIdx)
+                          const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+                          const cellKey = `${hour}-${dayIdx}`
+
+                          // Skip if this cell is covered by a rowspan from above
+                          if (coveredCells.has(cellKey)) {
+                            return null
+                          }
+
+                          // Find slots that START at this hour for this date
+                          const slotSchedules = schedules.filter(s => {
+                            if (!s.slots) return false
+                            return s.slots.some(slot => {
+                              if (slot.slot_date !== dateStr) return false
+                              const [startHour] = slot.start_time.split(':').map(Number)
+                              return startHour === hour
+                            })
                           })
-                        })
 
-                        return (
-                          <td
-                            key={dayIdx}
-                            className="px-0 py-1 border-r border-gray-100 last:border-0 min-h-[60px] align-top"
-                          >
-                            {slotSchedules.length > 0 ? (
-                              <div className="space-y-1">
-                                {slotSchedules.map(s => {
-                                  const slot = s.slots!.find(sl => sl.slot_date === dateStr && Number(sl.start_time.split(':')[0]) === hour)
-                                  return (
-                                    <div
-                                      key={s.id}
-                                      className="inline-block bg-[rgba(245,106,0,0.1)] border border-[rgba(245,106,0,0.3)] rounded px-1.5 py-0.5 text-[11px] cursor-pointer hover:bg-[rgba(245,106,0,0.15)] transition group whitespace-nowrap"
-                                    >
-                                      <p className="font-semibold text-[#F56A00] truncate leading-tight">{s.schedule_name}</p>
-                                      <p className="text-[10px] text-[#666] leading-tight">{s.sport}</p>
-                                      {slot && <p className="text-[10px] text-[#888] font-mono leading-tight">{slot.start_time}–{slot.end_time}</p>}
-                                      <div className="hidden group-hover:flex gap-1 mt-1 pt-1 border-t border-[rgba(245,106,0,0.2)]">
-                                        {can('strength', 'delete') && slot && (
-                                          <button onClick={() => setConfirmDeleteSlot({ schedule: s, slot })} className="flex-1 px-2 py-1 text-[10px] font-semibold text-[#D44040] hover:underline">Padam</button>
-                                        )}
+                          // Calculate rowspan for first slot
+                          let rowspan = 1
+                          if (slotSchedules.length > 0) {
+                            const firstSlot = slotSchedules[0].slots!.find(sl => sl.slot_date === dateStr && Number(sl.start_time.split(':')[0]) === hour)
+                            if (firstSlot) {
+                              const [endHour] = firstSlot.end_time.split(':').map(Number)
+                              rowspan = Math.max(1, endHour - hour)
+                              // Mark cells as covered for this slot
+                              for (let h = hour + 1; h < hour + rowspan; h++) {
+                                coveredCells.add(`${h}-${dayIdx}`)
+                              }
+                            }
+                          }
+
+                          return (
+                            <td
+                              key={dayIdx}
+                              rowSpan={rowspan}
+                              className="px-0 py-1 border-r border-gray-100 last:border-0 min-h-[60px] align-top"
+                            >
+                              {slotSchedules.length > 0 ? (
+                                <div className="space-y-1">
+                                  {slotSchedules.map(s => {
+                                    const slot = s.slots!.find(sl => sl.slot_date === dateStr && Number(sl.start_time.split(':')[0]) === hour)
+                                    return (
+                                      <div
+                                        key={s.id}
+                                        className="inline-block bg-[rgba(245,106,0,0.1)] border border-[rgba(245,106,0,0.3)] rounded px-1.5 py-0.5 text-[11px] cursor-pointer hover:bg-[rgba(245,106,0,0.15)] transition group whitespace-nowrap"
+                                      >
+                                        <p className="font-semibold text-[#F56A00] truncate leading-tight">{s.schedule_name}</p>
+                                        <p className="text-[10px] text-[#666] leading-tight">{s.sport}</p>
+                                        {slot && <p className="text-[10px] text-[#888] font-mono leading-tight">{slot.start_time}–{slot.end_time}</p>}
+                                        <div className="hidden group-hover:flex gap-1 mt-1 pt-1 border-t border-[rgba(245,106,0,0.2)]">
+                                          {can('strength', 'delete') && slot && (
+                                            <button onClick={() => setConfirmDeleteSlot({ schedule: s, slot })} className="flex-1 px-2 py-1 text-[10px] font-semibold text-[#D44040] hover:underline">Padam</button>
+                                          )}
+                                        </div>
                                       </div>
-                                    </div>
-                                  )
-                                })}
-                              </div>
-                            ) : null}
-                          </td>
-                        )
-                      })}
-                    </tr>
-                  )
-                })}
+                                    )
+                                  })}
+                                </div>
+                              ) : null}
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    )
+                  })
+                })()}
               </tbody>
             </table>
           </div>
