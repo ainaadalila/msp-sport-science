@@ -431,9 +431,18 @@ export default function StrengthPage() {
       await supabase.from('coach_schedule_slots').delete().eq('id', slot.id)
       await logAction(profile!.id, 'delete_coach_schedule_slot', 'coach_schedule_slots', slot.id)
       setConfirmDeleteSlot(null)
-      fetchAll()
+      await fetchAll()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error deleting slot')
+    }
+  }
+
+  async function handleDeleteScheduleFromModal(schedule: CoachSchedule) {
+    try {
+      await handleDeleteSchedule(schedule)
+      setConfirmDeleteSlot(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error deleting schedule')
     }
   }
 
@@ -1240,7 +1249,7 @@ export default function StrengthPage() {
                 <button onClick={() => setConfirmDeleteSlot(null)} disabled={saving} className="flex-1 px-4 py-2 text-sm text-[#888] border border-gray-200 rounded-lg hover:border-gray-400 transition disabled:opacity-50">Batal</button>
                 <button onClick={() => handleDeleteSlot(confirmDeleteSlot.schedule, confirmDeleteSlot.slot)} disabled={saving} className="flex-1 px-4 py-2 text-sm font-semibold text-white bg-[#F56A00] hover:bg-[#D45A00] rounded-lg transition disabled:opacity-50">Padam Slot Sahaja</button>
                 <button
-                  onClick={async () => { await handleDeleteSchedule(confirmDeleteSlot.schedule); setConfirmDeleteSlot(null) }}
+                  onClick={() => handleDeleteScheduleFromModal(confirmDeleteSlot.schedule)}
                   disabled={(confirmDeleteSlot.schedule.slots?.length ?? 0) <= 1 || saving}
                   className="flex-1 px-4 py-2 text-sm font-semibold text-white bg-[#D44040] hover:bg-red-700 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#D44040]"
                 >
