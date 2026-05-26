@@ -751,14 +751,14 @@ export default function StrengthPage() {
                                   return (
                                     <div
                                       key={s.id}
-                                      className="bg-[rgba(245,106,0,0.1)] border border-[rgba(245,106,0,0.3)] rounded px-1.5 py-0.5 text-[9px] cursor-pointer hover:bg-[rgba(245,106,0,0.15)] transition group"
+                                      className="bg-[rgba(245,106,0,0.1)] border border-[rgba(245,106,0,0.3)] rounded px-2 py-1 text-[11px] cursor-pointer hover:bg-[rgba(245,106,0,0.15)] transition group whitespace-nowrap"
                                     >
                                       <p className="font-semibold text-[#F56A00] truncate leading-tight">{s.schedule_name}</p>
-                                      <p className="text-[8px] text-[#666] leading-tight">{s.sport}</p>
-                                      {slot && <p className="text-[8px] text-[#888] font-mono leading-tight">{slot.start_time}–{slot.end_time}</p>}
-                                      <div className="hidden group-hover:flex gap-0.5 mt-0.5 pt-0.5 border-t border-[rgba(245,106,0,0.2)]">
+                                      <p className="text-[10px] text-[#666] leading-tight">{s.sport}</p>
+                                      {slot && <p className="text-[10px] text-[#888] font-mono leading-tight">{slot.start_time}–{slot.end_time}</p>}
+                                      <div className="hidden group-hover:flex gap-1 mt-1 pt-1 border-t border-[rgba(245,106,0,0.2)]">
                                         {can('strength', 'delete') && slot && (
-                                          <button onClick={() => setConfirmDeleteSlot({ schedule: s, slot })} className="flex-1 px-0.5 py-0.5 text-[7px] font-semibold text-[#D44040] hover:underline">Padam</button>
+                                          <button onClick={() => setConfirmDeleteSlot({ schedule: s, slot })} className="flex-1 px-2 py-1 text-[10px] font-semibold text-[#D44040] hover:underline">Padam</button>
                                         )}
                                       </div>
                                     </div>
