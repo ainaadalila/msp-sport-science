@@ -767,13 +767,13 @@ export default function StrengthPage() {
                               rowSpan={rowspan}
                               style={{
                                 height: `${rowspan * 60}px`,
-                                minHeight: `${rowspan * 60}px`,
+                                padding: '4px 0',
                                 verticalAlign: 'top'
                               }}
-                              className="px-0 py-1 border-r border-gray-100 last:border-0"
+                              className="border-r border-gray-100 last:border-0"
                             >
                               {slotSchedules.length > 0 ? (
-                                <div className="space-y-1 flex flex-col" style={{ height: `${rowspan * 60}px` }}>
+                                <div className="flex flex-col" style={{ height: '100%' }}>
                                   {slotSchedules.map(s => {
                                     const slot = s.slots!.find(sl => sl.slot_date === dateStr && Number(sl.start_time.split(':')[0]) === hour)
                                     return (
