@@ -742,7 +742,7 @@ export default function StrengthPage() {
                         return (
                           <td
                             key={dayIdx}
-                            className="px-2 py-2 border-r border-gray-100 last:border-0 min-h-[60px] align-top"
+                            className="px-1 py-2 border-r border-gray-100 last:border-0 min-h-[60px] align-top"
                           >
                             {slotSchedules.length > 0 ? (
                               <div className="space-y-1">
