@@ -693,8 +693,8 @@ export default function StrengthPage() {
                 onClick={() => setWeekStartDate(new Date(weekStartDate.getFullYear(), weekStartDate.getMonth(), weekStartDate.getDate() - 7))}
                 className="p-1.5 rounded-lg border border-gray-200 hover:border-[#F56A00] text-[#888] hover:text-[#F56A00] transition text-sm leading-none"
               >‹</button>
-              <p className="text-sm font-semibold text-[#111] w-48 text-center">
-                Week of {weekStartDate.toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric' })}
+              <p className="text-sm font-semibold text-[#111] w-56 text-center">
+                Minggu {weekStartDate.toLocaleDateString('ms-MY', { day: '2-digit', month: 'short' })} hingga {new Date(weekStartDate.getFullYear(), weekStartDate.getMonth(), weekStartDate.getDate() + 6).toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric' })}
               </p>
               <button
                 onClick={() => setWeekStartDate(new Date(weekStartDate.getFullYear(), weekStartDate.getMonth(), weekStartDate.getDate() + 7))}
