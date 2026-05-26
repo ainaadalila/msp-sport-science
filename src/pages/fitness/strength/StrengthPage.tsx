@@ -713,15 +713,45 @@ export default function StrengthPage() {
               <tbody>
                 {(() => {
                   const coveredCells = new Set<string>()
+                  const maxRowspanPerHour: Record<number, number> = {}
+
+                  // First pass: calculate max rowspan for each hour
+                  Array.from({ length: 11 }).forEach((_, hourIdx) => {
+                    const hour = 8 + hourIdx
+                    Array.from({ length: 7 }).forEach((_, dayIdx) => {
+                      const date = new Date(weekStartDate)
+                      date.setDate(date.getDate() + dayIdx)
+                      const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+
+                      const slotSchedules = schedules.filter(s => {
+                        if (!s.slots) return false
+                        return s.slots.some(slot => {
+                          if (slot.slot_date !== dateStr) return false
+                          const [startHour] = slot.start_time.split(':').map(Number)
+                          return startHour === hour
+                        })
+                      })
+
+                      if (slotSchedules.length > 0) {
+                        const firstSlot = slotSchedules[0].slots!.find(sl => sl.slot_date === dateStr && Number(sl.start_time.split(':')[0]) === hour)
+                        if (firstSlot) {
+                          const [endHour] = firstSlot.end_time.split(':').map(Number)
+                          const rowspan = Math.max(1, endHour - hour)
+                          maxRowspanPerHour[hour] = Math.max(maxRowspanPerHour[hour] || 1, rowspan)
+                        }
+                      }
+                    })
+                  })
 
                   return Array.from({ length: 11 }).map((_, hourIdx) => {
                     const hour = 8 + hourIdx
                     const timeStr = `${String(hour).padStart(2, '0')}:00`
+                    const cellHeight = maxRowspanPerHour[hour] ? maxRowspanPerHour[hour] * 60 : 60
 
                     return (
                       <tr key={hour} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/50">
                         {/* Time label */}
-                        <td className="px-3 py-3 text-[11px] font-semibold text-[#888] border-r border-gray-100 bg-gray-50/50">
+                        <td className="px-3 py-3 text-[11px] font-semibold text-[#888] border-r border-gray-100 bg-gray-50/50" style={{ height: `${cellHeight}px` }}>
                           {timeStr}
                         </td>
 
@@ -766,7 +796,7 @@ export default function StrengthPage() {
                               key={dayIdx}
                               rowSpan={rowspan}
                               style={{
-                                height: `${rowspan * 60}px`,
+                                height: `${cellHeight}px`,
                                 padding: '4px 0',
                                 verticalAlign: 'top'
                               }}
