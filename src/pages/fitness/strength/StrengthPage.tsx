@@ -733,16 +733,17 @@ export default function StrengthPage() {
                           if (!s.slots) return false
                           return s.slots.some(slot => {
                             if (slot.slot_date !== dateStr) return false
-                            // Check if this slot's start time matches the current hour row
+                            // Check if this slot overlaps with the current hour row
                             const [startHour] = slot.start_time.split(':').map(Number)
-                            return startHour === hour
+                            const [endHour] = slot.end_time.split(':').map(Number)
+                            return startHour <= hour && endHour > hour
                           })
                         })
 
                         return (
                           <td
                             key={dayIdx}
-                            className="px-0.5 py-2 border-r border-gray-100 last:border-0 min-h-[60px] align-top"
+                            className="px-0 py-1 border-r border-gray-100 last:border-0 min-h-[60px] align-top"
                           >
                             {slotSchedules.length > 0 ? (
                               <div className="space-y-1">
