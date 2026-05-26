@@ -428,12 +428,23 @@ export default function StrengthPage() {
 
   async function handleDeleteSlot(_schedule: CoachSchedule, slot: CoachScheduleSlot) {
     try {
-      await supabase.from('coach_schedule_slots').delete().eq('id', slot.id)
+      setSaving(true)
+      setError(null)
+      const { error: deleteError } = await supabase.from('coach_schedule_slots').delete().eq('id', slot.id)
+      if (deleteError) {
+        console.error('Supabase delete error:', deleteError)
+        setError(`Failed to delete: ${deleteError.message}`)
+        setSaving(false)
+        return
+      }
       await logAction(profile!.id, 'delete_coach_schedule_slot', 'coach_schedule_slots', slot.id)
+      setSaving(false)
       setConfirmDeleteSlot(null)
       await fetchAll()
     } catch (err) {
+      console.error('Delete error:', err)
       setError(err instanceof Error ? err.message : 'Error deleting slot')
+      setSaving(false)
     }
   }
 
