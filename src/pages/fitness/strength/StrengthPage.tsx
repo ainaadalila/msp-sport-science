@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
+import { usePermissions } from '../../../hooks/usePermissions'
 import { logAction } from '../../../lib/audit'
 import StructuredProgramBuilder from './StructuredProgramBuilder'
 import type { StructuredProgramData } from '../../../types'
@@ -25,10 +26,27 @@ interface SCProgram {
   coach?: { full_name: string }
 }
 
-interface CoachAssignment {
+interface CoachSchedule {
   id: string; coach_id: string; sport: string
-  days_of_week: string[] | null; session_time: string | null; notes: string | null
-  coach?: { full_name: string }
+  schedule_name: string; valid_from: string
+  repeats: boolean; repeat_pattern: 'weekly' | 'bi-weekly' | 'custom' | null
+  repeat_until: string | null
+  slots?: CoachScheduleSlot[]
+}
+
+interface CoachScheduleSlot {
+  id: string; schedule_id: string
+  slot_date: string; start_time: string; end_time: string
+}
+
+interface ScheduleForm {
+  coach_id: string; valid_from: string
+  repeats: boolean; repeat_pattern: 'weekly' | 'bi-weekly' | 'custom'
+  repeat_until: string; sport: string
+}
+
+interface ScheduleSlotForm {
+  slot_date: string; start_time: string; end_time: string
 }
 
 interface AttendanceForm {
@@ -43,10 +61,6 @@ interface ProgramForm {
   structured_data: StructuredProgramData
   start_date: string
   end_date: string
-}
-
-interface AssignmentForm {
-  coach_id: string; sport: string; days_of_week: string[]; session_time: string; notes: string
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mac', 'Apr', 'Mei', 'Jun', 'Jul', 'Ogos', 'Sep', 'Okt', 'Nov', 'Dis']
@@ -69,14 +83,10 @@ const emptyProgramForm: ProgramForm = {
   sport: '', month: new Date().getMonth() + 1, year: new Date().getFullYear(), content: '',
   program_type: 'text', structured_data: emptyStructuredData, start_date: '', end_date: '',
 }
-const emptyAssignmentForm: AssignmentForm = {
-  coach_id: '', sport: '', days_of_week: [], session_time: '08:00', notes: '',
-}
 
 export default function StrengthPage() {
   const { profile } = useAuth()
-  const isAdmin = profile?.role === 'superadmin' || profile?.role === 'admin'
-  const isCoach = profile?.role === 'coach'
+  const { can } = usePermissions()
 
   const [activeTab, setActiveTab] = useState<'kehadiran' | 'program' | 'jadual'>('jadual')
   const [loading, setLoading] = useState(true)
@@ -85,7 +95,6 @@ export default function StrengthPage() {
 
   const [athletes, setAthletes] = useState<Athlete[]>([])
   const [coaches, setCoaches] = useState<Coach[]>([])
-  const [assignments, setAssignments] = useState<CoachAssignment[]>([])
 
   // Tab 1 — Kehadiran
   const [records, setRecords] = useState<SCRecord[]>([])
@@ -109,37 +118,48 @@ export default function StrengthPage() {
   const [confirmDeleteProgram, setConfirmDeleteProgram] = useState<SCProgram | null>(null)
   const [viewProgram, setViewProgram] = useState<SCProgram | null>(null)
 
-  // Tab 3 — Jadual Jurulatih
-  const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth() + 1)
-  const [calendarYear, setCalendarYear] = useState(new Date().getFullYear())
-  const [assignmentModalOpen, setAssignmentModalOpen] = useState(false)
-  const [editingAssignment, setEditingAssignment] = useState<CoachAssignment | null>(null)
-  const [assignmentForm, setAssignmentForm] = useState<AssignmentForm>(emptyAssignmentForm)
-  const [confirmDeleteAssignment, setConfirmDeleteAssignment] = useState<CoachAssignment | null>(null)
+  // Tab 3 — Jadual Jurulatih (Coach Schedules)
+  const [weekStartDate, setWeekStartDate] = useState(() => {
+    const today = new Date()
+    const day = today.getDay()
+    const diff = today.getDate() - day + (day === 0 ? -6 : 1)
+    return new Date(today.getFullYear(), today.getMonth(), diff)
+  })
+  const [schedules, setSchedules] = useState<CoachSchedule[]>([])
+  const [scheduleModalOpen, setScheduleModalOpen] = useState(false)
+  const [editingSchedule, setEditingSchedule] = useState<CoachSchedule | null>(null)
+  const [scheduleForm, setScheduleForm] = useState<ScheduleForm>({
+    coach_id: '', valid_from: new Date().toISOString().slice(0, 10),
+    repeats: false, repeat_pattern: 'weekly', repeat_until: '', sport: '',
+  })
+  const [scheduleSlots, setScheduleSlots] = useState<ScheduleSlotForm[]>([
+    { slot_date: new Date().toISOString().slice(0, 10), start_time: '09:00', end_time: '11:00' },
+  ])
+  const [scheduleModalMode, setScheduleModalMode] = useState<'single' | 'multiple'>('single')
+  const [singleSlotForm, setSingleSlotForm] = useState({ coach_id: '', sport: '', slot_date: new Date().toISOString().slice(0, 10), start_time: '09:00', end_time: '11:00' })
+  const [confirmDeleteSchedule, setConfirmDeleteSchedule] = useState<CoachSchedule | null>(null)
+  const [confirmDeleteSlot, setConfirmDeleteSlot] = useState<{ schedule: CoachSchedule; slot: CoachScheduleSlot } | null>(null)
 
   useEffect(() => { fetchAll() }, [])
 
   async function fetchAll() {
     setLoading(true)
-    const [recRes, athRes, progRes, assignRes, coachRes] = await Promise.all([
+    const [recRes, athRes, progRes, schedRes, coachRes] = await Promise.all([
       supabase.from('strength_conditioning').select('*, athlete:athletes(name, sport)').order('session_date', { ascending: false }),
       supabase.from('athletes').select('id, name, sport').order('name'),
       supabase.from('sc_programs').select('*, coach:profiles(full_name)').order('year', { ascending: false }).order('month'),
-      supabase.from('coach_assignments').select('*, coach:profiles(full_name)').order('sport'),
+      supabase.from('coach_schedules').select('*, slots:coach_schedule_slots(*)').order('valid_from', { ascending: false }),
       supabase.from('profiles').select('id, full_name').eq('role', 'coach').order('full_name'),
     ])
     setRecords(recRes.data ?? [])
     setAthletes(athRes.data ?? [])
     setPrograms(progRes.data ?? [])
-    setAssignments(assignRes.data ?? [])
+    setSchedules(schedRes.data ?? [])
     setCoaches(coachRes.data ?? [])
     setLoading(false)
   }
 
   const allSports = [...new Set(athletes.map(a => a.sport))].sort()
-  const myAssignedSports = isCoach
-    ? assignments.filter(a => a.coach_id === profile?.id).map(a => a.sport)
-    : allSports
 
   // --- ATTENDANCE ---
   function openAddAttendance() {
@@ -173,7 +193,7 @@ export default function StrengthPage() {
   // --- PROGRAM ---
   function openAddProgram() {
     setEditingProgram(null)
-    setProgramForm({ ...emptyProgramForm, sport: myAssignedSports[0] ?? '' })
+    setProgramForm(emptyProgramForm)
     setError(null); setProgramModalOpen(true)
   }
   function openEditProgram(p: SCProgram) {
@@ -215,33 +235,226 @@ export default function StrengthPage() {
     setConfirmDeleteProgram(null); fetchAll()
   }
 
-  // --- ASSIGNMENT ---
-  function openAddAssignment() {
-    setEditingAssignment(null); setAssignmentForm(emptyAssignmentForm); setError(null); setAssignmentModalOpen(true)
+  // --- SCHEDULE SLOTS ---
+  function addScheduleSlot() {
+    const today = new Date().toISOString().slice(0, 10)
+    setScheduleSlots([...scheduleSlots, { slot_date: today, start_time: '09:00', end_time: '11:00' }])
   }
-  function openEditAssignment(a: CoachAssignment) {
-    setEditingAssignment(a)
-    setAssignmentForm({ coach_id: a.coach_id, sport: a.sport, days_of_week: a.days_of_week ?? [], session_time: a.session_time ?? '08:00', notes: a.notes ?? '' })
-    setError(null); setAssignmentModalOpen(true)
+  function removeScheduleSlot(index: number) {
+    setScheduleSlots(scheduleSlots.filter((_, i) => i !== index))
   }
-  async function handleSaveAssignment() {
-    if (!assignmentForm.coach_id || !assignmentForm.sport) { setError('Jurulatih dan sukan wajib dipilih.'); return }
-    setSaving(true); setError(null)
-    const payload = { coach_id: assignmentForm.coach_id, sport: assignmentForm.sport, days_of_week: assignmentForm.days_of_week || null, session_time: assignmentForm.session_time || null, notes: assignmentForm.notes || null }
-    if (editingAssignment) {
-      const { error } = await supabase.from('coach_assignments').update(payload).eq('id', editingAssignment.id)
-      if (error) { setError(error.message); setSaving(false); return }
-      await logAction(profile!.id, 'update_coach_assignment', 'coach_assignments', editingAssignment.id)
-    } else {
-      const { data, error } = await supabase.from('coach_assignments').insert(payload).select('id').single()
-      if (error) { setError(error.message); setSaving(false); return }
-      await logAction(profile!.id, 'create_coach_assignment', 'coach_assignments', data.id)
+  function updateScheduleSlot(index: number, field: 'slot_date' | 'start_time' | 'end_time', value: any) {
+    const updated = [...scheduleSlots]
+    updated[index] = { ...updated[index], [field]: value }
+    setScheduleSlots(updated)
+  }
+
+  // --- SCHEDULE ---
+  function expandRecurringSlots(
+    slots: ScheduleSlotForm[],
+    repeats: boolean,
+    repeatPattern: 'weekly' | 'bi-weekly' | 'custom' | null,
+    repeatUntil: string
+  ): ScheduleSlotForm[] {
+    if (!repeats || !repeatPattern || slots.length === 0) {
+      return slots
     }
-    setSaving(false); setAssignmentModalOpen(false); fetchAll()
+
+    const expanded: ScheduleSlotForm[] = []
+    const increment = repeatPattern === 'weekly' ? 7 : repeatPattern === 'bi-weekly' ? 14 : 7
+
+    for (const slot of slots) {
+      let currentDate = new Date(slot.slot_date)
+      const untilDate = new Date(repeatUntil)
+
+      while (currentDate <= untilDate) {
+        expanded.push({
+          slot_date: currentDate.toISOString().split('T')[0],
+          start_time: slot.start_time,
+          end_time: slot.end_time,
+        })
+        currentDate.setDate(currentDate.getDate() + increment)
+      }
+    }
+
+    return expanded
   }
-  async function handleDeleteAssignment(a: CoachAssignment) {
-    await supabase.from('coach_assignments').delete().eq('id', a.id)
-    setConfirmDeleteAssignment(null); fetchAll()
+
+  function openAddSchedule() {
+    setEditingSchedule(null)
+    setScheduleModalMode('single')
+    const today = new Date().toISOString().slice(0, 10)
+    setScheduleForm({ coach_id: '', valid_from: today, repeats: false, repeat_pattern: 'weekly', repeat_until: '', sport: '' })
+    setScheduleSlots([{ slot_date: today, start_time: '09:00', end_time: '11:00' }])
+    setSingleSlotForm({ coach_id: '', sport: '', slot_date: today, start_time: '09:00', end_time: '11:00' })
+    setError(null)
+    setScheduleModalOpen(true)
+  }
+  async function handleSaveSingleSlot() {
+    if (!singleSlotForm.coach_id || !singleSlotForm.sport) {
+      setError('Jurulatih dan sukan wajib dipilih.')
+      return
+    }
+    setSaving(true); setError(null)
+
+    try {
+      const coach = coaches.find(c => c.id === singleSlotForm.coach_id)
+      const scheduleName = coach ? coach.full_name : 'Schedule'
+
+      const schedulePayload = {
+        coach_id: singleSlotForm.coach_id,
+        sport: singleSlotForm.sport,
+        schedule_name: scheduleName,
+        valid_from: new Date().toISOString().slice(0, 10),
+        repeats: false,
+        repeat_pattern: null,
+        repeat_until: null,
+      }
+
+      const { data: schedule, error: schedError } = await supabase
+        .from('coach_schedules')
+        .insert([schedulePayload])
+        .select('id')
+
+      if (schedError) throw new Error(`Insert schedule failed: ${schedError.message}`)
+      if (!schedule || schedule.length === 0) throw new Error('No schedule returned from insert')
+
+      const scheduleId = schedule[0].id
+      const slotPayload = {
+        schedule_id: scheduleId,
+        slot_date: singleSlotForm.slot_date,
+        start_time: singleSlotForm.start_time,
+        end_time: singleSlotForm.end_time,
+      }
+
+      const { error: slotError } = await supabase.from('coach_schedule_slots').insert([slotPayload])
+      if (slotError) throw new Error(`Insert slot failed: ${slotError.message}`)
+
+      await logAction(profile!.id, 'create_coach_schedule', 'coach_schedules', scheduleId)
+      setSaving(false); setScheduleModalOpen(false); fetchAll()
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err)
+      setError(`Error: ${errorMsg}`)
+      setSaving(false)
+    }
+  }
+
+  async function handleSaveSchedule() {
+    if (!scheduleForm.coach_id || !scheduleForm.valid_from || !scheduleForm.sport) {
+      setError('Jurulatih, tarikh mula, dan sukan wajib dipilih.')
+      return
+    }
+    if (scheduleSlots.length === 0) { setError('Sila tambah sekurang-kurangnya satu slot hari/masa.'); return }
+    if (scheduleForm.repeats && !scheduleForm.repeat_until) { setError('Sila tentukan tarikh akhir untuk jadual berulang.'); return }
+    setSaving(true); setError(null)
+
+    const coach = coaches.find(c => c.id === scheduleForm.coach_id)
+    const scheduleName = coach ? coach.full_name : scheduleForm.sport
+
+    const payload = {
+      coach_id: scheduleForm.coach_id,
+      sport: scheduleForm.sport,
+      schedule_name: scheduleName,
+      valid_from: scheduleForm.valid_from,
+      repeats: scheduleForm.repeats,
+      repeat_pattern: scheduleForm.repeats ? scheduleForm.repeat_pattern : null,
+      repeat_until: scheduleForm.repeats ? scheduleForm.repeat_until : null,
+    }
+
+    const finalSlots = expandRecurringSlots(
+      scheduleSlots,
+      scheduleForm.repeats,
+      scheduleForm.repeats ? scheduleForm.repeat_pattern : null,
+      scheduleForm.repeat_until
+    )
+
+    try {
+      if (editingSchedule) {
+        const { error } = await supabase.from('coach_schedules').update(payload).eq('id', editingSchedule.id)
+        if (error) throw new Error(`Update failed: ${error.message}`)
+
+        await supabase.from('coach_schedule_slots').delete().eq('schedule_id', editingSchedule.id)
+
+        const slotsPayload = finalSlots.map(slot => ({
+          schedule_id: editingSchedule.id,
+          slot_date: slot.slot_date,
+          start_time: slot.start_time,
+          end_time: slot.end_time,
+        }))
+        const { error: slotsError } = await supabase.from('coach_schedule_slots').insert(slotsPayload)
+        if (slotsError) throw new Error(`Insert slots failed: ${slotsError.message}`)
+
+        await logAction(profile!.id, 'update_coach_schedule', 'coach_schedules', editingSchedule.id)
+        setSaving(false); setScheduleModalOpen(false); fetchAll()
+      } else {
+        const { data: schedule, error: schedError } = await supabase
+          .from('coach_schedules')
+          .insert([payload])
+          .select('id')
+
+        if (schedError) throw new Error(`Insert schedule failed: ${schedError.message}`)
+        if (!schedule || schedule.length === 0) throw new Error('No schedule returned from insert')
+
+        const scheduleId = schedule[0].id
+        const slotsPayload = finalSlots.map(slot => ({
+          schedule_id: scheduleId,
+          slot_date: slot.slot_date,
+          start_time: slot.start_time,
+          end_time: slot.end_time,
+        }))
+
+        const { error: slotsError } = await supabase.from('coach_schedule_slots').insert(slotsPayload)
+        if (slotsError) throw new Error(`Insert slots failed: ${slotsError.message}`)
+
+        await logAction(profile!.id, 'create_coach_schedule', 'coach_schedules', scheduleId)
+        setSaving(false); setScheduleModalOpen(false); fetchAll()
+      }
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err)
+      setError(`Error: ${errorMsg}`)
+      setSaving(false)
+    }
+  }
+  async function handleDeleteSchedule(s: CoachSchedule) {
+    try {
+      await supabase.from('coach_schedules').delete().eq('id', s.id)
+      await logAction(profile!.id, 'delete_coach_schedule', 'coach_schedules', s.id)
+      setConfirmDeleteSchedule(null)
+      fetchAll()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error deleting schedule')
+    }
+  }
+
+  async function handleDeleteSlot(_schedule: CoachSchedule, slot: CoachScheduleSlot) {
+    try {
+      setSaving(true)
+      setError(null)
+      const { error: deleteError } = await supabase.from('coach_schedule_slots').delete().eq('id', slot.id)
+      if (deleteError) {
+        console.error('Supabase delete error:', deleteError)
+        setError(`Failed to delete: ${deleteError.message}`)
+        setSaving(false)
+        return
+      }
+      await logAction(profile!.id, 'delete_coach_schedule_slot', 'coach_schedule_slots', slot.id)
+      setSaving(false)
+      setConfirmDeleteSlot(null)
+      await fetchAll()
+    } catch (err) {
+      console.error('Delete error:', err)
+      setError(err instanceof Error ? err.message : 'Error deleting slot')
+      setSaving(false)
+    }
+  }
+
+  async function handleDeleteScheduleFromModal(schedule: CoachSchedule) {
+    try {
+      await handleDeleteSchedule(schedule)
+      setConfirmDeleteSlot(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error deleting schedule')
+    }
   }
 
   // --- DERIVED ---
@@ -257,7 +470,6 @@ export default function StrengthPage() {
   })
 
   const visiblePrograms = programs.filter(p =>
-    (!isCoach || myAssignedSports.includes(p.sport)) &&
     (!filterProgramSport || p.sport === filterProgramSport) &&
     (!filterProgramYear || p.year === +filterProgramYear)
   )
@@ -294,9 +506,11 @@ export default function StrengthPage() {
         <>
           <div className="flex items-center justify-between">
             <p className="text-[12px] text-[#888]">{records.length} rekod sesi</p>
-            <button onClick={openAddAttendance} className="bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
-              + Rekod Sesi
-            </button>
+            {can('strength', 'create') && (
+              <button onClick={openAddAttendance} className="bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
+                + Rekod Sesi
+              </button>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -368,8 +582,8 @@ export default function StrengthPage() {
                       <td className="px-4 py-3 text-[#888] max-w-[160px] truncate">{r.notes ?? '—'}</td>
                       <td className="px-4 py-3">
                         <div className="flex gap-3 justify-end">
-                          <button onClick={() => openEditAttendance(r)} className="text-xs text-[#F56A00] hover:underline font-medium">Edit</button>
-                          {isAdmin && <button onClick={() => setConfirmDelete(r)} className="text-xs text-[#D44040] hover:underline font-medium">Padam</button>}
+                          {can('strength', 'update') && <button onClick={() => openEditAttendance(r)} className="text-xs text-[#F56A00] hover:underline font-medium">Edit</button>}
+                          {can('strength', 'delete') && <button onClick={() => setConfirmDelete(r)} className="text-xs text-[#D44040] hover:underline font-medium">Padam</button>}
                         </div>
                       </td>
                     </tr>
@@ -386,15 +600,17 @@ export default function StrengthPage() {
         <>
           <div className="flex items-center justify-between">
             <p className="text-[12px] text-[#888]">{visiblePrograms.length} program</p>
-            <button onClick={openAddProgram} className="bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
-              + Program Baharu
-            </button>
+            {can('strength', 'create') && (
+              <button onClick={openAddProgram} className="bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
+                + Program Baharu
+              </button>
+            )}
           </div>
 
           <div className="flex flex-wrap gap-2">
             <select value={filterProgramSport} onChange={e => setFilterProgramSport(e.target.value)} className={filterCls}>
               <option value="">Semua Sukan</option>
-              {(isCoach ? myAssignedSports : allSports).map(s => <option key={s} value={s}>{s}</option>)}
+              {allSports.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
             <select value={filterProgramYear} onChange={e => setFilterProgramYear(e.target.value)} className={filterCls}>
               {(programYears.length > 0 ? programYears : [new Date().getFullYear()]).map(y => (
@@ -453,8 +669,8 @@ export default function StrengthPage() {
                               {p.program_type === 'structured' && (
                                 <button onClick={() => setViewProgram(p)} className="text-xs text-[#3A7EC8] hover:underline font-medium">Lihat</button>
                               )}
-                              <button onClick={() => openEditProgram(p)} className="text-xs text-[#F56A00] hover:underline">Edit</button>
-                              {isAdmin && <button onClick={() => setConfirmDeleteProgram(p)} className="text-xs text-[#D44040] hover:underline">Padam</button>}
+                              {can('strength', 'update') && <button onClick={() => openEditProgram(p)} className="text-xs text-[#F56A00] hover:underline">Edit</button>}
+                              {can('strength', 'delete') && <button onClick={() => setConfirmDeleteProgram(p)} className="text-xs text-[#D44040] hover:underline">Padam</button>}
                             </div>
                           </div>
                         </div>
@@ -468,93 +684,129 @@ export default function StrengthPage() {
         </>
       )}
 
-      {/* ── TAB 3: JADUAL JURULATIH ── */}
+      {/* ── TAB 3: JADUAL JURULATIH (WEEKLY VIEW) ── */}
       {activeTab === 'jadual' && (
         <>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <button
-                onClick={() => { const d = new Date(calendarYear, calendarMonth - 2); setCalendarMonth(d.getMonth() + 1); setCalendarYear(d.getFullYear()) }}
+                onClick={() => setWeekStartDate(new Date(weekStartDate.getFullYear(), weekStartDate.getMonth(), weekStartDate.getDate() - 7))}
                 className="p-1.5 rounded-lg border border-gray-200 hover:border-[#F56A00] text-[#888] hover:text-[#F56A00] transition text-sm leading-none"
               >‹</button>
-              <p className="text-sm font-semibold text-[#111] w-32 text-center">
-                {MONTHS[calendarMonth - 1]} {calendarYear}
+              <p className="text-sm font-semibold text-[#111] w-56 text-center">
+                Minggu {weekStartDate.toLocaleDateString('ms-MY', { day: '2-digit', month: 'short' })} hingga {new Date(weekStartDate.getFullYear(), weekStartDate.getMonth(), weekStartDate.getDate() + 6).toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric' })}
               </p>
               <button
-                onClick={() => { const d = new Date(calendarYear, calendarMonth); setCalendarMonth(d.getMonth() + 1); setCalendarYear(d.getFullYear()) }}
+                onClick={() => setWeekStartDate(new Date(weekStartDate.getFullYear(), weekStartDate.getMonth(), weekStartDate.getDate() + 7))}
                 className="p-1.5 rounded-lg border border-gray-200 hover:border-[#F56A00] text-[#888] hover:text-[#F56A00] transition text-sm leading-none"
               >›</button>
             </div>
-            {isAdmin && (
-              <button onClick={openAddAssignment} className="bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
-                + Tambah Tugasan
+            {can('strength', 'create') && (
+              <button onClick={openAddSchedule} className="bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
+                + Jadual Baharu
               </button>
             )}
           </div>
 
-          {/* Calendar grid */}
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            {/* Day headers */}
-            <div className="grid grid-cols-7 border-b border-gray-100">
-              {DAY_NAMES.map(d => (
-                <div key={d} className="px-2 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-[#888]">{d}</div>
-              ))}
-            </div>
-            {/* Weeks */}
-            {buildCalendarWeeks(calendarYear, calendarMonth).map((week, wi) => (
-              <div key={wi} className="grid grid-cols-7 border-b border-gray-50 last:border-0">
-                {week.map((day, di) => {
-                  const dayName = day ? DAY_NAMES[(new Date(calendarYear, calendarMonth - 1, day).getDay() + 6) % 7] : null
-                  const dayAssignments = dayName ? assignments.filter(a => a.days_of_week?.includes(dayName)) : []
+          {/* Weekly Grid */}
+          <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
+            <table className="w-full text-sm border-collapse">
+              {/* Header: Days of week */}
+              <thead>
+                <tr className="border-b border-gray-100 bg-gray-50">
+                  <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-[#888] w-16 border-r border-gray-100">MASA</th>
+                  {Array.from({ length: 7 }).map((_, i) => {
+                    const date = new Date(weekStartDate)
+                    date.setDate(date.getDate() + i)
+                    const dayOfWeek = (date.getDay() + 6) % 7
+                    return (
+                      <th key={i} className="px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-[#111] border-r border-gray-100 last:border-0">
+                        <div>{DAY_NAMES[dayOfWeek]}</div>
+                        <div className="text-[11px] font-normal text-[#888]">{date.getDate()}/{date.getMonth() + 1}</div>
+                      </th>
+                    )
+                  })}
+                </tr>
+              </thead>
+
+              {/* Time slots: 08:00 - 18:00 */}
+              <tbody>
+                {Array.from({ length: 11 }).map((_, hourIdx) => {
+                  const hour = 8 + hourIdx
+                  const timeStr = `${String(hour).padStart(2, '0')}:00`
+
                   return (
-                    <div key={di} className={`min-h-[80px] p-2 border-r border-gray-50 last:border-0 ${!day ? 'bg-gray-50/50' : ''}`}>
-                      {day && (
-                        <>
-                          <p className="text-[11px] font-mono text-[#aaa] mb-1">{day}</p>
-                          <div className="space-y-1">
-                            {dayAssignments.map(a => (
-                              <div key={a.id} className="group relative">
-                                <div className="text-[10px] leading-tight bg-[rgba(245,106,0,0.08)] border border-[rgba(245,106,0,0.2)] text-[#F56A00] rounded px-1.5 py-1">
-                                  <p className="font-semibold truncate">{a.sport}</p>
-                                  <p className="text-[#888] truncate">{a.coach?.full_name?.split(' ')[0]}</p>
-                                  {a.session_time && <p className="text-[#888] font-mono text-[9px]">{a.session_time}</p>}
+                    <tr key={hour} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/50">
+                      {/* Time label */}
+                      <td className="px-3 py-3 text-[11px] font-semibold text-[#888] border-r border-gray-100 bg-gray-50/50" style={{ height: '60px' }}>
+                        {timeStr}
+                      </td>
+
+                      {/* Days */}
+                      {Array.from({ length: 7 }).map((_, dayIdx) => {
+                        const date = new Date(weekStartDate)
+                        date.setDate(date.getDate() + dayIdx)
+                        const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+
+                        // Find ALL slots for this date
+                        const slotsForDate = schedules.flatMap(s =>
+                          (s.slots ?? [])
+                            .filter(sl => sl.slot_date === dateStr)
+                            .map(sl => ({ schedule: s, slot: sl }))
+                        )
+
+                        // Filter to only slots that include this hour
+                        const slotsInHour = slotsForDate.filter(({ slot }) => {
+                          const [startHour] = slot.start_time.split(':').map(Number)
+                          const [endHour] = slot.end_time.split(':').map(Number)
+                          return startHour <= hour && endHour > hour
+                        })
+
+                        return (
+                          <td
+                            key={dayIdx}
+                            style={{ height: '60px', padding: '4px 0', position: 'relative' }}
+                            className="border-r border-gray-100 last:border-0"
+                          >
+                            {slotsInHour.map(({ schedule: s, slot }) => {
+                              const [startHour] = slot.start_time.split(':').map(Number)
+                              const [endHour] = slot.end_time.split(':').map(Number)
+                              const slotHeight = (endHour - startHour) * 60
+                              const topOffset = startHour === hour ? 0 : -(hour - startHour) * 60
+
+                              return (
+                                <div
+                                  key={slot.id}
+                                  style={{
+                                    position: 'absolute',
+                                    top: `${topOffset}px`,
+                                    left: '4px',
+                                    right: '4px',
+                                    height: `${slotHeight}px`,
+                                    zIndex: 10
+                                  }}
+                                  className="bg-[rgba(245,106,0,0.1)] border border-[rgba(245,106,0,0.3)] rounded px-1.5 py-0.5 text-[11px] cursor-pointer hover:bg-[rgba(245,106,0,0.15)] transition group overflow-hidden"
+                                >
+                                  <p className="font-semibold text-[#F56A00] truncate leading-tight text-xs">{s.schedule_name}</p>
+                                  <p className="text-[10px] text-[#666] leading-tight">{s.sport}</p>
+                                  <p className="text-[9px] text-[#888] font-mono leading-tight">{slot.start_time}–{slot.end_time}</p>
+                                  <div className="hidden group-hover:flex gap-1 mt-0.5 pt-0.5 border-t border-[rgba(245,106,0,0.2)]">
+                                    {can('strength', 'delete') && (
+                                      <button onClick={() => setConfirmDeleteSlot({ schedule: s, slot })} className="flex-1 px-1 py-0.5 text-[8px] font-semibold text-[#D44040] hover:underline">Padam</button>
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
-                            ))}
-                          </div>
-                        </>
-                      )}
-                    </div>
+                              )
+                            })}
+                          </td>
+                        )
+                      })}
+                    </tr>
                   )
                 })}
-              </div>
-            ))}
+              </tbody>
+            </table>
           </div>
-
-          {/* Assignments legend */}
-          {assignments.length > 0 && (
-            <div className="bg-white rounded-xl border border-gray-200 p-4">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-[#888] mb-3">Senarai Tugasan</p>
-              <div className="space-y-2">
-                {assignments.map(a => (
-                  <div key={a.id} className="flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[rgba(245,106,0,0.08)] text-[#F56A00] border border-[rgba(245,106,0,0.2)] shrink-0">{a.sport}</span>
-                      <span className="text-[12px] text-[#444] truncate">{a.coach?.full_name ?? '—'}</span>
-                      <span className="text-[11px] text-[#aaa]">{a.days_of_week?.join(', ') ?? '—'}</span>
-                      {a.session_time && <span className="text-[11px] font-mono text-[#aaa]">@ {a.session_time}</span>}
-                    </div>
-                    {isAdmin && (
-                      <div className="flex gap-3 shrink-0">
-                        <button onClick={() => openEditAssignment(a)} className="text-xs text-[#F56A00] hover:underline font-medium">Edit</button>
-                        <button onClick={() => setConfirmDeleteAssignment(a)} className="text-xs text-[#D44040] hover:underline font-medium">Padam</button>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </>
       )}
 
@@ -641,7 +893,7 @@ export default function StrengthPage() {
                 <Field label="Sukan" required>
                   <select value={programForm.sport} onChange={e => setProgramForm(f => ({ ...f, sport: e.target.value }))} className={inputCls}>
                     <option value="">— Pilih —</option>
-                    {(isCoach ? myAssignedSports : allSports).map(s => <option key={s} value={s}>{s}</option>)}
+                    {allSports.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </Field>
                 <Field label="Bulan" required>
@@ -691,59 +943,145 @@ export default function StrengthPage() {
         </div>
       )}
 
-      {/* ── MODAL: ASSIGNMENT ── */}
-      {assignmentModalOpen && (
+      {/* ── MODAL: SCHEDULE ── */}
+      {scheduleModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm md:max-w-md">
-            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
-              <h3 className="font-bold text-[#111]">{editingAssignment ? 'Edit Tugasan' : 'Tugasan Baharu'}</h3>
-              <button onClick={() => setAssignmentModalOpen(false)} className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white">
+              <h3 className="font-bold text-[#111]">{editingSchedule ? 'Edit Jadual' : 'Jadual Baharu'}</h3>
+              <button onClick={() => setScheduleModalOpen(false)} className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
             </div>
+
+            {!editingSchedule && (
+              <div className="flex gap-1 border-b border-gray-200 px-6 pt-4 bg-gray-50">
+                {(['single', 'multiple'] as const).map(mode => (
+                  <button
+                    key={mode}
+                    onClick={() => setScheduleModalMode(mode)}
+                    className={`px-4 py-2 text-sm font-semibold border-b-2 transition ${
+                      scheduleModalMode === mode
+                        ? 'border-[#F56A00] text-[#F56A00]'
+                        : 'border-transparent text-[#888] hover:text-[#111]'
+                    }`}
+                  >
+                    {mode === 'single' ? 'Tambah Slot Tunggal' : 'Tambah Slot Berbilang'}
+                  </button>
+                ))}
+              </div>
+            )}
+
             <div className="px-6 py-5 space-y-4">
               {error && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-600">{error}</div>}
-              <Field label="Jurulatih S&C" required>
-                <select value={assignmentForm.coach_id} onChange={e => setAssignmentForm(f => ({ ...f, coach_id: e.target.value }))} className={inputCls}>
-                  <option value="">— Pilih —</option>
-                  {coaches.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
-                </select>
-              </Field>
-              <Field label="Sukan" required>
-                <select value={assignmentForm.sport} onChange={e => setAssignmentForm(f => ({ ...f, sport: e.target.value }))} className={inputCls}>
-                  <option value="">— Pilih —</option>
-                  {allSports.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </Field>
-              <Field label="Hari">
-                <div className="flex flex-wrap gap-2">
-                  {DAY_NAMES.map(day => (
-                    <label key={day} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[12px] font-medium cursor-pointer transition ${assignmentForm.days_of_week.includes(day) ? 'bg-[rgba(245,106,0,0.08)] border-[rgba(245,106,0,0.4)] text-[#F56A00]' : 'bg-[#F5F5F7] border-[#E8E8E8] text-[#888]'}`}>
+
+              {scheduleModalMode === 'single' ? (
+                /* ── SINGLE SLOT MODE ── */
+                <>
+                  <Field label="Jurulatih" required>
+                    <select value={singleSlotForm.coach_id} onChange={e => setSingleSlotForm(f => ({ ...f, coach_id: e.target.value }))} className={inputCls}>
+                      <option value="">— Pilih Jurulatih —</option>
+                      {coaches.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
+                    </select>
+                  </Field>
+
+                  <Field label="Sukan" required>
+                    <select value={singleSlotForm.sport} onChange={e => setSingleSlotForm(f => ({ ...f, sport: e.target.value }))} className={inputCls}>
+                      <option value="">— Pilih Sukan —</option>
+                      {allSports.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </Field>
+
+                  <Field label="Tarikh" required>
+                    <input type="date" value={singleSlotForm.slot_date} onChange={e => setSingleSlotForm(f => ({ ...f, slot_date: e.target.value }))} className={inputCls} />
+                  </Field>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <Field label="Masa Mula" required>
+                      <input type="time" value={singleSlotForm.start_time} onChange={e => setSingleSlotForm(f => ({ ...f, start_time: e.target.value }))} className={inputCls} />
+                    </Field>
+                    <Field label="Masa Akhir" required>
+                      <input type="time" value={singleSlotForm.end_time} onChange={e => setSingleSlotForm(f => ({ ...f, end_time: e.target.value }))} className={inputCls} />
+                    </Field>
+                  </div>
+                </>
+              ) : (
+                /* ── MULTIPLE SLOTS MODE ── */
+                <>
+                  <Field label="Jurulatih" required>
+                    <select value={scheduleForm.coach_id} onChange={e => setScheduleForm(f => ({ ...f, coach_id: e.target.value }))} className={inputCls}>
+                      <option value="">— Pilih Jurulatih —</option>
+                      {coaches.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
+                    </select>
+                  </Field>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <Field label="Tarikh Mula" required>
+                      <input type="date" value={scheduleForm.valid_from} onChange={e => setScheduleForm(f => ({ ...f, valid_from: e.target.value }))} className={inputCls} />
+                    </Field>
+                    <Field label="Sukan" required>
+                      <select value={scheduleForm.sport} onChange={e => setScheduleForm(f => ({ ...f, sport: e.target.value }))} className={inputCls}>
+                        <option value="">— Pilih —</option>
+                        {allSports.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </Field>
+                  </div>
+
+                  <Field label="Slot Tarikh/Masa">
+                    <div className="space-y-3">
+                      {scheduleSlots.map((slot, idx) => (
+                        <div key={idx} className="flex gap-2 items-end">
+                          <input type="date" value={slot.slot_date} onChange={e => updateScheduleSlot(idx, 'slot_date', e.target.value)} className="flex-1 bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2.5 text-sm text-[#111] outline-none focus:border-[#F56A00] focus:bg-white" />
+                          <input type="time" value={slot.start_time} onChange={e => updateScheduleSlot(idx, 'start_time', e.target.value)} className="w-24 bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2.5 text-sm text-[#111] outline-none focus:border-[#F56A00] focus:bg-white" />
+                          <span className="text-[#888]">–</span>
+                          <input type="time" value={slot.end_time} onChange={e => updateScheduleSlot(idx, 'end_time', e.target.value)} className="w-24 bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2.5 text-sm text-[#111] outline-none focus:border-[#F56A00] focus:bg-white" />
+                          {scheduleSlots.length > 1 && (
+                            <button type="button" onClick={() => removeScheduleSlot(idx)} className="px-3 py-2.5 text-red-600 hover:bg-red-50 rounded-lg transition text-sm font-medium">
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      <button type="button" onClick={addScheduleSlot} className="text-[13px] text-[#F56A00] hover:text-[#D45A00] font-semibold transition">
+                        + Tambah Slot
+                      </button>
+                    </div>
+                  </Field>
+
+                  <div className="border-t border-gray-100 pt-4">
+                    <label className="flex items-center gap-3 cursor-pointer">
                       <input
                         type="checkbox"
-                        className="hidden"
-                        checked={assignmentForm.days_of_week.includes(day)}
-                        onChange={e => setAssignmentForm(f => ({
-                          ...f,
-                          days_of_week: e.target.checked
-                            ? [...f.days_of_week, day]
-                            : f.days_of_week.filter(d => d !== day)
-                        }))}
+                        checked={scheduleForm.repeats}
+                        onChange={e => setScheduleForm(f => ({ ...f, repeats: e.target.checked, repeat_until: '' }))}
+                        className="w-4 h-4 rounded border-[#E8E8E8] cursor-pointer accent-[#F56A00]"
                       />
-                      {day}
+                      <span className="text-sm font-semibold text-[#111]">Jadual Berulang</span>
                     </label>
-                  ))}
-                </div>
-              </Field>
-              <Field label="Masa Sesi">
-                <input type="time" value={assignmentForm.session_time} onChange={e => setAssignmentForm(f => ({ ...f, session_time: e.target.value }))} className={inputCls} />
-              </Field>
-              <Field label="Nota">
-                <textarea value={assignmentForm.notes} onChange={e => setAssignmentForm(f => ({ ...f, notes: e.target.value.toUpperCase() }))} className={`${inputCls} resize-none`} rows={3} placeholder="MAKLUMAT TAMBAHAN..." />
-              </Field>
+                  </div>
+
+                  {scheduleForm.repeats && (
+                    <div className="space-y-4 bg-gray-50 border border-gray-100 rounded-lg p-4">
+                      <Field label="Corak Pengulangan" required>
+                        <div className="flex gap-2">
+                          {(['weekly', 'bi-weekly', 'custom'] as const).map(pattern => (
+                            <label key={pattern} className={`flex-1 px-3 py-2.5 rounded-lg border text-[12px] font-semibold cursor-pointer transition text-center ${scheduleForm.repeat_pattern === pattern ? 'bg-[#F56A00] border-[#F56A00] text-white' : 'bg-white border-[#E8E8E8] text-[#888] hover:border-[#D0D0D0]'}`}>
+                              <input type="radio" name="pattern" value={pattern} checked={scheduleForm.repeat_pattern === pattern} onChange={() => setScheduleForm(f => ({ ...f, repeat_pattern: pattern }))} className="hidden" />
+                              {pattern === 'weekly' ? 'Mingguan' : pattern === 'bi-weekly' ? 'Dua Mingguan' : 'Tersuai'}
+                            </label>
+                          ))}
+                        </div>
+                      </Field>
+                      <Field label="Berakhir Pada" required>
+                        <input type="date" value={scheduleForm.repeat_until} onChange={e => setScheduleForm(f => ({ ...f, repeat_until: e.target.value }))} className={inputCls} />
+                      </Field>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
-            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
-              <button onClick={() => setAssignmentModalOpen(false)} className="px-4 py-2 text-sm text-[#888] hover:text-[#111] transition">Batal</button>
-              <button onClick={handleSaveAssignment} disabled={saving} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
-                {saving ? 'Menyimpan...' : 'Simpan'}
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 sticky bottom-0 bg-white">
+              <button onClick={() => setScheduleModalOpen(false)} className="px-4 py-2 text-sm text-[#888] hover:text-[#111] transition">Batal</button>
+              <button onClick={scheduleModalMode === 'single' ? handleSaveSingleSlot : handleSaveSchedule} disabled={saving} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
+                {saving ? 'Menyimpan...' : scheduleModalMode === 'single' ? 'Tambah Slot' : 'Simpan'}
               </button>
             </div>
           </div>
@@ -886,17 +1224,49 @@ export default function StrengthPage() {
         </div>
       )}
 
-      {/* ── CONFIRM DELETE: ASSIGNMENT ── */}
-      {confirmDeleteAssignment && (
+      {/* ── CONFIRM DELETE: SCHEDULE ── */}
+      {confirmDeleteSchedule && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 text-center">
-            <p className="text-sm font-semibold text-[#111] mb-1">Padam tugasan ini?</p>
+            <p className="text-sm font-semibold text-[#111] mb-1">Padam jadual ini?</p>
             <p className="text-[13px] text-[#888] mb-6">
-              {confirmDeleteAssignment.coach?.full_name} — {confirmDeleteAssignment.sport}
+              {confirmDeleteSchedule.schedule_name}
             </p>
             <div className="flex gap-3 justify-center">
-              <button onClick={() => setConfirmDeleteAssignment(null)} className="px-4 py-2 text-sm text-[#888] border border-gray-200 rounded-lg hover:border-gray-400 transition">Batal</button>
-              <button onClick={() => handleDeleteAssignment(confirmDeleteAssignment)} className="px-4 py-2 text-sm font-semibold text-white bg-[#D44040] hover:bg-red-700 rounded-lg transition">Padam</button>
+              <button onClick={() => setConfirmDeleteSchedule(null)} className="px-4 py-2 text-sm text-[#888] border border-gray-200 rounded-lg hover:border-gray-400 transition">Batal</button>
+              <button onClick={() => handleDeleteSchedule(confirmDeleteSchedule)} className="px-4 py-2 text-sm font-semibold text-white bg-[#D44040] hover:bg-red-700 rounded-lg transition">Padam</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── CONFIRM DELETE: SLOT ── */}
+      {confirmDeleteSlot && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
+            <p className="text-sm font-semibold text-[#111] mb-1">Padam slot ini?</p>
+            <p className="text-[13px] text-[#888] mb-2">
+              {confirmDeleteSlot.schedule.schedule_name}
+            </p>
+            <p className="text-[12px] text-[#666] mb-6">
+              {new Date(confirmDeleteSlot.slot.slot_date + 'T00:00:00').toLocaleDateString('ms-MY', { weekday: 'long', day: '2-digit', month: 'short' })} {confirmDeleteSlot.slot.start_time}–{confirmDeleteSlot.slot.end_time}
+            </p>
+
+            {error && <div className="px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-[12px] text-red-600 mb-4">{error}</div>}
+
+            <div className="space-y-3">
+              <p className="text-[11px] text-[#888] font-semibold">Pilih tindakan:</p>
+              <div className="flex gap-2">
+                <button onClick={() => setConfirmDeleteSlot(null)} disabled={saving} className="flex-1 px-4 py-2 text-sm text-[#888] border border-gray-200 rounded-lg hover:border-gray-400 transition disabled:opacity-50">Batal</button>
+                <button onClick={() => handleDeleteSlot(confirmDeleteSlot.schedule, confirmDeleteSlot.slot)} disabled={saving} className="flex-1 px-4 py-2 text-sm font-semibold text-white bg-[#F56A00] hover:bg-[#D45A00] rounded-lg transition disabled:opacity-50">Padam Slot Sahaja</button>
+                <button
+                  onClick={() => handleDeleteScheduleFromModal(confirmDeleteSlot.schedule)}
+                  disabled={(confirmDeleteSlot.schedule.slots?.length ?? 0) <= 1 || saving}
+                  className="flex-1 px-4 py-2 text-sm font-semibold text-white bg-[#D44040] hover:bg-red-700 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#D44040]"
+                >
+                  {saving ? 'Memuatkan...' : 'Padam Seluruh Jadual'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -911,19 +1281,6 @@ const inputCls = 'w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py
 
 function fmtProgramDate(d: string) {
   return new Date(d + 'T00:00:00').toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric' })
-}
-
-function buildCalendarWeeks(year: number, month: number): (number | null)[][] {
-  const firstDow = (new Date(year, month - 1, 1).getDay() + 6) % 7 // Mon=0
-  const daysInMonth = new Date(year, month, 0).getDate()
-  const cells: (number | null)[] = [
-    ...Array(firstDow).fill(null),
-    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
-  ]
-  while (cells.length % 7 !== 0) cells.push(null)
-  const weeks: (number | null)[][] = []
-  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7))
-  return weeks
 }
 
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {

@@ -2,6 +2,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useState, useEffect, useRef } from 'react'
 import Sidebar from './Sidebar'
 import { supabase } from '../lib/supabase'
+import { logAction } from '../lib/audit'
 import { useAuth } from '../context/AuthContext'
 
 const routeMeta: Record<string, { title: string; parent?: string }> = {
@@ -17,6 +18,7 @@ const routeMeta: Record<string, { title: string; parent?: string }> = {
   '/psychology/rating':           { title: 'Penilaian Psikologi', parent: 'Sains Sukan' },
   '/reports':                     { title: 'Laporan', parent: 'Dashboard' },
   '/admin/users':                 { title: 'Pengurusan Pengguna', parent: 'Dashboard' },
+  '/admin/audit':                 { title: 'Log Audit', parent: 'Dashboard' },
 }
 
 interface AlertCounts { injured: number; pendingSupplements: number }
@@ -62,6 +64,7 @@ export default function Layout() {
 
   async function handleSignOut() {
     setUserOpen(false)
+    if (profile) await logAction(profile.id, 'logout')
     await signOut()
     navigate('/login')
   }

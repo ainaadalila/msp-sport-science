@@ -4,6 +4,7 @@ import { AthletesTableSkeleton } from '../../components/Skeleton'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { logAction } from '../../lib/audit'
+import { usePermissions } from '../../hooks/usePermissions'
 
 interface Athlete {
   id: string
@@ -120,6 +121,7 @@ function initials(name: string) {
 
 export default function AthletesPage() {
   const { profile } = useAuth()
+  const { can } = usePermissions()
   const isAdmin = profile?.role === 'superadmin' || profile?.role === 'admin'
   const navigate = useNavigate()
 
@@ -265,7 +267,7 @@ export default function AthletesPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <p className="text-[12px] text-[#888]">{athletes.length} atlet terdaftar</p>
-        {isAdmin && (
+        {can('athletes', 'create') && (
           <button onClick={openAdd} className="bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
             + Tambah Atlet
           </button>
@@ -438,17 +440,17 @@ export default function AthletesPage() {
                     </td>
                     <td className="px-5 py-3">
                       <div className="flex gap-3 justify-end items-center">
-                        {isAdmin && (
-                          <>
-                            <button
-                              onClick={e => { e.stopPropagation(); openEdit(a) }}
-                              className="text-xs text-[#F56A00] hover:underline font-medium opacity-0 group-hover:opacity-100 transition"
-                            >Edit</button>
-                            <button
-                              onClick={e => { e.stopPropagation(); setConfirmDelete(a) }}
-                              className="text-xs text-[#D44040] hover:underline font-medium opacity-0 group-hover:opacity-100 transition"
-                            >Padam</button>
-                          </>
+                        {can('athletes', 'update') && (
+                          <button
+                            onClick={e => { e.stopPropagation(); openEdit(a) }}
+                            className="text-xs text-[#F56A00] hover:underline font-medium opacity-0 group-hover:opacity-100 transition"
+                          >Edit</button>
+                        )}
+                        {can('athletes', 'delete') && (
+                          <button
+                            onClick={e => { e.stopPropagation(); setConfirmDelete(a) }}
+                            className="text-xs text-[#D44040] hover:underline font-medium opacity-0 group-hover:opacity-100 transition"
+                          >Padam</button>
                         )}
                         <svg className="w-3.5 h-3.5 text-[#bbb] group-hover:text-[#F56A00] transition shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                           <polyline points="9 18 15 12 9 6"/>

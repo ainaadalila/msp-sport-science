@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import type { User, Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
+import { logAction } from '../lib/audit'
 import type { Profile } from '../types'
 
 interface AuthContextValue {
@@ -45,7 +46,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function signIn(email: string, password: string) {
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+    if (!error && data.user) {
+      await logAction(data.user.id, 'login')
+    }
     return { error: error?.message ?? null }
   }
 

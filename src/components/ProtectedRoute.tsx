@@ -42,7 +42,8 @@ export function ProtectedRoute({ children, roles, module }: Props) {
 
   if (module && profile) {
     const isSuperAdmin = profile.role === 'superadmin'
-    const hasExplicitPermission = profile.module_permissions?.[module]
+    const perm = profile.module_permissions?.[module]
+    const hasExplicitPermission = typeof perm === 'boolean' ? perm : perm?.read
     const hasImplicitPermission = roleModuleMap[profile.role]?.includes(module)
 
     if (!isSuperAdmin && !hasExplicitPermission && !hasImplicitPermission) {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
+import { usePermissions } from '../../../hooks/usePermissions'
 import { logAction } from '../../../lib/audit'
 
 interface Athlete {
@@ -101,8 +102,7 @@ const emptyAssessmentForm: AssessmentFormState = {
 
 export default function PhysioPage() {
   const { profile } = useAuth()
-  const isAdmin = profile?.role === 'superadmin' || profile?.role === 'admin'
-  const isPhysio = profile?.role === 'physio'
+  const { can } = usePermissions()
 
   const [slots, setSlots] = useState<PhysioSlot[]>([])
   const [athletes, setAthletes] = useState<Athlete[]>([])
@@ -282,7 +282,6 @@ export default function PhysioPage() {
     return matchAthlete
   }).sort((a, b) => new Date(b.slot_date).getTime() - new Date(a.slot_date).getTime())
 
-  const canEdit = isAdmin || isPhysio
   const allSports = [...new Set(athletes.map(a => a.sport))].sort()
   const modalAthletes = formSport ? athletes.filter(a => a.sport === formSport) : athletes
 
@@ -292,7 +291,7 @@ export default function PhysioPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <p className="text-[12px] text-[#888]">{slots.length} rekod sesi</p>
-        {canEdit && (
+        {can('physio', 'create') && (
           <button onClick={() => openBookingAdd()} className="bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
             + Rekod Sesi Baharu
           </button>
@@ -366,8 +365,8 @@ export default function PhysioPage() {
                         <div className="flex gap-2 justify-end text-xs">
                           <button onClick={() => { setDetailSlot(s); setDetailView('booking') }} className="text-[#3A7EC8] hover:underline font-medium">Lihat</button>
                           <button onClick={() => { setDetailSlot(s); setDetailView('full') }} className="text-[#F56A00] hover:underline font-medium">Catatan</button>
-                          {canEdit && <button onClick={() => openBookingEdit(s)} className="text-[#555] hover:underline font-medium">Edit</button>}
-                          {isAdmin && <button onClick={() => setConfirmDelete(s)} className="text-[#D44040] hover:underline font-medium">Padam</button>}
+                          {can('physio', 'update') && <button onClick={() => openBookingEdit(s)} className="text-[#555] hover:underline font-medium">Edit</button>}
+                          {can('physio', 'delete') && <button onClick={() => setConfirmDelete(s)} className="text-[#D44040] hover:underline font-medium">Padam</button>}
                         </div>
                       </td>
                     </tr>
@@ -602,10 +601,10 @@ export default function PhysioPage() {
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 shrink-0 flex-wrap">
               {detailView === 'booking' ? (
                 <>
-                  {isAdmin && (
+                  {can('physio', 'delete') && (
                     <button onClick={() => { setConfirmDelete(detailSlot); setDetailSlot(null) }} className="px-4 py-2 text-sm text-[#D44040] border border-red-200 rounded-lg hover:bg-red-50 transition">Padam</button>
                   )}
-                  {canEdit && detailSlot.attendance_status === 'scheduled' && (
+                  {can('physio', 'update') && detailSlot.attendance_status === 'scheduled' && (
                     <button onClick={() => handleMarkArrived(detailSlot)} className="px-4 py-2 text-sm font-semibold text-white bg-[#3A7EC8] hover:bg-blue-700 rounded-lg transition">
                       Tandai Hadir
                     </button>
@@ -613,7 +612,7 @@ export default function PhysioPage() {
                   <button onClick={() => setDetailView('full')} className="px-4 py-2 text-sm font-semibold bg-[#F5F5F7] text-[#111] hover:bg-gray-100 rounded-lg transition">
                     Catatan Sesi
                   </button>
-                  {canEdit && (
+                  {can('physio', 'update') && (
                     <button onClick={() => { openBookingEdit(detailSlot); setDetailSlot(null) }} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold rounded-lg transition">Edit</button>
                   )}
                 </>
@@ -622,7 +621,7 @@ export default function PhysioPage() {
                   <button onClick={() => setDetailView('booking')} className="px-4 py-2 text-sm font-semibold bg-[#F5F5F7] text-[#111] hover:bg-gray-100 rounded-lg transition">
                     Kembali
                   </button>
-                  {canEdit && (
+                  {can('physio', 'update') && (
                     <button onClick={() => { openAssessmentEdit(detailSlot); setDetailSlot(null) }} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold rounded-lg transition">Edit Catatan</button>
                   )}
                 </>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
+import { usePermissions } from '../../../hooks/usePermissions'
 import { logAction } from '../../../lib/audit'
 import type { Athlete, FitnessTestSession, SportFitnessTest, FitnessTestNorm } from '../../../types'
 
@@ -28,7 +29,8 @@ interface SessionWithResults {
 
 export default function FitnessTestingPage() {
   const { profile } = useAuth()
-  const canRecord = profile?.role === 'superadmin' || profile?.role === 'admin' || profile?.role === 'coach'
+  const { can } = usePermissions()
+  const canRecord = can('fitness', 'create')
 
   const [athletes, setAthletes] = useState<Athlete[]>([])
   const [selectedAthlete, setSelectedAthlete] = useState<Athlete | null>(null)
@@ -142,14 +144,19 @@ export default function FitnessTestingPage() {
       .order('recorded_date', { ascending: false })
 
     const sessionsList = sessionsRes.data ?? []
-    const withResults: SessionWithResults[] = []
 
-    for (const sess of sessionsList) {
-      const resultsRes = await supabase
+    // Fetch all results in parallel instead of sequentially
+    const resultsPromises = sessionsList.map(sess =>
+      supabase
         .from('fitness_test_results')
         .select('id, test_id, result_value, rating, notes, test:test_id(test_name, unit)')
         .eq('session_id', sess.id)
+    )
 
+    const allResultsRes = await Promise.all(resultsPromises)
+
+    const withResults: SessionWithResults[] = sessionsList.map((sess, idx) => {
+      const resultsRes = allResultsRes[idx]
       const results = (resultsRes.data ?? []).map(r => ({
         id: r.id,
         test_id: r.test_id,
@@ -160,8 +167,8 @@ export default function FitnessTestingPage() {
         unit: (r.test as any)?.unit || '',
       })) as SessionResult[]
 
-      withResults.push({ session: sess, results })
-    }
+      return { session: sess, results }
+    })
 
     setSessionsWithResults(withResults)
   }

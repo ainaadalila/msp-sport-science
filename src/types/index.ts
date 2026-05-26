@@ -1,14 +1,25 @@
 export type UserRole = 'superadmin' | 'admin' | 'coach' | 'physio' | 'psikologis' | 'penolong_pegawai' | 'pegawai_belia_sukan'
 
+export interface SubmoduleCRUD {
+  read: boolean
+  create: boolean
+  update: boolean
+  delete: boolean
+}
+
+export type SubmoduleKey = 'athletes' | 'strength' | 'fitness' | 'fitness_config' | 'inbody' | 'supplement' | 'physio' | 'physio_cases' | 'psychology' | 'reports'
+
 export interface ModulePermissions {
-  athletes: boolean
-  inbody: boolean
-  supplement: boolean
-  physio: boolean
-  fitness: boolean
-  strength: boolean
-  reports: boolean
-  psychology: boolean
+  athletes: SubmoduleCRUD
+  strength: SubmoduleCRUD
+  fitness: SubmoduleCRUD
+  fitness_config: SubmoduleCRUD
+  inbody: SubmoduleCRUD
+  supplement: SubmoduleCRUD
+  physio: SubmoduleCRUD
+  physio_cases: SubmoduleCRUD
+  psychology: SubmoduleCRUD
+  reports: SubmoduleCRUD
   supplement_coordinator: boolean
   supplement_supporter: boolean
   supplement_approver: boolean

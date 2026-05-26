@@ -10,7 +10,22 @@
 create table profiles (
   id uuid references auth.users(id) on delete cascade primary key,
   full_name text,
-  role text check (role in ('superadmin', 'admin', 'coach', 'physio', 'medical', 'athlete')) not null default 'admin',
+  role text check (role in ('superadmin', 'admin', 'coach', 'physio', 'psikologis', 'penolong_pegawai', 'pegawai_belia_sukan')) not null default 'admin',
+  module_permissions jsonb default '{
+    "athletes": {"read": true, "create": true, "update": true, "delete": true},
+    "strength": {"read": false, "create": false, "update": false, "delete": false},
+    "fitness": {"read": false, "create": false, "update": false, "delete": false},
+    "fitness_config": {"read": false, "create": false, "update": false, "delete": false},
+    "inbody": {"read": false, "create": false, "update": false, "delete": false},
+    "supplement": {"read": false, "create": false, "update": false, "delete": false},
+    "physio": {"read": false, "create": false, "update": false, "delete": false},
+    "physio_cases": {"read": false, "create": false, "update": false, "delete": false},
+    "psychology": {"read": false, "create": false, "update": false, "delete": false},
+    "reports": {"read": true, "create": false, "update": false, "delete": false},
+    "supplement_coordinator": false,
+    "supplement_supporter": false,
+    "supplement_approver": false
+  }'::jsonb,
   created_at timestamptz default now()
 );
 
@@ -321,6 +336,8 @@ create table audit_logs (
 alter table profiles enable row level security;
 alter table athletes enable row level security;
 alter table fitness_tests enable row level security;
+alter table fitness_test_sessions enable row level security;
+alter table fitness_test_results enable row level security;
 alter table inbody_records enable row level security;
 alter table supplements enable row level security;
 alter table supplement_requests enable row level security;
@@ -347,9 +364,9 @@ create policy "Admins can update profiles"
 -- athletes
 create policy "Admins full access to athletes"
   on athletes for all using (get_my_role() in ('superadmin', 'admin'));
-create policy "Coach reads own athletes"
+create policy "Coach reads all athletes"
   on athletes for select using (
-    get_my_role() = 'coach' and coach_id = auth.uid()
+    get_my_role() = 'coach'
   );
 create policy "Physio/medical reads athletes"
   on athletes for select using (
@@ -363,10 +380,13 @@ create policy "Athlete reads own record"
 -- fitness_tests
 create policy "Admins full access to fitness_tests"
   on fitness_tests for all using (get_my_role() in ('superadmin', 'admin'));
-create policy "Coach reads fitness_tests for own athletes"
+create policy "Coach reads all fitness_tests"
   on fitness_tests for select using (
-    get_my_role() = 'coach' and
-    athlete_id in (select id from athletes where coach_id = auth.uid())
+    get_my_role() = 'coach'
+  );
+create policy "Medical reads all fitness_tests"
+  on fitness_tests for select using (
+    get_my_role() = 'medical'
   );
 create policy "Staff can insert fitness_tests"
   on fitness_tests for insert with check (
@@ -377,6 +397,30 @@ create policy "Athlete reads own fitness_tests"
     get_my_role() = 'athlete' and athlete_id = auth.uid()
   );
 
+-- fitness_test_sessions
+create policy "Admins full access to fitness_test_sessions"
+  on fitness_test_sessions for all using (get_my_role() in ('superadmin', 'admin'));
+create policy "Coach reads all fitness_test_sessions"
+  on fitness_test_sessions for select using (get_my_role() = 'coach');
+create policy "Medical reads all fitness_test_sessions"
+  on fitness_test_sessions for select using (get_my_role() = 'medical');
+create policy "Staff can insert fitness_test_sessions"
+  on fitness_test_sessions for insert with check (
+    get_my_role() in ('superadmin', 'admin', 'coach', 'medical')
+  );
+
+-- fitness_test_results
+create policy "Admins full access to fitness_test_results"
+  on fitness_test_results for all using (get_my_role() in ('superadmin', 'admin'));
+create policy "Coach reads all fitness_test_results"
+  on fitness_test_results for select using (get_my_role() = 'coach');
+create policy "Medical reads all fitness_test_results"
+  on fitness_test_results for select using (get_my_role() = 'medical');
+create policy "Staff can insert fitness_test_results"
+  on fitness_test_results for insert with check (
+    get_my_role() in ('superadmin', 'admin', 'coach', 'medical')
+  );
+
 -- inbody_records
 create policy "Admins full access to inbody_records"
   on inbody_records for all using (get_my_role() in ('superadmin', 'admin'));
@@ -384,10 +428,13 @@ create policy "Medical/coach can insert inbody_records"
   on inbody_records for insert with check (
     get_my_role() in ('medical', 'coach', 'admin', 'superadmin')
   );
-create policy "Coach reads inbody for own athletes"
+create policy "Coach reads all inbody_records"
   on inbody_records for select using (
-    get_my_role() = 'coach' and
-    athlete_id in (select id from athletes where coach_id = auth.uid())
+    get_my_role() = 'coach'
+  );
+create policy "Medical reads all inbody_records"
+  on inbody_records for select using (
+    get_my_role() = 'medical'
   );
 create policy "Athlete reads own inbody"
   on inbody_records for select using (
@@ -405,20 +452,19 @@ create policy "Admins/medical full access to supplement_requests"
   on supplement_requests for all using (get_my_role() in ('superadmin', 'admin', 'medical'));
 create policy "Coach can request supplements"
   on supplement_requests for insert with check (get_my_role() = 'coach');
-create policy "Coach reads own requests"
-  on supplement_requests for select using (requested_by = auth.uid());
+create policy "Coach reads all requests"
+  on supplement_requests for select using (get_my_role() = 'coach');
 
 -- physio_slots
 create policy "Admins full access to physio_slots"
   on physio_slots for all using (get_my_role() in ('superadmin', 'admin'));
-create policy "Physio manages own slots"
+create policy "Physio manages all slots"
   on physio_slots for all using (
-    get_my_role() = 'physio' and physiotherapist_id = auth.uid()
+    get_my_role() = 'physio'
   );
-create policy "Coach reads physio slots for own athletes"
+create policy "Coach reads all physio slots"
   on physio_slots for select using (
-    get_my_role() = 'coach' and
-    athlete_id in (select id from athletes where coach_id = auth.uid())
+    get_my_role() = 'coach'
   );
 
 -- sc_programs
@@ -426,13 +472,13 @@ create policy "Admins full access to sc_programs"
   on sc_programs for all using (get_my_role() in ('superadmin', 'admin'));
 create policy "Coaches can read sc_programs"
   on sc_programs for select using (get_my_role() = 'coach');
-create policy "Coaches can insert own sc_programs"
+create policy "Coaches can insert sc_programs"
   on sc_programs for insert with check (
-    get_my_role() = 'coach' and coach_id = auth.uid()
+    get_my_role() = 'coach'
   );
-create policy "Coaches can update own sc_programs"
+create policy "Coaches can update sc_programs"
   on sc_programs for update using (
-    get_my_role() = 'coach' and coach_id = auth.uid()
+    get_my_role() = 'coach'
   );
 
 -- coach_assignments
@@ -444,9 +490,9 @@ create policy "All authenticated users can read coach_assignments"
 -- strength_conditioning
 create policy "Admins full access to strength_conditioning"
   on strength_conditioning for all using (get_my_role() in ('superadmin', 'admin'));
-create policy "Coach manages own strength_conditioning"
+create policy "Coach accesses all strength_conditioning"
   on strength_conditioning for all using (
-    get_my_role() = 'coach' and recorded_by = auth.uid()
+    get_my_role() = 'coach'
   );
 
 -- audit_logs
@@ -454,6 +500,76 @@ create policy "Authenticated users can insert own audit logs"
   on audit_logs for insert with check (user_id = auth.uid());
 create policy "Admins can read all audit logs"
   on audit_logs for select using (get_my_role() in ('superadmin', 'admin'));
+
+
+-- =============================================================
+-- 13. COACH SCHEDULES (Latihan Suaian Fizikal / Strength Training)
+-- =============================================================
+create table coach_schedules (
+  id uuid default gen_random_uuid() primary key,
+  coach_id uuid references profiles(id) on delete cascade not null,
+  sport text not null,
+  schedule_name text not null,
+  valid_from date not null,
+  repeats boolean default false,
+  repeat_pattern text check (repeat_pattern in ('weekly', 'bi-weekly', 'custom')) default null,
+  repeat_until date default null,
+  created_at timestamptz default now()
+);
+
+create table coach_schedule_slots (
+  id uuid default gen_random_uuid() primary key,
+  schedule_id uuid references coach_schedules(id) on delete cascade not null,
+  slot_date date not null,
+  start_time time not null,
+  end_time time not null,
+  created_at timestamptz default now(),
+  unique (schedule_id, slot_date, start_time)
+);
+
+-- RLS Policies for coach schedules
+create policy "Coaches can manage own schedules"
+  on coach_schedules for all using (coach_id = auth.uid() or get_my_role() in ('superadmin', 'admin'));
+create policy "All authenticated can read coach schedules"
+  on coach_schedules for select using (auth.role() = 'authenticated');
+create policy "Coaches and admins can delete schedules"
+  on coach_schedules for delete using (coach_id = auth.uid() or get_my_role() in ('superadmin', 'admin'));
+
+create policy "Coaches can manage own schedule slots"
+  on coach_schedule_slots for all using (
+    schedule_id in (select id from coach_schedules where coach_id = auth.uid()) or get_my_role() in ('superadmin', 'admin')
+  );
+create policy "All authenticated can read schedule slots"
+  on coach_schedule_slots for select using (auth.role() = 'authenticated');
+create policy "Coaches and admins can delete schedule slots"
+  on coach_schedule_slots for delete using (
+    schedule_id in (select id from coach_schedules where coach_id = auth.uid()) or get_my_role() in ('superadmin', 'admin')
+  );
+
+
+-- =============================================================
+-- MIGRATION: Upgrade existing users to CRUD permissions (run once)
+-- =============================================================
+-- If you have existing users with boolean module_permissions, run this to convert to CRUD format:
+-- UPDATE profiles
+-- SET module_permissions = jsonb_build_object(
+--   'athletes',       jsonb_build_object('read', COALESCE((module_permissions->>'athletes')::boolean, false), 'create', false, 'update', false, 'delete', false),
+--   'strength',       jsonb_build_object('read', COALESCE((module_permissions->>'strength')::boolean, false), 'create', false, 'update', false, 'delete', false),
+--   'fitness',        jsonb_build_object('read', COALESCE((module_permissions->>'fitness')::boolean, false), 'create', false, 'update', false, 'delete', false),
+--   'fitness_config', jsonb_build_object('read', false, 'create', false, 'update', false, 'delete', false),
+--   'inbody',         jsonb_build_object('read', COALESCE((module_permissions->>'inbody')::boolean, false), 'create', false, 'update', false, 'delete', false),
+--   'supplement',     jsonb_build_object('read', COALESCE((module_permissions->>'supplement')::boolean, false), 'create', false, 'update', false, 'delete', false),
+--   'physio',         jsonb_build_object('read', COALESCE((module_permissions->>'physio')::boolean, false), 'create', false, 'update', false, 'delete', false),
+--   'physio_cases',   jsonb_build_object('read', COALESCE((module_permissions->>'physio')::boolean, false), 'create', false, 'update', false, 'delete', false),
+--   'psychology',     jsonb_build_object('read', COALESCE((module_permissions->>'psychology')::boolean, false), 'create', false, 'update', false, 'delete', false),
+--   'reports',        jsonb_build_object('read', COALESCE((module_permissions->>'reports')::boolean, false), 'create', false, 'update', false, 'delete', false),
+--   'supplement_coordinator', COALESCE((module_permissions->>'supplement_coordinator')::boolean, false),
+--   'supplement_supporter',   COALESCE((module_permissions->>'supplement_supporter')::boolean, false),
+--   'supplement_approver',    COALESCE((module_permissions->>'supplement_approver')::boolean, false)
+-- )
+-- WHERE module_permissions IS NOT NULL
+--   AND module_permissions ? 'athletes'
+--   AND NOT (module_permissions -> 'athletes' ? 'read');
 
 
 -- =============================================================

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
+import { usePermissions } from '../../../hooks/usePermissions'
 import type { FitnessTestDefinition, SportFitnessTest } from '../../../types'
 
 interface CategoryGroup {
@@ -10,7 +11,8 @@ interface CategoryGroup {
 
 export default function FitnessTestConfigPage() {
   const { profile } = useAuth()
-  const isAdmin = profile?.role === 'superadmin' || profile?.role === 'admin'
+  const { can } = usePermissions()
+  const isAdmin = can('fitness_config', 'create')
 
   const [sports, setSports] = useState<string[]>([])
   const [selectedSport, setSelectedSport] = useState('')
@@ -67,6 +69,9 @@ export default function FitnessTestConfigPage() {
   }
 
   async function toggleTest(testId: string, isAdded: boolean) {
+    if (isAdded && !can('fitness_config', 'delete')) return
+    if (!isAdded && !can('fitness_config', 'create')) return
+
     setSaving(true)
     if (isAdded) {
       const { error } = await supabase.from('sport_fitness_tests').delete().eq('sport', selectedSport).eq('test_id', testId)
@@ -91,7 +96,7 @@ export default function FitnessTestConfigPage() {
   }
 
   if (!isAdmin) {
-    return <div className="py-16 text-center text-[#888]">Akses ditolak. Admin sahaja.</div>
+    return <div className="py-16 text-center text-[#888]">Akses ditolak.</div>
   }
 
   if (loading) {

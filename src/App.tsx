@@ -19,6 +19,7 @@ import PhysioCasePage from './pages/rehabilitation/physio/PhysioCasePage'
 import PsychologyRatingPage from './pages/psychology/PsychologyRatingPage'
 import ReportsPage from './pages/reports/ReportsPage'
 import UserManagementPage from './pages/admin/UserManagementPage'
+import AuditLogPage from './pages/admin/AuditLogPage'
 
 export default function App() {
   return (
@@ -52,6 +53,14 @@ export default function App() {
               element={
                 <ProtectedRoute roles={['superadmin', 'admin']}>
                   <UserManagementPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="admin/audit"
+              element={
+                <ProtectedRoute roles={['superadmin', 'admin']}>
+                  <AuditLogPage />
                 </ProtectedRoute>
               }
             />
