@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
-import { createUserAdmin } from '../../lib/adminClient'
+import { createUserAdmin, deleteUserAdmin } from '../../lib/adminClient'
 import { useAuth } from '../../context/AuthContext'
+import { validatePassword, getPasswordStrengthColor, getPasswordStrengthLabel, isPasswordValid } from '../../lib/passwordValidator'
+import { logAction } from '../../lib/audit'
 import type { ModulePermissions } from '../../types'
 
 interface UserProfile {
@@ -95,6 +97,9 @@ export default function UserManagementPage() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [permissionTab, setPermissionTab] = useState<'utama' | 'kecergasan' | 'prestasi' | 'fisioterapi' | 'psikologi' | 'pelaporan'>('utama')
+  const [createPermissionTab, setCreatePermissionTab] = useState<'utama' | 'kecergasan' | 'prestasi' | 'fisioterapi' | 'psikologi' | 'pelaporan'>('utama')
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   const [createOpen, setCreateOpen] = useState(false)
   const getInitialCreateForm = () => {
@@ -105,6 +110,7 @@ export default function UserManagementPage() {
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const [createSuccess, setCreateSuccess] = useState(false)
+  const [passwordStrength, setPasswordStrength] = useState(validatePassword(''))
 
   useEffect(() => { fetchUsers() }, [])
 
@@ -141,9 +147,27 @@ export default function UserManagementPage() {
       .update({ full_name: editForm.full_name || null, role: editForm.role, module_permissions: editForm.module_permissions })
       .eq('id', editingUser.id)
     if (error) { setSaveError(error.message); setSaving(false); return }
+    await logAction(currentUser?.id || '', 'edit_user', 'profiles', editingUser.id)
     setSaving(false)
     setEditingUser(null)
     fetchUsers()
+  }
+
+  async function handleDelete() {
+    if (!editingUser || !isSuperAdmin) return
+    setDeleting(true)
+    setSaveError(null)
+    try {
+      await deleteUserAdmin(editingUser.id)
+      await logAction(currentUser?.id || '', 'delete_user', 'profiles', editingUser.id)
+      setDeleting(false)
+      setEditingUser(null)
+      setDeleteConfirm(false)
+      fetchUsers()
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Gagal memadamkan pengguna')
+      setDeleting(false)
+    }
   }
 
   async function handleCreate(e?: React.MouseEvent) {
@@ -154,8 +178,9 @@ export default function UserManagementPage() {
       setCreateError('Sila isi semua medan.')
       return
     }
-    if (createForm.password.length < 8) {
-      setCreateError('Kata laluan mestilah sekurang-kurangnya 8 aksara.')
+    if (!isPasswordValid(createForm.password)) {
+      const strength = validatePassword(createForm.password)
+      setCreateError(strength.errors[0] || 'Kata laluan tidak memenuhi persyaratan keamanan.')
       return
     }
     setCreating(true)
@@ -164,7 +189,7 @@ export default function UserManagementPage() {
     console.log('Creating user with role:', createForm.role, 'Permissions:', finalModulePermissions)
     try {
       console.log('Calling createUserAdmin...')
-      await createUserAdmin(
+      const newUser = await createUserAdmin(
         createForm.email.trim(),
         createForm.password,
         {
@@ -173,6 +198,8 @@ export default function UserManagementPage() {
         },
         finalModulePermissions
       )
+      const userId = newUser.user?.id || newUser.id
+      await logAction(currentUser?.id || '', 'create_user', 'profiles', userId)
       setCreating(false)
       setCreateSuccess(true)
       fetchUsers()
@@ -423,12 +450,35 @@ export default function UserManagementPage() {
                 </div>
               </div>
             </div>
-            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
-              <button onClick={() => setEditingUser(null)} className="px-4 py-2 text-sm text-[#888] hover:text-[#111] transition">Batal</button>
-              <button onClick={handleSave} disabled={saving} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
-                {saving ? 'Menyimpan...' : 'Simpan'}
-              </button>
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-between gap-3">
+              <div>
+                {isSuperAdmin && editingUser?.id !== currentUser?.id && (
+                  <button onClick={() => setDeleteConfirm(true)} className="px-4 py-2 text-sm text-red-600 hover:text-red-700 font-medium transition">
+                    Padam Pengguna
+                  </button>
+                )}
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => setEditingUser(null)} className="px-4 py-2 text-sm text-[#888] hover:text-[#111] transition">Batal</button>
+                <button onClick={handleSave} disabled={saving} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
+                  {saving ? 'Menyimpan...' : 'Simpan'}
+                </button>
+              </div>
             </div>
+
+            {deleteConfirm && (
+              <div className="px-6 py-4 border-t border-red-100 bg-red-50 space-y-3">
+                <p className="text-sm text-red-800 font-medium">Adakah anda pasti ingin memadam pengguna ini? Tindakan ini tidak dapat dibuat asal.</p>
+                <div className="flex justify-end gap-2">
+                  <button onClick={() => setDeleteConfirm(false)} disabled={deleting} className="px-4 py-2 text-sm text-red-600 hover:text-red-700 font-medium transition">
+                    Batal
+                  </button>
+                  <button onClick={handleDelete} disabled={deleting} className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
+                    {deleting ? 'Memadamkan...' : 'Padam'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -460,19 +510,64 @@ export default function UserManagementPage() {
                   </div>
                   <div>
                     <label className={labelCls}>Kata Laluan</label>
-                    <div className="relative">
+                    <div className="relative mb-2">
                       <input
                         type={createForm.showPw ? 'text' : 'password'}
                         value={createForm.password}
-                        onChange={e => setCreateForm(f => ({ ...f, password: e.target.value }))}
+                        onChange={e => {
+                          setCreateForm(f => ({ ...f, password: e.target.value }))
+                          setPasswordStrength(validatePassword(e.target.value))
+                        }}
                         className={inputCls + ' pr-10'}
-                        placeholder="Min. 8 aksara"
+                        placeholder="Min. 8 aksara, huruf besar, kecil, nombor, dan aksara khas"
                       />
                       <button type="button" onClick={() => setCreateForm(f => ({ ...f, showPw: !f.showPw }))}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-[#888] hover:text-[#111] text-xs">
                         {createForm.showPw ? 'Sembunyi' : 'Tunjuk'}
                       </button>
                     </div>
+
+                    {/* Password Strength Indicator */}
+                    {createForm.password && (
+                      <div className="space-y-2">
+                        {/* Strength Bar */}
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[10px] font-semibold uppercase tracking-widest text-[#888]">Kekuatan Kata Laluan</span>
+                            <span className="text-[11px] font-semibold" style={{ color: getPasswordStrengthColor(passwordStrength.strength) }}>
+                              {getPasswordStrengthLabel(passwordStrength.strength)}
+                            </span>
+                          </div>
+                          <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                            <div
+                              className="h-full transition-all"
+                              style={{
+                                width: `${(passwordStrength.score / 4) * 100}%`,
+                                backgroundColor: getPasswordStrengthColor(passwordStrength.strength),
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Requirements */}
+                        {(passwordStrength.errors.length > 0 || passwordStrength.suggestions.length > 0) && (
+                          <div className="space-y-1 pt-2 border-t border-gray-200">
+                            {passwordStrength.errors.map((error, idx) => (
+                              <div key={idx} className="flex items-start gap-2">
+                                <span className="text-red-500 text-xs font-bold mt-0.5">✕</span>
+                                <span className="text-[11px] text-red-600">{error}</span>
+                              </div>
+                            ))}
+                            {passwordStrength.suggestions.map((suggestion, idx) => (
+                              <div key={idx} className="flex items-start gap-2">
+                                <span className="text-yellow-600 text-xs font-bold mt-0.5">◆</span>
+                                <span className="text-[11px] text-yellow-600">{suggestion}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label className={labelCls}>Peranan</label>
@@ -484,39 +579,101 @@ export default function UserManagementPage() {
                     </select>
                   </div>
 
-                  {/* Module Permissions */}
+                  {/* Module Permissions Matrix - Tabbed */}
                   <div className="space-y-3">
                     <p className="text-[11px] font-semibold text-[#888] uppercase tracking-widest">Akses Modul</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {(['athletes', 'inbody', 'supplement', 'physio', 'fitness', 'strength', 'reports', 'psychology'] as const).map(m => {
-                        const isChecked = createForm.module_permissions[m] || false
-                        return (
-                          <button
-                            key={m}
-                            type="button"
-                            onClick={() => setCreateForm(f => ({ ...f, module_permissions: { ...f.module_permissions, [m]: !f.module_permissions[m] } }))}
-                            className={`flex items-center gap-2 px-2 py-1.5 rounded text-sm font-medium transition cursor-pointer ${isChecked ? 'bg-orange-100 text-[#F56A00] border border-orange-300' : 'bg-gray-100 text-gray-500 border border-gray-200'}`}
-                          >
-                            <span className="text-lg">{isChecked ? '✓' : '−'}</span>
-                            {moduleLabel[m]}
-                          </button>
-                        )
-                      })}
+
+                    {/* Tabs */}
+                    <div className="flex gap-1 border-b border-gray-200 overflow-x-auto">
+                      {[
+                        { id: 'utama', label: 'Utama' },
+                        { id: 'kecergasan', label: 'Kecergasan' },
+                        { id: 'prestasi', label: 'Prestasi' },
+                        { id: 'fisioterapi', label: 'Fisioterapi' },
+                        { id: 'psikologi', label: 'Psikologi' },
+                        { id: 'pelaporan', label: 'Pelaporan' },
+                      ].map(tab => (
+                        <button
+                          key={tab.id}
+                          onClick={() => setCreatePermissionTab(tab.id as typeof createPermissionTab)}
+                          className={`px-3 py-2 text-sm font-semibold border-b-2 transition whitespace-nowrap ${
+                            createPermissionTab === tab.id
+                              ? 'border-[#F56A00] text-[#F56A00]'
+                              : 'border-transparent text-[#888] hover:text-[#111]'
+                          }`}
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
                     </div>
-                    <p className="text-[11px] font-semibold text-[#888] uppercase tracking-widest mt-3">Kebenaran Aliran Suplemen</p>
-                    <div className="grid grid-cols-2 gap-2">
+
+                    {/* Permission Table for Active Tab */}
+                    <div className="border border-gray-200 rounded-lg overflow-hidden text-sm">
+                      {/* Header */}
+                      <div className="grid grid-cols-5 bg-gray-50 border-b border-gray-200">
+                        <div className="px-3 py-2 font-semibold text-[11px] text-[#888]">Modul</div>
+                        <div className="px-2 py-2 font-semibold text-[11px] text-[#888] text-center">Baca</div>
+                        <div className="px-2 py-2 font-semibold text-[11px] text-[#888] text-center">Tambah</div>
+                        <div className="px-2 py-2 font-semibold text-[11px] text-[#888] text-center">Kemaskini</div>
+                        <div className="px-2 py-2 font-semibold text-[11px] text-[#888] text-center">Padam</div>
+                      </div>
+                      {/* Rows */}
+                      {(() => {
+                        const sections = [
+                          { id: 'utama', items: [{ key: 'athletes' as const, label: 'Profil Atlet' }] },
+                          { id: 'kecergasan', items: [{ key: 'strength' as const, label: 'Latihan Suaian Fizikal' }, { key: 'fitness' as const, label: 'Ujian Kecergasan' }, { key: 'fitness_config' as const, label: 'Konfigurasi Ujian' }] },
+                          { id: 'prestasi', items: [{ key: 'inbody' as const, label: 'Penilaian InBody' }, { key: 'supplement' as const, label: 'Pengurusan Suplemen' }] },
+                          { id: 'fisioterapi', items: [{ key: 'physio' as const, label: 'Saringan Fisioterapi' }, { key: 'physio_cases' as const, label: 'Pengurusan Kes' }] },
+                          { id: 'psikologi', items: [{ key: 'psychology' as const, label: 'Penilaian Psikologi' }] },
+                          { id: 'pelaporan', items: [{ key: 'reports' as const, label: 'Laporan' }] },
+                        ]
+                        const active = sections.find(s => s.id === createPermissionTab)
+                        return active?.items.map((item: typeof active.items[0]) => (
+                          <div key={item.key} className="grid grid-cols-5 border-b border-gray-100 last:border-0 hover:bg-gray-50">
+                            <div className="px-3 py-2 text-[12px] text-[#111]">{item.label}</div>
+                            {(['read', 'create', 'update', 'delete'] as const).map(action => {
+                              const perm = createForm.module_permissions[item.key]
+                              const isChecked = typeof perm === 'boolean' ? false : perm[action]
+                              return (
+                                <div key={action} className="px-2 py-2 text-center">
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={e => {
+                                      const newPerm = typeof perm === 'boolean' ? { read: false, create: false, update: false, delete: false } : perm
+                                      const updated = { ...newPerm, [action]: e.target.checked }
+                                      if (action === 'read' && !e.target.checked) {
+                                        updated.create = false
+                                        updated.update = false
+                                        updated.delete = false
+                                      }
+                                      setCreateForm(f => ({ ...f, module_permissions: { ...f.module_permissions, [item.key]: updated } }))
+                                    }}
+                                    style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#F56A00' }}
+                                  />
+                                </div>
+                              )
+                            })}
+                          </div>
+                        ))
+                      })()}
+                    </div>
+
+                    {/* Supplement Workflow Permissions */}
+                    <p className="text-[11px] font-semibold text-[#888] uppercase tracking-widest mt-4">Kebenaran Aliran Suplemen</p>
+                    <div className="grid grid-cols-3 gap-2">
                       {(['supplement_coordinator', 'supplement_supporter', 'supplement_approver'] as const).map(m => {
                         const isChecked = createForm.module_permissions[m] || false
                         return (
-                          <button
-                            key={m}
-                            type="button"
-                            onClick={() => setCreateForm(f => ({ ...f, module_permissions: { ...f.module_permissions, [m]: !f.module_permissions[m] } }))}
-                            className={`flex items-center gap-2 px-2 py-1.5 rounded text-sm font-medium transition cursor-pointer ${isChecked ? 'bg-orange-100 text-[#F56A00] border border-orange-300' : 'bg-gray-100 text-gray-500 border border-gray-200'}`}
-                          >
-                            <span className="text-lg">{isChecked ? '✓' : '−'}</span>
-                            {moduleLabel[m]}
-                          </button>
+                          <label key={m} className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={typeof isChecked === 'boolean' ? isChecked : false}
+                              onChange={e => setCreateForm(f => ({ ...f, module_permissions: { ...f.module_permissions, [m]: e.target.checked } }))}
+                              style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#F56A00' }}
+                            />
+                            <span className="text-sm text-[#666]">{moduleLabel[m]}</span>
+                          </label>
                         )
                       })}
                     </div>
