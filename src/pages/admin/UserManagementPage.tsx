@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { createUserAdmin, deleteUserAdmin } from '../../lib/adminClient'
 import { useAuth } from '../../context/AuthContext'
 import { validatePassword, getPasswordStrengthColor, getPasswordStrengthLabel, isPasswordValid } from '../../lib/passwordValidator'
+import { logAction } from '../../lib/audit'
 import type { ModulePermissions } from '../../types'
 
 interface UserProfile {
@@ -146,6 +147,7 @@ export default function UserManagementPage() {
       .update({ full_name: editForm.full_name || null, role: editForm.role, module_permissions: editForm.module_permissions })
       .eq('id', editingUser.id)
     if (error) { setSaveError(error.message); setSaving(false); return }
+    await logAction(currentUser?.id || '', 'edit_user', 'profiles', editingUser.id)
     setSaving(false)
     setEditingUser(null)
     fetchUsers()
@@ -157,6 +159,7 @@ export default function UserManagementPage() {
     setSaveError(null)
     try {
       await deleteUserAdmin(editingUser.id)
+      await logAction(currentUser?.id || '', 'delete_user', 'profiles', editingUser.id)
       setDeleting(false)
       setEditingUser(null)
       setDeleteConfirm(false)
@@ -186,7 +189,7 @@ export default function UserManagementPage() {
     console.log('Creating user with role:', createForm.role, 'Permissions:', finalModulePermissions)
     try {
       console.log('Calling createUserAdmin...')
-      await createUserAdmin(
+      const newUser = await createUserAdmin(
         createForm.email.trim(),
         createForm.password,
         {
@@ -195,6 +198,8 @@ export default function UserManagementPage() {
         },
         finalModulePermissions
       )
+      const userId = newUser.user?.id || newUser.id
+      await logAction(currentUser?.id || '', 'create_user', 'profiles', userId)
       setCreating(false)
       setCreateSuccess(true)
       fetchUsers()
