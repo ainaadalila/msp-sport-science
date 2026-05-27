@@ -96,6 +96,7 @@ export default function UserManagementPage() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [permissionTab, setPermissionTab] = useState<'utama' | 'kecergasan' | 'prestasi' | 'fisioterapi' | 'psikologi' | 'pelaporan'>('utama')
+  const [createPermissionTab, setCreatePermissionTab] = useState<'utama' | 'kecergasan' | 'prestasi' | 'fisioterapi' | 'psikologi' | 'pelaporan'>('utama')
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
@@ -573,39 +574,101 @@ export default function UserManagementPage() {
                     </select>
                   </div>
 
-                  {/* Module Permissions */}
+                  {/* Module Permissions Matrix - Tabbed */}
                   <div className="space-y-3">
                     <p className="text-[11px] font-semibold text-[#888] uppercase tracking-widest">Akses Modul</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {(['athletes', 'inbody', 'supplement', 'physio', 'fitness', 'strength', 'reports', 'psychology'] as const).map(m => {
-                        const isChecked = createForm.module_permissions[m] || false
-                        return (
-                          <button
-                            key={m}
-                            type="button"
-                            onClick={() => setCreateForm(f => ({ ...f, module_permissions: { ...f.module_permissions, [m]: !f.module_permissions[m] } }))}
-                            className={`flex items-center gap-2 px-2 py-1.5 rounded text-sm font-medium transition cursor-pointer ${isChecked ? 'bg-orange-100 text-[#F56A00] border border-orange-300' : 'bg-gray-100 text-gray-500 border border-gray-200'}`}
-                          >
-                            <span className="text-lg">{isChecked ? '✓' : '−'}</span>
-                            {moduleLabel[m]}
-                          </button>
-                        )
-                      })}
+
+                    {/* Tabs */}
+                    <div className="flex gap-1 border-b border-gray-200 overflow-x-auto">
+                      {[
+                        { id: 'utama', label: 'Utama' },
+                        { id: 'kecergasan', label: 'Kecergasan' },
+                        { id: 'prestasi', label: 'Prestasi' },
+                        { id: 'fisioterapi', label: 'Fisioterapi' },
+                        { id: 'psikologi', label: 'Psikologi' },
+                        { id: 'pelaporan', label: 'Pelaporan' },
+                      ].map(tab => (
+                        <button
+                          key={tab.id}
+                          onClick={() => setCreatePermissionTab(tab.id as typeof createPermissionTab)}
+                          className={`px-3 py-2 text-sm font-semibold border-b-2 transition whitespace-nowrap ${
+                            createPermissionTab === tab.id
+                              ? 'border-[#F56A00] text-[#F56A00]'
+                              : 'border-transparent text-[#888] hover:text-[#111]'
+                          }`}
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
                     </div>
-                    <p className="text-[11px] font-semibold text-[#888] uppercase tracking-widest mt-3">Kebenaran Aliran Suplemen</p>
-                    <div className="grid grid-cols-2 gap-2">
+
+                    {/* Permission Table for Active Tab */}
+                    <div className="border border-gray-200 rounded-lg overflow-hidden text-sm">
+                      {/* Header */}
+                      <div className="grid grid-cols-5 bg-gray-50 border-b border-gray-200">
+                        <div className="px-3 py-2 font-semibold text-[11px] text-[#888]">Modul</div>
+                        <div className="px-2 py-2 font-semibold text-[11px] text-[#888] text-center">Baca</div>
+                        <div className="px-2 py-2 font-semibold text-[11px] text-[#888] text-center">Tambah</div>
+                        <div className="px-2 py-2 font-semibold text-[11px] text-[#888] text-center">Kemaskini</div>
+                        <div className="px-2 py-2 font-semibold text-[11px] text-[#888] text-center">Padam</div>
+                      </div>
+                      {/* Rows */}
+                      {(() => {
+                        const sections = [
+                          { id: 'utama', items: [{ key: 'athletes' as const, label: 'Profil Atlet' }] },
+                          { id: 'kecergasan', items: [{ key: 'strength' as const, label: 'Latihan Suaian Fizikal' }, { key: 'fitness' as const, label: 'Ujian Kecergasan' }, { key: 'fitness_config' as const, label: 'Konfigurasi Ujian' }] },
+                          { id: 'prestasi', items: [{ key: 'inbody' as const, label: 'Penilaian InBody' }, { key: 'supplement' as const, label: 'Pengurusan Suplemen' }] },
+                          { id: 'fisioterapi', items: [{ key: 'physio' as const, label: 'Saringan Fisioterapi' }, { key: 'physio_cases' as const, label: 'Pengurusan Kes' }] },
+                          { id: 'psikologi', items: [{ key: 'psychology' as const, label: 'Penilaian Psikologi' }] },
+                          { id: 'pelaporan', items: [{ key: 'reports' as const, label: 'Laporan' }] },
+                        ]
+                        const active = sections.find(s => s.id === createPermissionTab)
+                        return active?.items.map((item: typeof active.items[0]) => (
+                          <div key={item.key} className="grid grid-cols-5 border-b border-gray-100 last:border-0 hover:bg-gray-50">
+                            <div className="px-3 py-2 text-[12px] text-[#111]">{item.label}</div>
+                            {(['read', 'create', 'update', 'delete'] as const).map(action => {
+                              const perm = createForm.module_permissions[item.key]
+                              const isChecked = typeof perm === 'boolean' ? false : perm[action]
+                              return (
+                                <div key={action} className="px-2 py-2 text-center">
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={e => {
+                                      const newPerm = typeof perm === 'boolean' ? { read: false, create: false, update: false, delete: false } : perm
+                                      const updated = { ...newPerm, [action]: e.target.checked }
+                                      if (action === 'read' && !e.target.checked) {
+                                        updated.create = false
+                                        updated.update = false
+                                        updated.delete = false
+                                      }
+                                      setCreateForm(f => ({ ...f, module_permissions: { ...f.module_permissions, [item.key]: updated } }))
+                                    }}
+                                    style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#F56A00' }}
+                                  />
+                                </div>
+                              )
+                            })}
+                          </div>
+                        ))
+                      })()}
+                    </div>
+
+                    {/* Supplement Workflow Permissions */}
+                    <p className="text-[11px] font-semibold text-[#888] uppercase tracking-widest mt-4">Kebenaran Aliran Suplemen</p>
+                    <div className="grid grid-cols-3 gap-2">
                       {(['supplement_coordinator', 'supplement_supporter', 'supplement_approver'] as const).map(m => {
                         const isChecked = createForm.module_permissions[m] || false
                         return (
-                          <button
-                            key={m}
-                            type="button"
-                            onClick={() => setCreateForm(f => ({ ...f, module_permissions: { ...f.module_permissions, [m]: !f.module_permissions[m] } }))}
-                            className={`flex items-center gap-2 px-2 py-1.5 rounded text-sm font-medium transition cursor-pointer ${isChecked ? 'bg-orange-100 text-[#F56A00] border border-orange-300' : 'bg-gray-100 text-gray-500 border border-gray-200'}`}
-                          >
-                            <span className="text-lg">{isChecked ? '✓' : '−'}</span>
-                            {moduleLabel[m]}
-                          </button>
+                          <label key={m} className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={typeof isChecked === 'boolean' ? isChecked : false}
+                              onChange={e => setCreateForm(f => ({ ...f, module_permissions: { ...f.module_permissions, [m]: e.target.checked } }))}
+                              style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#F56A00' }}
+                            />
+                            <span className="text-sm text-[#666]">{moduleLabel[m]}</span>
+                          </label>
                         )
                       })}
                     </div>
