@@ -25,7 +25,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Detect recovery tokens and redirect to reset-password page
     const hash = window.location.hash
     if (hash.includes('type=recovery') && !window.location.pathname.includes('reset-password')) {
-      window.location.pathname = '/reset-password'
+      window.location.href = '/reset-password' + hash
       return
     }
 
