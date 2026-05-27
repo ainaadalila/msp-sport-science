@@ -66,23 +66,31 @@ export async function createUserAdmin(
 
 export async function deleteUserAdmin(userId: string) {
   try {
-    console.log('1. Deleting related supplement requests...')
+    console.log('1. Deleting related physio slots...')
+    const { error: slotError } = await adminDb.from('physio_slots').delete().eq('physiotherapist_id', userId)
+    if (slotError) {
+      console.error('Physio slot delete error:', slotError)
+      throw new Error(`Failed to delete physio slots: ${slotError.message}`)
+    }
+    console.log('2. Physio slots deleted')
+
+    console.log('3. Deleting related supplement requests...')
     const { error: requestError } = await adminDb.from('supplement_requests').delete().eq('requested_by', userId)
     if (requestError) {
       console.error('Supplement request delete error:', requestError)
       throw new Error(`Failed to delete supplement requests: ${requestError.message}`)
     }
-    console.log('2. Supplement requests deleted')
+    console.log('4. Supplement requests deleted')
 
-    console.log('3. Deleting profile from database...')
+    console.log('5. Deleting profile from database...')
     const { error: profileError } = await adminDb.from('profiles').delete().eq('id', userId)
     if (profileError) {
       console.error('Profile delete error:', profileError)
       throw new Error(`Failed to delete profile: ${profileError.message}`)
     }
-    console.log('4. Profile deleted successfully')
+    console.log('6. Profile deleted successfully')
 
-    console.log('5. Disabling auth user...')
+    console.log('7. Disabling auth user...')
     const updateResponse = await fetch(`${supabaseUrl}/auth/v1/admin/users/${userId}`, {
       method: 'PUT',
       headers: {
@@ -99,7 +107,7 @@ export async function deleteUserAdmin(userId: string) {
       // Don't throw - profile is already deleted, this is optional
       console.log('Auth user update failed, but profile was deleted successfully')
     } else {
-      console.log('6. Auth user marked as deleted')
+      console.log('8. Auth user marked as deleted')
     }
 
     return true
