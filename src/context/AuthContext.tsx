@@ -22,6 +22,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // Detect recovery tokens and redirect to reset-password page
+    const hash = window.location.hash
+    if (hash.includes('type=recovery') && !window.location.pathname.includes('reset-password')) {
+      window.location.pathname = '/reset-password'
+      return
+    }
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       setUser(session?.user ?? null)
