@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { validatePassword, getPasswordStrengthColor, getPasswordStrengthLabel, isPasswordValid } from '../../lib/passwordValidator'
 
 export default function ResetPasswordPage() {
   const navigate = useNavigate()
@@ -11,6 +12,7 @@ export default function ResetPasswordPage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [verifying, setVerifying] = useState(true)
+  const [passwordStrength, setPasswordStrength] = useState(validatePassword(''))
 
   useEffect(() => {
     supabase.auth.onAuthStateChange((event, session) => {
@@ -32,8 +34,9 @@ export default function ResetPasswordPage() {
     e.preventDefault()
     setError(null)
 
-    if (password.length < 8) {
-      setError('Kata laluan mestilah sekurang-kurangnya 8 aksara.')
+    if (!isPasswordValid(password)) {
+      const strength = validatePassword(password)
+      setError(strength.errors[0] || 'Kata laluan tidak memenuhi persyaratan keamanan.')
       return
     }
     if (password !== confirm) {
@@ -94,12 +97,15 @@ export default function ResetPasswordPage() {
                 <label className="block text-[10px] font-semibold uppercase tracking-widest text-[#888] mb-1.5">
                   Kata Laluan Baharu
                 </label>
-                <div className="relative">
+                <div className="relative mb-2">
                   <input
                     type={showPw ? 'text' : 'password'}
                     value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    placeholder="Min. 8 aksara"
+                    onChange={e => {
+                      setPassword(e.target.value)
+                      setPasswordStrength(validatePassword(e.target.value))
+                    }}
+                    placeholder="Min. 8 aksara, huruf besar, kecil, nombor, dan aksara khas"
                     className="w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3.5 py-3 pr-10 text-sm text-[#111] placeholder-[#bbb] outline-none transition focus:border-[#F56A00] focus:bg-white"
                   />
                   <button
@@ -110,6 +116,48 @@ export default function ResetPasswordPage() {
                     {showPw ? 'Sembunyi' : 'Tunjuk'}
                   </button>
                 </div>
+
+                {/* Password Strength Indicator */}
+                {password && (
+                  <div className="space-y-2">
+                    {/* Strength Bar */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-semibold uppercase tracking-widest text-[#888]">Kekuatan Kata Laluan</span>
+                        <span className="text-[11px] font-semibold" style={{ color: getPasswordStrengthColor(passwordStrength.strength) }}>
+                          {getPasswordStrengthLabel(passwordStrength.strength)}
+                        </span>
+                      </div>
+                      <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div
+                          className="h-full transition-all"
+                          style={{
+                            width: `${(passwordStrength.score / 4) * 100}%`,
+                            backgroundColor: getPasswordStrengthColor(passwordStrength.strength),
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Requirements */}
+                    {(passwordStrength.errors.length > 0 || passwordStrength.suggestions.length > 0) && (
+                      <div className="space-y-1 pt-2 border-t border-gray-200">
+                        {passwordStrength.errors.map((error, idx) => (
+                          <div key={idx} className="flex items-start gap-2">
+                            <span className="text-red-500 text-xs font-bold mt-0.5">✕</span>
+                            <span className="text-[11px] text-red-600">{error}</span>
+                          </div>
+                        ))}
+                        {passwordStrength.suggestions.map((suggestion, idx) => (
+                          <div key={idx} className="flex items-start gap-2">
+                            <span className="text-yellow-600 text-xs font-bold mt-0.5">◆</span>
+                            <span className="text-[11px] text-yellow-600">{suggestion}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="mb-[18px]">
