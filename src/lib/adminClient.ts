@@ -3,6 +3,10 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY
 
+console.log('[adminClient] URL loaded:', !!supabaseUrl)
+console.log('[adminClient] Service role key loaded:', !!serviceRoleKey)
+console.log('[adminClient] Key length:', serviceRoleKey?.length ?? 0)
+
 // Client for inserting into profiles table
 const adminDb = createClient(supabaseUrl!, serviceRoleKey!, {
   auth: { autoRefreshToken: false, persistSession: false },
@@ -16,6 +20,7 @@ export async function createUserAdmin(
 ) {
   try {
     console.log('1. Creating auth user...')
+    console.log('[createUserAdmin] Using key length:', serviceRoleKey?.length ?? 0)
     const authResponse = await fetch(`${supabaseUrl}/auth/v1/admin/users`, {
       method: 'POST',
       headers: {
@@ -30,6 +35,7 @@ export async function createUserAdmin(
         user_metadata: userData,
       }),
     })
+    console.log('[createUserAdmin] Response status:', authResponse.status)
 
     if (!authResponse.ok) {
       const error = await authResponse.json()
