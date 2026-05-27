@@ -125,7 +125,7 @@ export default function UserManagementPage() {
 
   async function fetchUsers() {
     setLoading(true)
-    const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: false })
+    const { data } = await supabase.from('profiles').select('id, full_name, role, created_at, module_permissions').order('created_at', { ascending: false })
     setUsers(data ?? [])
     setLoading(false)
   }

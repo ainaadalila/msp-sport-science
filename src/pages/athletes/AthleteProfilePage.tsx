@@ -51,13 +51,6 @@ interface PhysioSlot {
   injury_type: string | null
 }
 
-interface SupRequest {
-  id: string
-  status: string
-  quantity: number
-  supplements?: Array<{ name: string; unit: string }>
-}
-
 const statusLabel: Record<string, string> = { active: 'Aktif', rest: 'Rehat', injured: 'Cedera' }
 const statusStyle: Record<string, string> = {
   active: 'bg-green-50 text-[#3A9E6A] border border-green-200',
@@ -111,7 +104,6 @@ export default function AthleteProfilePage() {
   const [fitnessResults, setFitnessResults] = useState<FitnessTestResult[]>([])
   const [scRecords, setScRecords] = useState<SCRecord[]>([])
   const [physio, setPhysio] = useState<PhysioSlot | null>(null)
-  const [supRequests, setSupRequests] = useState<SupRequest[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -120,8 +112,14 @@ export default function AthleteProfilePage() {
 
   async function fetchAll(athleteId: string) {
     setLoading(true)
-    const [athRes, inbodyRes, fitnessSessionRes, scRes, physioRes] = await Promise.all([
-      supabase.from('athletes').select('*').eq('id', athleteId).single(),
+
+    // Fetch athlete first to get sport for supplement query
+    const { data: athData } = await supabase.from('athletes').select('id, name, ic_number, sport, status, gender, date_of_birth, weight, height, is_elite, photo_url, category, created_at').eq('id', athleteId).single()
+    if (!athData) { navigate('/athletes', { replace: true }); return }
+    setAthlete(athData)
+
+    // Run all remaining queries in parallel
+    const [inbodyRes, fitnessSessionRes, scRes, physioRes, fitnessResultsRes] = await Promise.all([
       supabase.from('inbody_records').select('recorded_date, weight, smm, bmi, fat_pct, inbody_score')
         .eq('athlete_id', athleteId).order('recorded_date', { ascending: false }).limit(1).single(),
       supabase.from('fitness_test_sessions').select('id, session, year, recorded_date')
@@ -130,55 +128,31 @@ export default function AthleteProfilePage() {
         .eq('athlete_id', athleteId).order('session_date', { ascending: false }).limit(20),
       supabase.from('physio_slots').select('slot_date, session_type, injury_type')
         .eq('athlete_id', athleteId).order('slot_date', { ascending: false }).limit(1).single(),
+      supabase.from('fitness_test_sessions').select('id').eq('athlete_id', athleteId).order('recorded_date', { ascending: false }).limit(1).single()
+        .then(async (sessionRes) => {
+          if (sessionRes.data?.id) {
+            return supabase.from('fitness_test_results').select('test_id, result_value, rating, test:test_id(test_name)')
+              .eq('session_id', sessionRes.data.id).order('test_id')
+          }
+          return { data: [] }
+        })
     ])
 
-    if (!athRes.data) { navigate('/athletes', { replace: true }); return }
-    setAthlete(athRes.data)
     setInbody(inbodyRes.data ?? null)
     setFitness(fitnessSessionRes.data ?? null)
     setScRecords(scRes.data ?? [])
     setPhysio(physioRes.data ?? null)
 
-    // Fetch fitness test results for the latest session
-    if (fitnessSessionRes.data?.id) {
-      const resultsRes = await supabase
-        .from('fitness_test_results')
-        .select('test_id, result_value, rating, test:test_id(test_name)')
-        .eq('session_id', fitnessSessionRes.data.id)
-        .order('test_id')
-      const results = (resultsRes.data ?? []).map(r => ({
+    // Process fitness results
+    const resultsData = await fitnessResultsRes
+    if (resultsData.data) {
+      const results = resultsData.data.map(r => ({
         test_id: r.test_id,
         result_value: r.result_value,
         rating: r.rating,
         test_name: (r.test as any)?.test_name || 'Test',
       })) as FitnessTestResult[]
       setFitnessResults(results)
-    }
-
-    // Supplement requests for this athlete's sport
-    if (athRes.data.sport) {
-      const { data: reqData } = await supabase
-        .from('supplement_requests')
-        .select('id, status, quantity, supplement_id')
-        .eq('sport', athRes.data.sport)
-        .eq('status', 'approved')
-        .order('created_at', { ascending: false })
-        .limit(5)
-
-      if (reqData && reqData.length > 0) {
-        const supIds = reqData.map(r => r.supplement_id)
-        const { data: supData } = await supabase
-          .from('supplements')
-          .select('id, name, unit')
-          .in('id', supIds)
-
-        const supMap = new Map(supData?.map(s => [s.id, s]) ?? [])
-        const enriched = reqData.map(r => ({
-          ...r,
-          supplements: [supMap.get(r.supplement_id)].filter(Boolean)
-        }))
-        setSupRequests(enriched as SupRequest[])
-      }
     }
 
     setLoading(false)
@@ -253,7 +227,7 @@ export default function AthleteProfilePage() {
           title="Penilaian InBody"
           date={inbody?.recorded_date ? fmtDate(inbody.recorded_date) : null}
           empty={!inbody}
-          linkTo="/performance/inbody"
+          linkTo={`/performance/inbody?athlete=${id}`}
         >
           {inbody && (
             <div className="grid grid-cols-2 gap-3 mt-3">
@@ -282,7 +256,7 @@ export default function AthleteProfilePage() {
           title="Ujian Kecergasan"
           date={fitness ? `${fitness.session} ${fitness.year}` : null}
           empty={!fitness}
-          linkTo="/fitness/testing"
+          linkTo={`/fitness/testing?athlete=${id}`}
         >
           {fitness && fitnessResults.length > 0 && (
             <div className="grid grid-cols-2 gap-3 mt-3">
@@ -298,7 +272,7 @@ export default function AthleteProfilePage() {
           title="Latihan Suaian Fizikal"
           date={scRecords[0]?.session_date ? fmtDate(scRecords[0].session_date) : null}
           empty={scRecords.length === 0}
-          linkTo="/fitness/strength"
+          linkTo={`/fitness/strength?athlete=${id}&tab=kehadiran`}
         >
           {scRecords.length > 0 && (
             <div className="mt-3 space-y-3">
@@ -327,7 +301,7 @@ export default function AthleteProfilePage() {
           title="Saringan Fisioterapi"
           date={physio?.slot_date ? fmtDate(physio.slot_date) : null}
           empty={!physio}
-          linkTo="/rehabilitation/physio"
+          linkTo={`/rehabilitation/physio?athlete=${id}`}
         >
           {physio && (
             <div className="mt-3 space-y-2">
@@ -342,33 +316,6 @@ export default function AthleteProfilePage() {
         </SummaryCard>
 
       </div>
-
-      {/* Supplement requests for sport */}
-      {supRequests.length > 0 && (
-        <div className="bg-white rounded-2xl border border-gray-200 p-5">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-[#888]">Permohonan Suplemen</p>
-              <p className="text-[11px] text-[#bbb] mt-0.5">Untuk sukan {athlete.sport}</p>
-            </div>
-            <Link to="/performance/supplement" className="text-xs text-[#F56A00] hover:underline font-semibold">Lihat Butiran →</Link>
-          </div>
-          <div className="space-y-1.5">
-            {supRequests.map(r => (
-              <div key={r.id} className="flex items-center justify-between text-sm">
-                <span className="text-[#444]">{r.supplements?.[0]?.name ?? '—'} <span className="text-[#888]">× {r.quantity} {r.supplements?.[0]?.unit ?? ''}</span></span>
-                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                  r.status === 'approved' ? 'bg-green-50 text-[#3A9E6A] border border-green-200'
-                  : r.status === 'rejected' ? 'bg-red-50 text-[#D44040] border border-red-200'
-                  : 'bg-[rgba(245,106,0,0.08)] text-[#F56A00] border border-[rgba(245,106,0,0.2)]'
-                }`}>
-                  {r.status === 'approved' ? 'Diluluskan' : r.status === 'rejected' ? 'Ditolak' : 'Menunggu'}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
     </div>
   )

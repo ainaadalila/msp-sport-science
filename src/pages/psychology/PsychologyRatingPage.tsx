@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { usePermissions } from '../../hooks/usePermissions'
 import type { PhysioRating } from '../../types'
 import Papa from 'papaparse'
+import * as XLSX from 'xlsx'
 
 interface CSVRow {
   [key: string]: string
@@ -30,14 +31,6 @@ const PHASE_LABEL: Record<string, string> = {
   pemulihan: 'Pemulihan',
 }
 
-const SCALE_LABEL = {
-  'Sangat Tidak Bersetuju': 1,
-  'Tidak Bersetuju': 2,
-  'Neutral': 3,
-  'Bersetuju': 4,
-  'Sangat Bersetuju': 5,
-}
-
 export default function PsychologyRatingPage() {
   const { can } = usePermissions()
 
@@ -45,8 +38,13 @@ export default function PsychologyRatingPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [filterPhase, setFilterPhase] = useState<'all' | 'persediaan' | 'pertandingan' | 'pemulihan'>('all')
+  const [filterAthlete, setFilterAthlete] = useState('')
+  const [filterSport, setFilterSport] = useState('')
+  const [search, setSearch] = useState('')
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
+  const [uploadSuccess, setUploadSuccess] = useState('')
+  const [uploadWarning, setUploadWarning] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -58,7 +56,7 @@ export default function PsychologyRatingPage() {
       setLoading(true)
       setError('')
       const { data, error: err } = await supabase
-        .from('physio_ratings')
+        .from('psychology_ratings')
         .select('*, athlete:athletes(id, name, sport)')
         .order('assessment_date', { ascending: false })
 
@@ -78,7 +76,7 @@ export default function PsychologyRatingPage() {
     let self_conf = 0
     for (const q of QUESTION_MAPPING.self_confidence) {
       if (q === 3) {
-        self_conf += 6 - (responses[`q${q}`] || 0)
+        self_conf += 5 - (responses[`q${q}`] || 0)
       } else {
         self_conf += responses[`q${q}`] || 0
       }
@@ -87,73 +85,156 @@ export default function PsychologyRatingPage() {
     return { cognitive, somatic, self_conf }
   }
 
-  const parseCSV = (file: File) => {
+  const parseFile = (file: File, onMissing: (athletes: string[]) => void) => {
     return new Promise<ParsedAssessment[]>((resolve, reject) => {
-      Papa.parse(file, {
-        header: true,
-        skipEmptyLines: true,
-        complete: async (results) => {
+      const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls')
+
+      if (isExcel) {
+        const reader = new FileReader()
+        reader.onload = async (e) => {
           try {
-            const parsed: ParsedAssessment[] = []
-
-            for (const row of results.data as CSVRow[]) {
-              const athleteName = row['Nama Atlet'] || ''
-              const phase = row['Fasa'] ? row['Fasa'].toLowerCase().replace(/\s+/g, '') : ''
-
-              if (!athleteName || !phase) continue
-
-              const validPhase = ['persediaan', 'pertandingan', 'pemulihan'].includes(phase)
-                ? (phase as 'persediaan' | 'pertandingan' | 'pemulihan')
-                : null
-
-              if (!validPhase) {
-                console.warn(`Skipping row with invalid phase: ${phase}`)
-                continue
-              }
-
-              try {
-                const { data: athleteData } = await supabase
-                  .from('athletes')
-                  .select('id')
-                  .ilike('name', athleteName)
-                  .single()
-
-                if (!athleteData) {
-                  console.warn(`Athlete not found: ${athleteName}`)
-                  continue
-                }
-
-                const responses: Record<string, number> = {}
-                for (let i = 1; i <= 17; i++) {
-                  const colName = `[Soalan ${i}]`
-                  const answer = row[colName] || ''
-                  responses[`q${i}`] = SCALE_LABEL[answer as keyof typeof SCALE_LABEL] || 0
-                }
-
-                const { cognitive, somatic, self_conf } = calculateScores(responses)
-
-                parsed.push({
-                  athlete_id: athleteData.id,
-                  athlete_name: athleteName,
-                  phase: validPhase,
-                  responses,
-                  cognitive_anxiety_score: cognitive,
-                  somatic_anxiety_score: somatic,
-                  self_confidence_score: self_conf,
-                })
-              } catch (err) {
-                console.error(`Error processing athlete ${athleteName}:`, err)
-              }
-            }
-
-            resolve(parsed)
+            const data = e.target?.result
+            const workbook = XLSX.read(data, { type: 'array' })
+            const worksheet = workbook.Sheets[workbook.SheetNames[0]]
+            const rows = XLSX.utils.sheet_to_json(worksheet) as CSVRow[]
+            await processRows(rows, resolve, reject, onMissing)
           } catch (err) {
             reject(err)
           }
-        },
-        error: (error) => reject(error),
-      })
+        }
+        reader.onerror = () => reject(new Error('Failed to read file'))
+        reader.readAsArrayBuffer(file)
+      } else {
+        Papa.parse(file, {
+          header: true,
+          skipEmptyLines: true,
+          complete: async (results) => {
+            await processRows(results.data as CSVRow[], resolve, reject, onMissing)
+          },
+          error: (error) => reject(error),
+        })
+      }
     })
+  }
+
+  const processRows = async (
+    rows: CSVRow[],
+    resolve: (value: ParsedAssessment[]) => void,
+    reject: (reason?: unknown) => void,
+    onMissing: (athletes: string[]) => void
+  ) => {
+    try {
+      const parsed: ParsedAssessment[] = []
+      const duplicates: string[] = []
+      const missing: string[] = []
+
+      for (const row of rows) {
+        const athleteName = row['NAMA ATLET'] || row['Nama Atlet'] || ''
+        const faseRaw = row['FASA'] || row['Fasa'] || ''
+        const phase = faseRaw
+          .toLowerCase()
+          .replace(/fasa\s+/i, '')
+          .replace(/\s+/g, '') as 'persediaan' | 'pertandingan' | 'pemulihan'
+
+        if (!athleteName || !['persediaan', 'pertandingan', 'pemulihan'].includes(phase)) {
+          continue
+        }
+
+        try {
+          let icNumber = String(row['NO. KAD PENGENALAN'] || '').trim()
+
+          if (!icNumber) {
+            console.warn(`Missing IC number for athlete: ${athleteName}`)
+            continue
+          }
+
+          if (!icNumber.startsWith('0') && icNumber.length === 11) {
+            icNumber = '0' + icNumber
+          }
+
+          const icWithDashes = icNumber.length === 12 && !icNumber.includes('-')
+            ? `${icNumber.substring(0, 6)}-${icNumber.substring(6, 8)}-${icNumber.substring(8)}`
+            : icNumber
+
+          let { data: athleteData } = await supabase
+            .from('athletes')
+            .select('id')
+            .eq('ic_number', icWithDashes)
+            .single()
+
+          if (!athleteData) {
+            missing.push(`${athleteName} (IC: ${icNumber})`)
+            continue
+          }
+
+          const { data: existingRecord } = await supabase
+            .from('psychology_ratings')
+            .select('id')
+            .eq('athlete_id', athleteData.id)
+            .eq('phase', phase)
+            .single()
+
+          if (existingRecord) {
+            duplicates.push(`${athleteName} - ${PHASE_LABEL[phase]}`)
+            continue
+          }
+
+          const responses: Record<string, number> = {}
+
+          const questionMappings = [
+            '1. Saya rasa bimbang tentang pertandingan',
+            '2. Saya rasa gementar',
+            '3. Saya rasa tenang (R)',
+            '4. Saya mempunyai keyakinan terhadap diri sendiri',
+            '5. Saya rasa gelisah',
+            '6. Saya bimbang jika tidak dapat lakukan yang terbaik',
+            '7. Badan saya terasa tegang',
+            '8. Saya rasa ragu-ragu tentang kemampuan saya',
+            '9. Saya rasa yakin pada diri sendiri',
+            '10. Perut saya terasa tidak selese',
+            '11. Saya rasa takut jika saya akan tewas',
+            '12. Jantung saya berdegup kencang',
+            '13. Saya rasa mampu menangani tekanan pertandingan ini',
+            '14. Tangan saya berpeluh',
+            '15. Saya bimbang saya akan mengecewakan orang lain',
+            '16. Saya rasa bersemangat untuk bertanding',
+            '17. Saya rasa otot-otot saya menggeletar',
+          ]
+
+          for (let i = 1; i <= 17; i++) {
+            const colName = questionMappings[i - 1]
+            const answer = row[colName] || ''
+            responses[`q${i}`] = parseInt(String(answer), 10) || 0
+          }
+
+          const { cognitive, somatic, self_conf } = calculateScores(responses)
+
+          parsed.push({
+            athlete_id: athleteData.id,
+            athlete_name: athleteName,
+            phase,
+            responses,
+            cognitive_anxiety_score: cognitive,
+            somatic_anxiety_score: somatic,
+            self_confidence_score: self_conf,
+          })
+        } catch (err) {
+          console.error(`Error processing athlete ${athleteName}:`, err)
+        }
+      }
+
+      if (missing.length > 0) {
+        onMissing(missing)
+      }
+
+      if (duplicates.length > 0) {
+        console.warn(`Skipped ${duplicates.length} duplicate entries: ${duplicates.join(', ')}`)
+      }
+
+      resolve(parsed)
+    } catch (err) {
+      reject(err)
+    }
   }
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -163,8 +244,11 @@ export default function PsychologyRatingPage() {
     try {
       setUploading(true)
       setUploadError('')
+      setUploadWarning('')
 
-      const assessments = await parseCSV(file)
+      const assessments = await parseFile(file, (missingAthletes) => {
+        setUploadWarning(`⚠ ${missingAthletes.length} atlet tidak dijumpai dalam sistem:\n${missingAthletes.join('\n')}`)
+      })
 
       if (assessments.length === 0) {
         setUploadError('No valid data found in CSV')
@@ -184,47 +268,62 @@ export default function PsychologyRatingPage() {
         recorded_by: user?.id,
       }))
 
-      const { error: insertErr } = await supabase.from('physio_ratings').insert(insertData)
+      if (insertData.length === 0) {
+        setUploadError('Tiada data baru untuk disimpan (semua adalah duplikat)')
+        setUploadSuccess('')
+        return
+      }
+
+      const { error: insertErr } = await supabase.from('psychology_ratings').insert(insertData)
 
       if (insertErr) throw insertErr
 
       await fetchRatings()
       if (fileInputRef.current) fileInputRef.current.value = ''
+      setUploadError('')
+      setUploadSuccess(`✓ ${insertData.length} rekod telah disimpan`)
+      setTimeout(() => setUploadSuccess(''), 5000)
     } catch (err) {
-      setUploadError(err instanceof Error ? err.message : 'Failed to upload CSV')
+      setUploadSuccess('')
+      setUploadWarning('')
+      setUploadError(err instanceof Error ? err.message : 'Failed to upload file')
     } finally {
       setUploading(false)
     }
   }
 
-  const filteredRatings = ratings.filter(
-    (r) => filterPhase === 'all' || r.phase === filterPhase
-  )
+  const filteredRatings = ratings.filter((r) => {
+    const matchPhase = filterPhase === 'all' || r.phase === filterPhase
+    const matchAthlete = !filterAthlete || r.athlete_id === filterAthlete
+    const matchSport = !filterSport || r.athlete?.sport === filterSport
+    const matchSearch = !search || (r.athlete?.name ?? '').toLowerCase().includes(search.toLowerCase())
+    return matchPhase && matchAthlete && matchSport && matchSearch
+  })
 
   const getScoreInsight = (type: 'cognitive' | 'somatic' | 'confidence', score: number | null) => {
     if (score === null) return { label: '-', color: '' }
 
     const ranges = {
       cognitive: [
-        { min: 0, max: 9, label: 'Sangat Rendah', color: 'text-red-600' },
-        { min: 10, max: 14, label: 'Rendah', color: 'text-orange-600' },
-        { min: 15, max: 19, label: 'Sederhana', color: 'text-yellow-600' },
-        { min: 20, max: 24, label: 'Tinggi', color: 'text-blue-600' },
-        { min: 25, max: 25, label: 'Sangat Tinggi', color: 'text-red-600' },
+        { min: 0, max: 7, label: 'Sangat Rendah', color: 'text-red-600' },
+        { min: 8, max: 11, label: 'Rendah', color: 'text-orange-600' },
+        { min: 12, max: 15, label: 'Sederhana', color: 'text-yellow-600' },
+        { min: 16, max: 19, label: 'Tinggi', color: 'text-blue-600' },
+        { min: 20, max: 20, label: 'Sangat Tinggi', color: 'text-red-600' },
       ],
       somatic: [
-        { min: 0, max: 12, label: 'Sangat Rendah', color: 'text-red-600' },
-        { min: 13, max: 18, label: 'Rendah', color: 'text-orange-600' },
-        { min: 19, max: 24, label: 'Sederhana', color: 'text-yellow-600' },
-        { min: 25, max: 30, label: 'Tinggi', color: 'text-blue-600' },
-        { min: 31, max: 35, label: 'Sangat Tinggi', color: 'text-red-600' },
+        { min: 0, max: 10, label: 'Sangat Rendah', color: 'text-red-600' },
+        { min: 11, max: 15, label: 'Rendah', color: 'text-orange-600' },
+        { min: 16, max: 20, label: 'Sederhana', color: 'text-yellow-600' },
+        { min: 21, max: 25, label: 'Tinggi', color: 'text-blue-600' },
+        { min: 26, max: 28, label: 'Sangat Tinggi', color: 'text-red-600' },
       ],
       confidence: [
-        { min: 0, max: 9, label: 'Sangat Rendah', color: 'text-red-600' },
-        { min: 10, max: 14, label: 'Rendah', color: 'text-orange-600' },
-        { min: 15, max: 19, label: 'Sederhana', color: 'text-yellow-600' },
-        { min: 20, max: 24, label: 'Tinggi', color: 'text-green-600' },
-        { min: 25, max: 25, label: 'Sangat Tinggi', color: 'text-green-600' },
+        { min: 0, max: 7, label: 'Sangat Rendah', color: 'text-red-600' },
+        { min: 8, max: 11, label: 'Rendah', color: 'text-orange-600' },
+        { min: 12, max: 15, label: 'Sederhana', color: 'text-yellow-600' },
+        { min: 16, max: 19, label: 'Tinggi', color: 'text-green-600' },
+        { min: 20, max: 20, label: 'Sangat Tinggi', color: 'text-green-600' },
       ],
     }
 
@@ -274,7 +373,7 @@ export default function PsychologyRatingPage() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".csv"
+                accept=".csv,.xlsx,.xls"
                 onChange={handleFileUpload}
                 disabled={uploading}
                 className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm"
@@ -288,23 +387,67 @@ export default function PsychologyRatingPage() {
               </button>
             </div>
           )}
-          {uploadError && <p className="text-red-600 text-sm">{uploadError}</p>}
+          {uploadError && <p className="text-red-600 text-sm whitespace-pre-wrap">{uploadError}</p>}
+          {uploadWarning && <p className="text-amber-600 text-sm whitespace-pre-wrap">{uploadWarning}</p>}
+          {uploadSuccess && <p className="text-green-600 text-sm">{uploadSuccess}</p>}
 
-          {/* Phase Filter */}
-          <div className="flex flex-wrap gap-2">
-            {(['all', 'persediaan', 'pertandingan', 'pemulihan'] as const).map((phase) => (
-              <button
-                key={phase}
-                onClick={() => setFilterPhase(phase)}
-                className={`px-4 py-2 rounded-lg font-semibold text-sm transition ${
-                  filterPhase === phase
-                    ? 'bg-[#F56A00] text-white'
-                    : 'bg-gray-100 text-[#666] hover:bg-gray-200'
-                }`}
+          {/* Filters */}
+          <div className="space-y-3">
+            {/* Search, Sport & Athlete Filters */}
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Cari nama atlet..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#F56A00]"
+              />
+              <select
+                value={filterSport}
+                onChange={(e) => setFilterSport(e.target.value)}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#F56A00]"
               >
-                {phase === 'all' ? 'Semua Fasa' : PHASE_LABEL[phase]}
-              </button>
-            ))}
+                <option value="">Semua Sukan</option>
+                {[...new Set(ratings.map(r => r.athlete?.sport))].filter(Boolean).map((sport) => (
+                  <option key={sport} value={sport}>
+                    {sport}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={filterAthlete}
+                onChange={(e) => setFilterAthlete(e.target.value)}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#F56A00]"
+              >
+                <option value="">Semua Atlet</option>
+                {[...new Set(ratings.map(r => r.athlete_id))].map((athleteId) => {
+                  const athlete = ratings.find(r => r.athlete_id === athleteId)?.athlete
+                  return (
+                    <option key={athleteId} value={athleteId}>
+                      {athlete?.name}
+                    </option>
+                  )
+                })}
+              </select>
+            </div>
+
+            {/* Phase Filter */}
+            <div className="flex flex-wrap gap-2">
+              {(['all', 'persediaan', 'pertandingan', 'pemulihan'] as const).map((phase) => (
+                <button
+                  key={phase}
+                  onClick={() => setFilterPhase(phase)}
+                  className={`px-4 py-2 rounded-lg font-semibold text-sm transition ${
+                    filterPhase === phase
+                      ? 'bg-[#F56A00] text-white'
+                      : 'bg-gray-100 text-[#666] hover:bg-gray-200'
+                  }`}
+                >
+                  {phase === 'all' ? 'Semua Fasa' : PHASE_LABEL[phase]}
+                </button>
+              ))}
+            </div>
           </div>
 
           {error && <p className="text-red-600 text-sm">{error}</p>}

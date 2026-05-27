@@ -81,6 +81,7 @@ export default function SupplementPage() {
   const [supSaving, setSupSaving] = useState(false)
   const [supError, setSupError] = useState<string | null>(null)
   const [confirmDelSup, setConfirmDelSup] = useState<Supplement | null>(null)
+  const [deletingSup, setDeleteSup] = useState(false)
 
   // Request modal
   const [reqModal, setReqModal] = useState(false)
@@ -128,7 +129,7 @@ export default function SupplementPage() {
   async function fetchAll() {
     setLoading(true)
     const [supRes, reqRes, athRes] = await Promise.all([
-      supabase.from('supplements').select('*').order('name'),
+      supabase.from('supplements').select('id, name, stock, unit, created_at, expiry_date').order('name'),
       supabase.from('supplement_requests')
         .select('*, supplement:supplement_id(name, unit)')
         .order('created_at', { ascending: sortBy === 'date_asc' }),
@@ -184,9 +185,14 @@ export default function SupplementPage() {
   }
 
   async function handleDelSup(s: Supplement) {
-    await supabase.from('supplements').delete().eq('id', s.id)
-    setConfirmDelSup(null)
-    fetchAll()
+    setDeleteSup(true)
+    try {
+      await supabase.from('supplements').delete().eq('id', s.id)
+      setConfirmDelSup(null)
+      await fetchAll()
+    } finally {
+      setDeleteSup(false)
+    }
   }
 
   // ── Requests ──────────────────────────────────────────────
@@ -648,8 +654,8 @@ export default function SupplementPage() {
             <p className="text-sm font-semibold text-[#111] mb-1">Padam suplemen ini?</p>
             <p className="text-[13px] text-[#888] mb-6">{confirmDelSup.name}</p>
             <div className="flex gap-3 justify-center">
-              <button onClick={() => setConfirmDelSup(null)} className="px-4 py-2 text-sm text-[#888] border border-gray-200 rounded-lg hover:border-gray-400 transition">Batal</button>
-              <button onClick={() => handleDelSup(confirmDelSup)} className="px-4 py-2 text-sm font-semibold text-white bg-[#D44040] hover:bg-red-700 rounded-lg transition">Padam</button>
+              <button onClick={() => setConfirmDelSup(null)} disabled={deletingSup} className="px-4 py-2 text-sm text-[#888] border border-gray-200 rounded-lg hover:border-gray-400 transition disabled:opacity-50">Batal</button>
+              <button onClick={() => handleDelSup(confirmDelSup)} disabled={deletingSup} className="px-4 py-2 text-sm font-semibold text-white bg-[#D44040] hover:bg-red-700 rounded-lg transition disabled:opacity-60">{deletingSup ? 'Padam...' : 'Padam'}</button>
             </div>
           </div>
         </div>
