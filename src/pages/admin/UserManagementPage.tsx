@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { createUserAdmin } from '../../lib/adminClient'
 import { useAuth } from '../../context/AuthContext'
+import { validatePassword, getPasswordStrengthColor, getPasswordStrengthLabel, isPasswordValid } from '../../lib/passwordValidator'
 import type { ModulePermissions } from '../../types'
 
 interface UserProfile {
@@ -105,6 +106,7 @@ export default function UserManagementPage() {
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const [createSuccess, setCreateSuccess] = useState(false)
+  const [passwordStrength, setPasswordStrength] = useState(validatePassword(''))
 
   useEffect(() => { fetchUsers() }, [])
 
@@ -154,8 +156,9 @@ export default function UserManagementPage() {
       setCreateError('Sila isi semua medan.')
       return
     }
-    if (createForm.password.length < 8) {
-      setCreateError('Kata laluan mestilah sekurang-kurangnya 8 aksara.')
+    if (!isPasswordValid(createForm.password)) {
+      const strength = validatePassword(createForm.password)
+      setCreateError(strength.errors[0] || 'Kata laluan tidak memenuhi persyaratan keamanan.')
       return
     }
     setCreating(true)
@@ -460,19 +463,64 @@ export default function UserManagementPage() {
                   </div>
                   <div>
                     <label className={labelCls}>Kata Laluan</label>
-                    <div className="relative">
+                    <div className="relative mb-2">
                       <input
                         type={createForm.showPw ? 'text' : 'password'}
                         value={createForm.password}
-                        onChange={e => setCreateForm(f => ({ ...f, password: e.target.value }))}
+                        onChange={e => {
+                          setCreateForm(f => ({ ...f, password: e.target.value }))
+                          setPasswordStrength(validatePassword(e.target.value))
+                        }}
                         className={inputCls + ' pr-10'}
-                        placeholder="Min. 8 aksara"
+                        placeholder="Min. 8 aksara, huruf besar, kecil, nombor, dan aksara khas"
                       />
                       <button type="button" onClick={() => setCreateForm(f => ({ ...f, showPw: !f.showPw }))}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-[#888] hover:text-[#111] text-xs">
                         {createForm.showPw ? 'Sembunyi' : 'Tunjuk'}
                       </button>
                     </div>
+
+                    {/* Password Strength Indicator */}
+                    {createForm.password && (
+                      <div className="space-y-2">
+                        {/* Strength Bar */}
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[10px] font-semibold uppercase tracking-widest text-[#888]">Kekuatan Kata Laluan</span>
+                            <span className="text-[11px] font-semibold" style={{ color: getPasswordStrengthColor(passwordStrength.strength) }}>
+                              {getPasswordStrengthLabel(passwordStrength.strength)}
+                            </span>
+                          </div>
+                          <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                            <div
+                              className="h-full transition-all"
+                              style={{
+                                width: `${(passwordStrength.score / 4) * 100}%`,
+                                backgroundColor: getPasswordStrengthColor(passwordStrength.strength),
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Requirements */}
+                        {(passwordStrength.errors.length > 0 || passwordStrength.suggestions.length > 0) && (
+                          <div className="space-y-1 pt-2 border-t border-gray-200">
+                            {passwordStrength.errors.map((error, idx) => (
+                              <div key={idx} className="flex items-start gap-2">
+                                <span className="text-red-500 text-xs font-bold mt-0.5">✕</span>
+                                <span className="text-[11px] text-red-600">{error}</span>
+                              </div>
+                            ))}
+                            {passwordStrength.suggestions.map((suggestion, idx) => (
+                              <div key={idx} className="flex items-start gap-2">
+                                <span className="text-yellow-600 text-xs font-bold mt-0.5">◆</span>
+                                <span className="text-[11px] text-yellow-600">{suggestion}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label className={labelCls}>Peranan</label>
