@@ -108,15 +108,30 @@ export async function deleteUserAdmin(userId: string) {
     }
     console.log('10. Audit log references cleared')
 
-    console.log('11. Deleting profile from database...')
+    console.log('11. Clearing user references in test records...')
+    const recordTables = ['fitness_test_sessions', 'fitness_tests', 'inbody_records', 'sport_fitness_tests', 'strength_conditioning']
+    for (const table of recordTables) {
+      const columnName = table === 'sport_fitness_tests' ? 'created_by' : 'recorded_by'
+      const { error: recordError } = await adminDb.from(table).update({ [columnName]: null }).eq(columnName, userId)
+      if (recordError) {
+        console.error(`${table} clear error:`, recordError)
+        // Continue with other tables instead of throwing
+        console.log(`Warning: Failed to clear ${table} references, continuing...`)
+      } else {
+        console.log(`  Cleared ${table}`)
+      }
+    }
+    console.log('12. Test record references cleared')
+
+    console.log('13. Deleting profile from database...')
     const { error: profileError } = await adminDb.from('profiles').delete().eq('id', userId)
     if (profileError) {
       console.error('Profile delete error:', profileError)
       throw new Error(`Failed to delete profile: ${profileError.message}`)
     }
-    console.log('12. Profile deleted successfully')
+    console.log('14. Profile deleted successfully')
 
-    console.log('13. Disabling auth user...')
+    console.log('15. Disabling auth user...')
     const updateResponse = await fetch(`${supabaseUrl}/auth/v1/admin/users/${userId}`, {
       method: 'PUT',
       headers: {
@@ -133,7 +148,7 @@ export async function deleteUserAdmin(userId: string) {
       // Don't throw - profile is already deleted, this is optional
       console.log('Auth user update failed, but profile was deleted successfully')
     } else {
-      console.log('14. Auth user marked as deleted')
+      console.log('16. Auth user marked as deleted')
     }
 
     return true
