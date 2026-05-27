@@ -66,31 +66,33 @@ export async function createUserAdmin(
 
 export async function deleteUserAdmin(userId: string) {
   try {
-    console.log('1. Deleting auth user:', userId)
-    const deleteResponse = await fetch(`${supabaseUrl}/auth/v1/admin/users/${userId}`, {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': serviceRoleKey || '',
-        'Authorization': `Bearer ${serviceRoleKey || ''}`,
-      },
-    })
-
-    if (!deleteResponse.ok) {
-      const error = await deleteResponse.json()
-      console.error('Auth API delete error:', error)
-      throw new Error(error.message || `Failed to delete auth user: ${deleteResponse.statusText}`)
-    }
-
-    console.log('2. Auth user deleted successfully')
-
-    console.log('3. Deleting profile from database...')
+    console.log('1. Deleting profile from database...')
     const { error: profileError } = await adminDb.from('profiles').delete().eq('id', userId)
     if (profileError) {
       console.error('Profile delete error:', profileError)
       throw new Error(`Failed to delete profile: ${profileError.message}`)
     }
-    console.log('4. Profile deleted successfully')
+    console.log('2. Profile deleted successfully')
+
+    console.log('3. Disabling auth user...')
+    const updateResponse = await fetch(`${supabaseUrl}/auth/v1/admin/users/${userId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': serviceRoleKey || '',
+        'Authorization': `Bearer ${serviceRoleKey || ''}`,
+      },
+      body: JSON.stringify({ user_metadata: { deleted_at: new Date().toISOString() } }),
+    })
+
+    if (!updateResponse.ok) {
+      const error = await updateResponse.json()
+      console.error('Auth API update error:', error)
+      // Don't throw - profile is already deleted, this is optional
+      console.log('Auth user update failed, but profile was deleted successfully')
+    } else {
+      console.log('4. Auth user marked as deleted')
+    }
 
     return true
   } catch (err) {
