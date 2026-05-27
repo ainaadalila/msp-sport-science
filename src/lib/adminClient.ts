@@ -82,7 +82,7 @@ export async function deleteUserAdmin(userId: string) {
     }
     console.log('4. Coach programs deleted')
 
-    console.log('5. Deleting related supplement requests...')
+    console.log('5. Deleting supplement requests requested by user...')
     const { error: requestError } = await adminDb.from('supplement_requests').delete().eq('requested_by', userId)
     if (requestError) {
       console.error('Supplement request delete error:', requestError)
@@ -90,15 +90,25 @@ export async function deleteUserAdmin(userId: string) {
     }
     console.log('6. Supplement requests deleted')
 
-    console.log('7. Deleting profile from database...')
+    console.log('7. Clearing user references in supplement requests (coordinator, reviewer, supporter)...')
+    const { error: suppClearError } = await adminDb.from('supplement_requests')
+      .update({ coordinator_id: null, reviewed_by: null, supporter_id: null })
+      .or(`coordinator_id.eq.${userId},reviewed_by.eq.${userId},supporter_id.eq.${userId}`)
+    if (suppClearError) {
+      console.error('Supplement request clear error:', suppClearError)
+      throw new Error(`Failed to clear supplement request references: ${suppClearError.message}`)
+    }
+    console.log('8. Supplement request references cleared')
+
+    console.log('9. Deleting profile from database...')
     const { error: profileError } = await adminDb.from('profiles').delete().eq('id', userId)
     if (profileError) {
       console.error('Profile delete error:', profileError)
       throw new Error(`Failed to delete profile: ${profileError.message}`)
     }
-    console.log('8. Profile deleted successfully')
+    console.log('10. Profile deleted successfully')
 
-    console.log('9. Disabling auth user...')
+    console.log('11. Disabling auth user...')
     const updateResponse = await fetch(`${supabaseUrl}/auth/v1/admin/users/${userId}`, {
       method: 'PUT',
       headers: {
@@ -115,7 +125,7 @@ export async function deleteUserAdmin(userId: string) {
       // Don't throw - profile is already deleted, this is optional
       console.log('Auth user update failed, but profile was deleted successfully')
     } else {
-      console.log('10. Auth user marked as deleted')
+      console.log('12. Auth user marked as deleted')
     }
 
     return true
