@@ -66,7 +66,15 @@ export async function createUserAdmin(
 
 export async function deleteUserAdmin(userId: string) {
   try {
-    console.log('Deleting auth user:', userId)
+    console.log('1. Deleting profile from database...')
+    const { error: profileError } = await adminDb.from('profiles').delete().eq('id', userId)
+    if (profileError) {
+      console.error('Profile delete error:', profileError)
+      throw new Error(`Failed to delete profile: ${profileError.message}`)
+    }
+    console.log('2. Profile deleted successfully')
+
+    console.log('3. Deleting auth user:', userId)
     const deleteResponse = await fetch(`${supabaseUrl}/auth/v1/admin/users/${userId}`, {
       method: 'DELETE',
       headers: {
@@ -82,7 +90,7 @@ export async function deleteUserAdmin(userId: string) {
       throw new Error(error.message || `Failed to delete auth user: ${deleteResponse.statusText}`)
     }
 
-    console.log('User deleted successfully')
+    console.log('4. Auth user deleted successfully')
     return true
   } catch (err) {
     console.error('Error in deleteUserAdmin:', err)
