@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
-import { createUserAdmin } from '../../lib/adminClient'
+import { createUserAdmin, deleteUserAdmin } from '../../lib/adminClient'
 import { useAuth } from '../../context/AuthContext'
 import { validatePassword, getPasswordStrengthColor, getPasswordStrengthLabel, isPasswordValid } from '../../lib/passwordValidator'
 import type { ModulePermissions } from '../../types'
@@ -96,6 +96,8 @@ export default function UserManagementPage() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [permissionTab, setPermissionTab] = useState<'utama' | 'kecergasan' | 'prestasi' | 'fisioterapi' | 'psikologi' | 'pelaporan'>('utama')
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   const [createOpen, setCreateOpen] = useState(false)
   const getInitialCreateForm = () => {
@@ -146,6 +148,22 @@ export default function UserManagementPage() {
     setSaving(false)
     setEditingUser(null)
     fetchUsers()
+  }
+
+  async function handleDelete() {
+    if (!editingUser || !isSuperAdmin) return
+    setDeleting(true)
+    setSaveError(null)
+    try {
+      await deleteUserAdmin(editingUser.id)
+      setDeleting(false)
+      setEditingUser(null)
+      setDeleteConfirm(false)
+      fetchUsers()
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Gagal memadamkan pengguna')
+      setDeleting(false)
+    }
   }
 
   async function handleCreate(e?: React.MouseEvent) {
@@ -426,12 +444,35 @@ export default function UserManagementPage() {
                 </div>
               </div>
             </div>
-            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
-              <button onClick={() => setEditingUser(null)} className="px-4 py-2 text-sm text-[#888] hover:text-[#111] transition">Batal</button>
-              <button onClick={handleSave} disabled={saving} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
-                {saving ? 'Menyimpan...' : 'Simpan'}
-              </button>
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-between gap-3">
+              <div>
+                {isSuperAdmin && editingUser?.id !== currentUser?.id && (
+                  <button onClick={() => setDeleteConfirm(true)} className="px-4 py-2 text-sm text-red-600 hover:text-red-700 font-medium transition">
+                    Padam Pengguna
+                  </button>
+                )}
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => setEditingUser(null)} className="px-4 py-2 text-sm text-[#888] hover:text-[#111] transition">Batal</button>
+                <button onClick={handleSave} disabled={saving} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
+                  {saving ? 'Menyimpan...' : 'Simpan'}
+                </button>
+              </div>
             </div>
+
+            {deleteConfirm && (
+              <div className="px-6 py-4 border-t border-red-100 bg-red-50 space-y-3">
+                <p className="text-sm text-red-800 font-medium">Adakah anda pasti ingin memadam pengguna ini? Tindakan ini tidak dapat dibuat asal.</p>
+                <div className="flex justify-end gap-2">
+                  <button onClick={() => setDeleteConfirm(false)} disabled={deleting} className="px-4 py-2 text-sm text-red-600 hover:text-red-700 font-medium transition">
+                    Batal
+                  </button>
+                  <button onClick={handleDelete} disabled={deleting} className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
+                    {deleting ? 'Memadamkan...' : 'Padam'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

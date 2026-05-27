@@ -63,3 +63,29 @@ export async function createUserAdmin(
     throw err
   }
 }
+
+export async function deleteUserAdmin(userId: string) {
+  try {
+    console.log('Deleting auth user:', userId)
+    const deleteResponse = await fetch(`${supabaseUrl}/auth/v1/admin/users/${userId}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': serviceRoleKey || '',
+        'Authorization': `Bearer ${serviceRoleKey || ''}`,
+      },
+    })
+
+    if (!deleteResponse.ok) {
+      const error = await deleteResponse.json()
+      console.error('Auth API delete error:', error)
+      throw new Error(error.message || `Failed to delete auth user: ${deleteResponse.statusText}`)
+    }
+
+    console.log('User deleted successfully')
+    return true
+  } catch (err) {
+    console.error('Error in deleteUserAdmin:', err)
+    throw err
+  }
+}
