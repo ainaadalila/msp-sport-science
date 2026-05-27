@@ -4,6 +4,7 @@ import Sidebar from './Sidebar'
 import { supabase } from '../lib/supabase'
 import { logAction } from '../lib/audit'
 import { useAuth } from '../context/AuthContext'
+import { useInactivityLogout } from '../hooks/useInactivityLogout'
 
 const routeMeta: Record<string, { title: string; parent?: string }> = {
   '/':                            { title: 'Dashboard' },
@@ -24,6 +25,7 @@ const routeMeta: Record<string, { title: string; parent?: string }> = {
 interface AlertCounts { injured: number; pendingSupplements: number }
 
 export default function Layout() {
+  useInactivityLogout()
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const { profile, signOut } = useAuth()
