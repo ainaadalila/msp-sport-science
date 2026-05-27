@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
 import { usePermissions } from '../../../hooks/usePermissions'
@@ -103,6 +104,8 @@ const emptyAssessmentForm: AssessmentFormState = {
 export default function PhysioPage() {
   const { profile } = useAuth()
   const { can } = usePermissions()
+  const [searchParams] = useSearchParams()
+  const athleteIdParam = searchParams.get('athlete')
 
   const [slots, setSlots] = useState<PhysioSlot[]>([])
   const [athletes, setAthletes] = useState<Athlete[]>([])
@@ -128,8 +131,15 @@ export default function PhysioPage() {
   const [assessmentError, setAssessmentError] = useState<string | null>(null)
 
   const [confirmDelete, setConfirmDelete] = useState<PhysioSlot | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => { fetchAll() }, [])
+
+  useEffect(() => {
+    if (athleteIdParam) {
+      setFilterAthlete(athleteIdParam)
+    }
+  }, [athleteIdParam])
 
   async function fetchAll() {
     setLoading(true)
@@ -260,11 +270,16 @@ export default function PhysioPage() {
   }
 
   async function handleDelete(s: PhysioSlot) {
-    await supabase.from('physio_slots').delete().eq('id', s.id)
-    await logAction(profile!.id, 'delete_physio_slot', 'physio_slots', s.id)
-    setConfirmDelete(null)
-    setDetailSlot(null)
-    fetchAll()
+    try {
+      setDeleting(true)
+      await supabase.from('physio_slots').delete().eq('id', s.id)
+      await logAction(profile!.id, 'delete_physio_slot', 'physio_slots', s.id)
+      setConfirmDelete(null)
+      setDetailSlot(null)
+      await fetchAll()
+    } finally {
+      setDeleting(false)
+    }
   }
 
   async function handleMarkArrived(s: PhysioSlot) {
@@ -639,7 +654,7 @@ export default function PhysioPage() {
             <p className="text-[13px] text-[#888] mb-6">{fmtDate(confirmDelete.slot_date)} · {confirmDelete.athlete?.name ?? 'Tiada atlet'}</p>
             <div className="flex gap-3 justify-center">
               <button onClick={() => setConfirmDelete(null)} className="px-4 py-2 text-sm text-[#888] border border-gray-200 rounded-lg hover:border-gray-400 transition">Batal</button>
-              <button onClick={() => handleDelete(confirmDelete)} className="px-4 py-2 text-sm font-semibold text-white bg-[#D44040] hover:bg-red-700 rounded-lg transition">Padam</button>
+              <button onClick={() => handleDelete(confirmDelete)} disabled={deleting} className="px-4 py-2 text-sm font-semibold text-white bg-[#D44040] hover:bg-red-700 disabled:opacity-60 rounded-lg transition">{deleting ? 'Padam...' : 'Padam'}</button>
             </div>
           </div>
         </div>

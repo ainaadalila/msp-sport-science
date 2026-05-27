@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
 import { usePermissions } from '../../../hooks/usePermissions'
@@ -13,6 +14,7 @@ interface SCRecord {
   id: string; athlete_id: string; session_date: string
   attendance: 'present' | 'absent' | 'mc'
   training_program: string | null; notes: string | null
+  start_time: string | null; end_time: string | null
   athlete?: { name: string; sport: string }
 }
 
@@ -53,6 +55,7 @@ interface AttendanceForm {
   athlete_id: string; session_date: string
   attendance: 'present' | 'absent' | 'mc'
   training_program: string; notes: string
+  start_time: string; end_time: string
 }
 
 interface ProgramForm {
@@ -63,7 +66,7 @@ interface ProgramForm {
   end_date: string
 }
 
-const MONTHS = ['Jan', 'Feb', 'Mac', 'Apr', 'Mei', 'Jun', 'Jul', 'Ogos', 'Sep', 'Okt', 'Nov', 'Dis']
+const MONTHS = ['Januari', 'Februari', 'Mac', 'April', 'Mei', 'Jun', 'Julai', 'Ogos', 'September', 'Oktober', 'November', 'Disember']
 const DAY_NAMES = ['Isnin', 'Selasa', 'Rabu', 'Khamis', 'Jumaat', 'Sabtu', 'Ahad']
 
 const attendanceLabel: Record<string, string> = { present: 'Hadir', absent: 'Tidak Hadir', mc: 'MC' }
@@ -76,8 +79,34 @@ const attendanceStyle: Record<string, string> = {
 const emptyAttendanceForm: AttendanceForm = {
   athlete_id: '', session_date: new Date().toISOString().slice(0, 10),
   attendance: 'present', training_program: '', notes: '',
+  start_time: '09:00', end_time: '10:00',
 }
 const emptyStructuredData: StructuredProgramData = { phase: '', training_goals: [''], sessions: [] }
+
+function formatTimeWithAMPM(time24: string): string {
+  if (!time24) return ''
+  const [hours, minutes] = time24.split(':')
+  const hour = parseInt(hours)
+  const ampm = hour >= 12 ? 'PM' : 'AM'
+  const hour12 = hour % 12 || 12
+  return `${hour12}:${minutes} ${ampm}`
+}
+
+function convert24To12(time24: string): { hour: string; minute: string; ampm: 'AM' | 'PM' } {
+  if (!time24) return { hour: '9', minute: '00', ampm: 'AM' }
+  const [hours, minutes] = time24.split(':')
+  const hour = parseInt(hours)
+  const ampm = hour >= 12 ? 'PM' : 'AM'
+  const hour12 = hour % 12 || 12
+  return { hour: String(hour12), minute: minutes, ampm }
+}
+
+function convert12To24(hour: string, minute: string, ampm: 'AM' | 'PM'): string {
+  let h = parseInt(hour)
+  if (ampm === 'PM' && h !== 12) h += 12
+  if (ampm === 'AM' && h === 12) h = 0
+  return `${String(h).padStart(2, '0')}:${minute}`
+}
 
 const emptyProgramForm: ProgramForm = {
   sport: '', month: new Date().getMonth() + 1, year: new Date().getFullYear(), content: '',
@@ -87,6 +116,9 @@ const emptyProgramForm: ProgramForm = {
 export default function StrengthPage() {
   const { profile } = useAuth()
   const { can } = usePermissions()
+  const [searchParams] = useSearchParams()
+  const athleteIdParam = searchParams.get('athlete')
+  const tabParam = searchParams.get('tab') as 'kehadiran' | 'program' | 'jadual' | null
 
   const [activeTab, setActiveTab] = useState<'kehadiran' | 'program' | 'jadual'>('jadual')
   const [loading, setLoading] = useState(true)
@@ -139,8 +171,21 @@ export default function StrengthPage() {
   const [singleSlotForm, setSingleSlotForm] = useState({ coach_id: '', sport: '', slot_date: new Date().toISOString().slice(0, 10), start_time: '09:00', end_time: '11:00' })
   const [confirmDeleteSchedule, setConfirmDeleteSchedule] = useState<CoachSchedule | null>(null)
   const [confirmDeleteSlot, setConfirmDeleteSlot] = useState<{ schedule: CoachSchedule; slot: CoachScheduleSlot } | null>(null)
+  const [deletingAttendance, setDeletingAttendance] = useState(false)
+  const [deletingProgram, setDeletingProgram] = useState(false)
+  const [deletingSchedule, setDeletingSchedule] = useState(false)
+  const [deletingSlot, setDeletingSlot] = useState(false)
 
   useEffect(() => { fetchAll() }, [])
+
+  useEffect(() => {
+    if (athleteIdParam) {
+      setFilterAthlete(athleteIdParam)
+    }
+    if (tabParam) {
+      setActiveTab(tabParam)
+    }
+  }, [athleteIdParam, tabParam])
 
   async function fetchAll() {
     setLoading(true)
@@ -167,13 +212,13 @@ export default function StrengthPage() {
   }
   function openEditAttendance(rec: SCRecord) {
     setEditingRecord(rec)
-    setAttendanceForm({ athlete_id: rec.athlete_id, session_date: rec.session_date, attendance: rec.attendance, training_program: rec.training_program ?? '', notes: rec.notes ?? '' })
+    setAttendanceForm({ athlete_id: rec.athlete_id, session_date: rec.session_date, attendance: rec.attendance, training_program: rec.training_program ?? '', notes: rec.notes ?? '', start_time: rec.start_time ?? '09:00', end_time: rec.end_time ?? '10:00' })
     setError(null); setAttendanceModalOpen(true)
   }
   async function handleSaveAttendance() {
     if (!attendanceForm.athlete_id || !attendanceForm.session_date) { setError('Atlet dan tarikh sesi wajib dipilih.'); return }
     setSaving(true); setError(null)
-    const payload = { athlete_id: attendanceForm.athlete_id, session_date: attendanceForm.session_date, attendance: attendanceForm.attendance, training_program: attendanceForm.training_program || null, notes: attendanceForm.notes || null, recorded_by: profile?.id }
+    const payload = { athlete_id: attendanceForm.athlete_id, session_date: attendanceForm.session_date, attendance: attendanceForm.attendance, training_program: attendanceForm.training_program || null, notes: attendanceForm.notes || null, start_time: attendanceForm.start_time, end_time: attendanceForm.end_time, recorded_by: profile?.id }
     if (editingRecord) {
       const { error } = await supabase.from('strength_conditioning').update(payload).eq('id', editingRecord.id)
       if (error) { setError(error.message); setSaving(false); return }
@@ -186,8 +231,13 @@ export default function StrengthPage() {
     setSaving(false); setAttendanceModalOpen(false); fetchAll()
   }
   async function handleDeleteAttendance(rec: SCRecord) {
-    await supabase.from('strength_conditioning').delete().eq('id', rec.id)
-    setConfirmDelete(null); fetchAll()
+    try {
+      setDeletingAttendance(true)
+      await supabase.from('strength_conditioning').delete().eq('id', rec.id)
+      setConfirmDelete(null); await fetchAll()
+    } finally {
+      setDeletingAttendance(false)
+    }
   }
 
   // --- PROGRAM ---
@@ -231,8 +281,13 @@ export default function StrengthPage() {
     setSaving(false); setProgramModalOpen(false); fetchAll()
   }
   async function handleDeleteProgram(p: SCProgram) {
-    await supabase.from('sc_programs').delete().eq('id', p.id)
-    setConfirmDeleteProgram(null); fetchAll()
+    try {
+      setDeletingProgram(true)
+      await supabase.from('sc_programs').delete().eq('id', p.id)
+      setConfirmDeleteProgram(null); await fetchAll()
+    } finally {
+      setDeletingProgram(false)
+    }
   }
 
   // --- SCHEDULE SLOTS ---
@@ -417,28 +472,34 @@ export default function StrengthPage() {
   }
   async function handleDeleteSchedule(s: CoachSchedule) {
     try {
+      setDeletingSchedule(true)
       await supabase.from('coach_schedules').delete().eq('id', s.id)
       await logAction(profile!.id, 'delete_coach_schedule', 'coach_schedules', s.id)
       setConfirmDeleteSchedule(null)
-      fetchAll()
+      await fetchAll()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error deleting schedule')
+    } finally {
+      setDeletingSchedule(false)
     }
   }
 
   async function handleDeleteSlot(_schedule: CoachSchedule, slot: CoachScheduleSlot) {
     try {
       setSaving(true)
+      setDeletingSlot(true)
       setError(null)
       const { error: deleteError } = await supabase.from('coach_schedule_slots').delete().eq('id', slot.id)
       if (deleteError) {
         console.error('Supabase delete error:', deleteError)
         setError(`Failed to delete: ${deleteError.message}`)
         setSaving(false)
+        setDeletingSlot(false)
         return
       }
       await logAction(profile!.id, 'delete_coach_schedule_slot', 'coach_schedule_slots', slot.id)
       setSaving(false)
+      setDeletingSlot(false)
       setConfirmDeleteSlot(null)
       await fetchAll()
     } catch (err) {
@@ -560,7 +621,7 @@ export default function StrengthPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-100">
-                    {['Tarikh', 'Atlet', 'Sukan', 'Kehadiran', 'Program Latihan', 'Nota', ''].map(h => (
+                    {['Tarikh', 'Waktu', 'Atlet', 'Sukan', 'Kehadiran', 'Program Latihan', 'Nota', ''].map(h => (
                       <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-wider text-[#888] px-4 py-3">{h}</th>
                     ))}
                   </tr>
@@ -570,6 +631,9 @@ export default function StrengthPage() {
                     <tr key={r.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
                       <td className="px-4 py-3 font-mono text-[12px] text-[#444] whitespace-nowrap">
                         {new Date(r.session_date).toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-[12px] text-[#F56A00] whitespace-nowrap">
+                        {r.start_time && r.end_time ? `${formatTimeWithAMPM(r.start_time)} - ${formatTimeWithAMPM(r.end_time)}` : '—'}
                       </td>
                       <td className="px-4 py-3 font-medium text-[#111]">{r.athlete?.name ?? '—'}</td>
                       <td className="px-4 py-3 text-[#888]">{r.athlete?.sport ?? '—'}</td>
@@ -844,6 +908,18 @@ export default function StrengthPage() {
                   </select>
                 </Field>
               </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-semibold uppercase tracking-widest text-[#888] mb-2">Waktu Mula *</label>
+                  <input type="time" value={attendanceForm.start_time} onChange={e => setAttendanceForm(f => ({ ...f, start_time: e.target.value }))} className={inputCls} />
+                  <p className="text-[11px] font-bold text-[#F56A00] mt-1">{formatTimeWithAMPM(attendanceForm.start_time)}</p>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold uppercase tracking-widest text-[#888] mb-2">Waktu Tamat *</label>
+                  <input type="time" value={attendanceForm.end_time} onChange={e => setAttendanceForm(f => ({ ...f, end_time: e.target.value }))} className={inputCls} />
+                  <p className="text-[11px] font-bold text-[#F56A00] mt-1">{formatTimeWithAMPM(attendanceForm.end_time)}</p>
+                </div>
+              </div>
               <Field label="Program Latihan">
                 <input value={attendanceForm.training_program} onChange={e => setAttendanceForm(f => ({ ...f, training_program: e.target.value.toUpperCase() }))} className={inputCls} placeholder="cth. FASA KEKUATAN 1" />
               </Field>
@@ -897,12 +973,20 @@ export default function StrengthPage() {
                   </select>
                 </Field>
                 <Field label="Bulan" required>
-                  <select value={programForm.month} onChange={e => setProgramForm(f => ({ ...f, month: +e.target.value }))} className={inputCls}>
+                  <select value={programForm.month} onChange={e => {
+                    const month = +e.target.value
+                    const { start, end } = getMonthDateRange(month, programForm.year)
+                    setProgramForm(f => ({ ...f, month, start_date: start, end_date: end }))
+                  }} className={inputCls}>
                     {MONTHS.map((m, i) => <option key={i + 1} value={i + 1}>{m}</option>)}
                   </select>
                 </Field>
                 <Field label="Tahun" required>
-                  <input type="number" value={programForm.year} onChange={e => setProgramForm(f => ({ ...f, year: +e.target.value }))} className={inputCls} placeholder="2026" />
+                  <input type="number" value={programForm.year} onChange={e => {
+                    const year = +e.target.value
+                    const { start, end } = getMonthDateRange(programForm.month, year)
+                    setProgramForm(f => ({ ...f, year, start_date: start, end_date: end }))
+                  }} className={inputCls} placeholder="2026" />
                 </Field>
               </div>
 
@@ -920,10 +1004,16 @@ export default function StrengthPage() {
                 <>
                   <div className="grid grid-cols-2 gap-4">
                     <Field label="Tarikh Mula">
-                      <input type="date" value={programForm.start_date} onChange={e => setProgramForm(f => ({ ...f, start_date: e.target.value }))} className={inputCls} />
+                      <input type="date" value={programForm.start_date} onChange={e => {
+                        const start = e.target.value
+                        setProgramForm(f => {
+                          const end = f.end_date && start > f.end_date ? start : f.end_date
+                          return { ...f, start_date: start, end_date: end }
+                        })
+                      }} className={inputCls} />
                     </Field>
                     <Field label="Tarikh Tamat">
-                      <input type="date" value={programForm.end_date} onChange={e => setProgramForm(f => ({ ...f, end_date: e.target.value }))} className={inputCls} />
+                      <input type="date" value={programForm.end_date} onChange={e => setProgramForm(f => ({ ...f, end_date: e.target.value }))} min={programForm.start_date} className={inputCls} />
                     </Field>
                   </div>
                   <StructuredProgramBuilder
@@ -995,11 +1085,11 @@ export default function StrengthPage() {
                   </Field>
 
                   <div className="grid grid-cols-2 gap-4">
-                    <Field label="Masa Mula" required>
-                      <input type="time" value={singleSlotForm.start_time} onChange={e => setSingleSlotForm(f => ({ ...f, start_time: e.target.value }))} className={inputCls} />
+                    <Field label="Masa Mula *">
+                      <TimeInput12h value={singleSlotForm.start_time} onChange={t => setSingleSlotForm(f => ({ ...f, start_time: t }))} />
                     </Field>
-                    <Field label="Masa Akhir" required>
-                      <input type="time" value={singleSlotForm.end_time} onChange={e => setSingleSlotForm(f => ({ ...f, end_time: e.target.value }))} className={inputCls} />
+                    <Field label="Masa Akhir *">
+                      <TimeInput12h value={singleSlotForm.end_time} onChange={t => setSingleSlotForm(f => ({ ...f, end_time: t }))} />
                     </Field>
                   </div>
                 </>
@@ -1026,16 +1116,26 @@ export default function StrengthPage() {
                   </div>
 
                   <Field label="Slot Tarikh/Masa">
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                       {scheduleSlots.map((slot, idx) => (
-                        <div key={idx} className="flex gap-2 items-end">
-                          <input type="date" value={slot.slot_date} onChange={e => updateScheduleSlot(idx, 'slot_date', e.target.value)} className="flex-1 bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2.5 text-sm text-[#111] outline-none focus:border-[#F56A00] focus:bg-white" />
-                          <input type="time" value={slot.start_time} onChange={e => updateScheduleSlot(idx, 'start_time', e.target.value)} className="w-24 bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2.5 text-sm text-[#111] outline-none focus:border-[#F56A00] focus:bg-white" />
-                          <span className="text-[#888]">–</span>
-                          <input type="time" value={slot.end_time} onChange={e => updateScheduleSlot(idx, 'end_time', e.target.value)} className="w-24 bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2.5 text-sm text-[#111] outline-none focus:border-[#F56A00] focus:bg-white" />
+                        <div key={idx} className="space-y-3 p-3 bg-gray-50 rounded-lg">
+                          <div>
+                            <label className="block text-[10px] font-semibold uppercase tracking-widest text-[#888] mb-1.5">Tarikh</label>
+                            <input type="date" value={slot.slot_date} onChange={e => updateScheduleSlot(idx, 'slot_date', e.target.value)} className="w-full bg-white border border-[#E8E8E8] rounded-lg px-3 py-2.5 text-sm text-[#111] outline-none focus:border-[#F56A00]" />
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-[10px] font-semibold uppercase tracking-widest text-[#888] mb-1.5">Masa Mula</label>
+                              <TimeInput12h value={slot.start_time} onChange={t => updateScheduleSlot(idx, 'start_time', t)} />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-semibold uppercase tracking-widest text-[#888] mb-1.5">Masa Akhir</label>
+                              <TimeInput12h value={slot.end_time} onChange={t => updateScheduleSlot(idx, 'end_time', t)} />
+                            </div>
+                          </div>
                           {scheduleSlots.length > 1 && (
-                            <button type="button" onClick={() => removeScheduleSlot(idx)} className="px-3 py-2.5 text-red-600 hover:bg-red-50 rounded-lg transition text-sm font-medium">
-                              ✕
+                            <button type="button" onClick={() => removeScheduleSlot(idx)} className="w-full px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition text-sm font-medium">
+                              ✕ Buang Slot Ini
                             </button>
                           )}
                         </div>
@@ -1202,7 +1302,7 @@ export default function StrengthPage() {
             </p>
             <div className="flex gap-3 justify-center">
               <button onClick={() => setConfirmDelete(null)} className="px-4 py-2 text-sm text-[#888] border border-gray-200 rounded-lg hover:border-gray-400 transition">Batal</button>
-              <button onClick={() => handleDeleteAttendance(confirmDelete)} className="px-4 py-2 text-sm font-semibold text-white bg-[#D44040] hover:bg-red-700 rounded-lg transition">Padam</button>
+              <button onClick={() => handleDeleteAttendance(confirmDelete)} disabled={deletingAttendance} className="px-4 py-2 text-sm font-semibold text-white bg-[#D44040] hover:bg-red-700 disabled:opacity-60 rounded-lg transition">{deletingAttendance ? 'Padam...' : 'Padam'}</button>
             </div>
           </div>
         </div>
@@ -1218,7 +1318,7 @@ export default function StrengthPage() {
             </p>
             <div className="flex gap-3 justify-center">
               <button onClick={() => setConfirmDeleteProgram(null)} className="px-4 py-2 text-sm text-[#888] border border-gray-200 rounded-lg hover:border-gray-400 transition">Batal</button>
-              <button onClick={() => handleDeleteProgram(confirmDeleteProgram)} className="px-4 py-2 text-sm font-semibold text-white bg-[#D44040] hover:bg-red-700 rounded-lg transition">Padam</button>
+              <button onClick={() => handleDeleteProgram(confirmDeleteProgram)} disabled={deletingProgram} className="px-4 py-2 text-sm font-semibold text-white bg-[#D44040] hover:bg-red-700 disabled:opacity-60 rounded-lg transition">{deletingProgram ? 'Padam...' : 'Padam'}</button>
             </div>
           </div>
         </div>
@@ -1234,7 +1334,7 @@ export default function StrengthPage() {
             </p>
             <div className="flex gap-3 justify-center">
               <button onClick={() => setConfirmDeleteSchedule(null)} className="px-4 py-2 text-sm text-[#888] border border-gray-200 rounded-lg hover:border-gray-400 transition">Batal</button>
-              <button onClick={() => handleDeleteSchedule(confirmDeleteSchedule)} className="px-4 py-2 text-sm font-semibold text-white bg-[#D44040] hover:bg-red-700 rounded-lg transition">Padam</button>
+              <button onClick={() => handleDeleteSchedule(confirmDeleteSchedule)} disabled={deletingSchedule} className="px-4 py-2 text-sm font-semibold text-white bg-[#D44040] hover:bg-red-700 disabled:opacity-60 rounded-lg transition">{deletingSchedule ? 'Padam...' : 'Padam'}</button>
             </div>
           </div>
         </div>
@@ -1258,7 +1358,7 @@ export default function StrengthPage() {
               <p className="text-[11px] text-[#888] font-semibold">Pilih tindakan:</p>
               <div className="flex gap-2">
                 <button onClick={() => setConfirmDeleteSlot(null)} disabled={saving} className="flex-1 px-4 py-2 text-sm text-[#888] border border-gray-200 rounded-lg hover:border-gray-400 transition disabled:opacity-50">Batal</button>
-                <button onClick={() => handleDeleteSlot(confirmDeleteSlot.schedule, confirmDeleteSlot.slot)} disabled={saving} className="flex-1 px-4 py-2 text-sm font-semibold text-white bg-[#F56A00] hover:bg-[#D45A00] rounded-lg transition disabled:opacity-50">Padam Slot Sahaja</button>
+                <button onClick={() => handleDeleteSlot(confirmDeleteSlot.schedule, confirmDeleteSlot.slot)} disabled={saving || deletingSlot} className="flex-1 px-4 py-2 text-sm font-semibold text-white bg-[#F56A00] hover:bg-[#D45A00] rounded-lg transition disabled:opacity-50">{deletingSlot ? 'Padam...' : 'Padam Slot Sahaja'}</button>
                 <button
                   onClick={() => handleDeleteScheduleFromModal(confirmDeleteSlot.schedule)}
                   disabled={(confirmDeleteSlot.schedule.slots?.length ?? 0) <= 1 || saving}
@@ -1281,6 +1381,33 @@ const inputCls = 'w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py
 
 function fmtProgramDate(d: string) {
   return new Date(d + 'T00:00:00').toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+function getMonthDateRange(month: number, year: number): { start: string; end: string } {
+  const firstDay = new Date(year, month - 1, 1)
+  const lastDay = new Date(year, month, 0)
+  const start = `${year}-${String(month).padStart(2, '0')}-${String(firstDay.getDate()).padStart(2, '0')}`
+  const end = `${year}-${String(month).padStart(2, '0')}-${String(lastDay.getDate()).padStart(2, '0')}`
+  return { start, end }
+}
+
+function TimeInput12h({ value, onChange }: { value: string; onChange: (time24: string) => void }) {
+  const { hour, minute, ampm } = convert24To12(value)
+  return (
+    <div className="flex gap-2 items-center">
+      <select value={hour} onChange={e => onChange(convert12To24(e.target.value, minute, ampm))} className="w-16 bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-2 py-2.5 text-sm text-[#111] outline-none focus:border-[#F56A00] focus:bg-white">
+        {Array.from({ length: 12 }, (_, i) => i + 1).map(h => <option key={h} value={h}>{h}</option>)}
+      </select>
+      <span className="text-[#888]">:</span>
+      <select value={minute} onChange={e => onChange(convert12To24(hour, e.target.value, ampm))} className="w-16 bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-2 py-2.5 text-sm text-[#111] outline-none focus:border-[#F56A00] focus:bg-white">
+        {Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0')).map(m => <option key={m} value={m}>{m}</option>)}
+      </select>
+      <select value={ampm} onChange={e => onChange(convert12To24(hour, minute, e.target.value as 'AM' | 'PM'))} className="w-20 bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-2 py-2.5 text-sm text-[#111] outline-none focus:border-[#F56A00] focus:bg-white">
+        <option value="AM">AM</option>
+        <option value="PM">PM</option>
+      </select>
+    </div>
+  )
 }
 
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {

@@ -96,6 +96,7 @@ export default function PhysioCasePage() {
   const [closeError, setCloseError] = useState<string | null>(null)
 
   const [confirmDelete, setConfirmDelete] = useState<PhysioCase | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   const [confirmCaseAction, setConfirmCaseAction] = useState<{ case: PhysioCase; action: 'refer' | 'close' } | null>(null)
   const [caseActionLoading, setCaseActionLoading] = useState(false)
@@ -204,11 +205,16 @@ export default function PhysioCasePage() {
   }
 
   async function handleDeleteCase(c: PhysioCase) {
-    const { error } = await supabase.from('physio_cases').delete().eq('id', c.id)
-    if (error) return
-    await logAction(profile!.id, 'delete_physio_case', 'physio_cases', c.id)
-    setConfirmDelete(null)
-    fetchAll()
+    try {
+      setDeleting(true)
+      const { error } = await supabase.from('physio_cases').delete().eq('id', c.id)
+      if (error) return
+      await logAction(profile!.id, 'delete_physio_case', 'physio_cases', c.id)
+      setConfirmDelete(null)
+      await fetchAll()
+    } finally {
+      setDeleting(false)
+    }
   }
 
   async function handleCaseAction(caseData: PhysioCase, action: 'refer' | 'close') {
@@ -742,7 +748,7 @@ export default function PhysioCasePage() {
             <p className="text-[13px] text-[#888] mb-6">{confirmDelete.athlete?.name ?? 'Tiada atlet'} · {fmtDate(confirmDelete.open_date)}</p>
             <div className="flex gap-3 justify-center">
               <button onClick={() => setConfirmDelete(null)} className="px-4 py-2 text-sm text-[#888] border border-gray-200 rounded-lg hover:border-gray-400 transition">Batal</button>
-              <button onClick={() => handleDeleteCase(confirmDelete)} className="px-4 py-2 text-sm font-semibold text-white bg-[#D44040] hover:bg-red-700 rounded-lg transition">Padam</button>
+              <button onClick={() => handleDeleteCase(confirmDelete)} disabled={deleting} className="px-4 py-2 text-sm font-semibold text-white bg-[#D44040] hover:bg-red-700 disabled:opacity-60 rounded-lg transition">{deleting ? 'Padam...' : 'Padam'}</button>
             </div>
           </div>
         </div>

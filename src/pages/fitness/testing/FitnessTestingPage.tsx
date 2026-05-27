@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
 import { usePermissions } from '../../../hooks/usePermissions'
@@ -31,6 +32,8 @@ export default function FitnessTestingPage() {
   const { profile } = useAuth()
   const { can } = usePermissions()
   const canRecord = can('fitness', 'create')
+  const [searchParams] = useSearchParams()
+  const athleteIdParam = searchParams.get('athlete')
 
   const [athletes, setAthletes] = useState<Athlete[]>([])
   const [selectedAthlete, setSelectedAthlete] = useState<Athlete | null>(null)
@@ -62,6 +65,15 @@ export default function FitnessTestingPage() {
     if (!canRecord) return
     fetchAthletes()
   }, [canRecord])
+
+  useEffect(() => {
+    if (athleteIdParam && athletes.length > 0) {
+      const athlete = athletes.find(a => a.id === athleteIdParam)
+      if (athlete) {
+        selectAthlete(athlete)
+      }
+    }
+  }, [athleteIdParam, athletes])
 
   async function fetchAthletes() {
     setLoading(true)
@@ -95,25 +107,6 @@ export default function FitnessTestingPage() {
     })
     setExpandedCategories(expandedState)
 
-    // Fetch norms separately
-    if (sportTestsData.length > 0) {
-      const testIds = sportTestsData.map(st => st.test_id)
-      const normsRes = await supabase
-        .from('fitness_test_norms')
-        .select('*')
-        .in('test_id', testIds)
-
-      const normsMap = new Map<string, FitnessTestNorm>()
-      const normsList = (normsRes.data ?? []) as FitnessTestNorm[]
-      normsList.forEach(norm => {
-        if (norm.gender === gender || norm.gender === 'both') {
-          normsMap.set(norm.test_id, norm)
-        }
-      })
-      setNorms(normsMap)
-    }
-
-
     // Initialize results
     const initialResults = sportTestsData.map(st => ({
       test_id: st.test_id,
@@ -123,13 +116,31 @@ export default function FitnessTestingPage() {
     }))
     setResults(initialResults)
 
-    // Fetch existing sessions
-    const sessionsRes = await supabase
-      .from('fitness_test_sessions')
-      .select('*')
-      .eq('athlete_id', athlete.id)
-      .order('recorded_date', { ascending: false })
-    setSessions(sessionsRes.data ?? [])
+    // Fetch norms and sessions in parallel
+    if (sportTestsData.length > 0) {
+      const testIds = sportTestsData.map(st => st.test_id)
+      const [normsRes, sessionsRes] = await Promise.all([
+        supabase
+          .from('fitness_test_norms')
+          .select('id, test_id, gender, good_min, good_max, average_min, average_max, poor_min, poor_max, rating_direction, created_at')
+          .in('test_id', testIds),
+        supabase
+          .from('fitness_test_sessions')
+          .select('id, athlete_id, session, year, recorded_date, recorded_by, is_draft, created_at')
+          .eq('athlete_id', athlete.id)
+          .order('recorded_date', { ascending: false })
+      ])
+
+      const normsMap = new Map<string, FitnessTestNorm>()
+      const normsList = (normsRes.data ?? []) as FitnessTestNorm[]
+      normsList.forEach(norm => {
+        if (norm.gender === gender || norm.gender === 'both') {
+          normsMap.set(norm.test_id, norm)
+        }
+      })
+      setNorms(normsMap)
+      setSessions(sessionsRes.data ?? [])
+    }
 
     // Fetch all sessions with their results
     await fetchSessionsWithResults(athlete.id)
@@ -139,7 +150,7 @@ export default function FitnessTestingPage() {
   async function fetchSessionsWithResults(athleteId: string) {
     const sessionsRes = await supabase
       .from('fitness_test_sessions')
-      .select('*')
+      .select('id, athlete_id, session, year, recorded_date, recorded_by, is_draft, created_at')
       .eq('athlete_id', athleteId)
       .order('recorded_date', { ascending: false })
 

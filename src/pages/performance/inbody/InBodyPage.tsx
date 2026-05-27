@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
 import { usePermissions } from '../../../hooks/usePermissions'
@@ -137,6 +138,8 @@ function InBodyScoreGauge({ score }: { score: number | null }) {
 export default function InBodyPage() {
   const { profile } = useAuth()
   const { can } = usePermissions()
+  const [searchParams] = useSearchParams()
+  const athleteIdParam = searchParams.get('athlete')
 
   const [records, setRecords] = useState<InBodyRecord[]>([])
   const [athletes, setAthletes] = useState<Athlete[]>([])
@@ -154,6 +157,7 @@ export default function InBodyPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<InBodyRecord | null>(null)
+  const [deleting, setDeleting] = useState(false)
   const [formSportFilter, setFormSportFilter] = useState<string>('')
 
   type ViewTab = 'jadual' | 'profil'
@@ -175,6 +179,12 @@ export default function InBodyPage() {
   useEffect(() => {
     fetchAthleteRecords(profilAthlete)
   }, [profilAthlete])
+
+  useEffect(() => {
+    if (athleteIdParam && athletes.length > 0) {
+      setFilterAthlete(athleteIdParam)
+    }
+  }, [athleteIdParam, athletes])
 
   async function fetchAll() {
     setLoading(true)
@@ -252,11 +262,16 @@ export default function InBodyPage() {
   }
 
   async function handleDelete(r: InBodyRecord) {
-    await supabase.from('inbody_records').delete().eq('id', r.id)
-    setConfirmDelete(null)
-    setViewRecord(null)
-    fetchAll()
-    if (profilAthlete) fetchAthleteRecords(profilAthlete)
+    try {
+      setDeleting(true)
+      await supabase.from('inbody_records').delete().eq('id', r.id)
+      setConfirmDelete(null)
+      setViewRecord(null)
+      await fetchAll()
+      if (profilAthlete) await fetchAthleteRecords(profilAthlete)
+    } finally {
+      setDeleting(false)
+    }
   }
 
   async function handleDietPlanUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -709,7 +724,7 @@ export default function InBodyPage() {
             <p className="text-[13px] text-[#888] mb-6">{confirmDelete.athlete?.name} — {fmtDate(confirmDelete.recorded_date)}</p>
             <div className="flex gap-3 justify-center">
               <button onClick={() => setConfirmDelete(null)} className="px-4 py-2 text-sm text-[#888] border border-gray-200 rounded-lg hover:border-gray-400 transition">Batal</button>
-              <button onClick={() => handleDelete(confirmDelete)} className="px-4 py-2 text-sm font-semibold text-white bg-[#D44040] hover:bg-red-700 rounded-lg transition">Padam</button>
+              <button onClick={() => handleDelete(confirmDelete)} disabled={deleting} className="px-4 py-2 text-sm font-semibold text-white bg-[#D44040] hover:bg-red-700 disabled:opacity-60 rounded-lg transition">{deleting ? 'Padam...' : 'Padam'}</button>
             </div>
           </div>
         </div>

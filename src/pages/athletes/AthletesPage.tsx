@@ -138,6 +138,7 @@ export default function AthletesPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Athlete | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -146,7 +147,7 @@ export default function AthletesPage() {
 
   async function fetchAthletes() {
     setLoading(true)
-    const { data, error } = await supabase.from('athletes').select('*').order('name')
+    const { data, error } = await supabase.from('athletes').select('id, name, ic_number, sport, status, gender, date_of_birth, weight, height, is_elite, photo_url, category, created_at').order('name')
     if (!error) setAthletes(data ?? [])
     setLoading(false)
   }
@@ -236,11 +237,16 @@ export default function AthletesPage() {
   }
 
   async function handleDelete(a: Athlete) {
-    const { error } = await supabase.from('athletes').delete().eq('id', a.id)
-    if (!error) {
-      await logAction(profile!.id, 'delete_athlete', 'athletes', a.id)
-      setConfirmDelete(null)
-      fetchAthletes()
+    try {
+      setDeleting(true)
+      const { error } = await supabase.from('athletes').delete().eq('id', a.id)
+      if (!error) {
+        await logAction(profile!.id, 'delete_athlete', 'athletes', a.id)
+        setConfirmDelete(null)
+        await fetchAthletes()
+      }
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -575,7 +581,7 @@ export default function AthletesPage() {
             <p className="text-[13px] text-[#888] mb-6">{confirmDelete.name} akan dipadam secara kekal.</p>
             <div className="flex gap-3 justify-center">
               <button onClick={() => setConfirmDelete(null)} className="px-4 py-2 text-sm text-[#888] border border-gray-200 rounded-lg hover:border-gray-400 transition">Batal</button>
-              <button onClick={() => handleDelete(confirmDelete)} className="px-4 py-2 text-sm font-semibold text-white bg-[#D44040] hover:bg-red-700 rounded-lg transition">Padam</button>
+              <button onClick={() => handleDelete(confirmDelete)} disabled={deleting} className="px-4 py-2 text-sm font-semibold text-white bg-[#D44040] hover:bg-red-700 disabled:opacity-60 rounded-lg transition">{deleting ? 'Padam...' : 'Padam'}</button>
             </div>
           </div>
         </div>

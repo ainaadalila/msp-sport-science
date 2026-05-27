@@ -31,7 +31,7 @@ export default function FitnessTestConfigPage() {
     setLoading(true)
     try {
       const [defsRes, athletesRes] = await Promise.all([
-        supabase.from('fitness_test_definitions').select('*').order('category').order('test_name'),
+        supabase.from('fitness_test_definitions').select('id, test_name, category, unit, description, created_at').order('category').order('test_name'),
         supabase.from('athletes').select('sport').limit(1000),
       ])
 
