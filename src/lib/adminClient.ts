@@ -66,15 +66,23 @@ export async function createUserAdmin(
 
 export async function deleteUserAdmin(userId: string) {
   try {
-    console.log('1. Deleting profile from database...')
+    console.log('1. Deleting related supplement requests...')
+    const { error: requestError } = await adminDb.from('supplement_requests').delete().eq('requested_by', userId)
+    if (requestError) {
+      console.error('Supplement request delete error:', requestError)
+      throw new Error(`Failed to delete supplement requests: ${requestError.message}`)
+    }
+    console.log('2. Supplement requests deleted')
+
+    console.log('3. Deleting profile from database...')
     const { error: profileError } = await adminDb.from('profiles').delete().eq('id', userId)
     if (profileError) {
       console.error('Profile delete error:', profileError)
       throw new Error(`Failed to delete profile: ${profileError.message}`)
     }
-    console.log('2. Profile deleted successfully')
+    console.log('4. Profile deleted successfully')
 
-    console.log('3. Disabling auth user...')
+    console.log('5. Disabling auth user...')
     const updateResponse = await fetch(`${supabaseUrl}/auth/v1/admin/users/${userId}`, {
       method: 'PUT',
       headers: {
@@ -91,7 +99,7 @@ export async function deleteUserAdmin(userId: string) {
       // Don't throw - profile is already deleted, this is optional
       console.log('Auth user update failed, but profile was deleted successfully')
     } else {
-      console.log('4. Auth user marked as deleted')
+      console.log('6. Auth user marked as deleted')
     }
 
     return true
