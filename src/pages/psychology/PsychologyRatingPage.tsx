@@ -4,6 +4,7 @@ import { usePermissions } from '../../hooks/usePermissions'
 import type { PhysioRating } from '../../types'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 interface CSVRow {
   [key: string]: string
@@ -45,6 +46,10 @@ export default function PsychologyRatingPage() {
   const [uploadError, setUploadError] = useState('')
   const [uploadSuccess, setUploadSuccess] = useState('')
   const [uploadWarning, setUploadWarning] = useState('')
+  const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(null)
+  const [comparisonData, setComparisonData] = useState<any[]>([])
+  const [selectedAthleteName, setSelectedAthleteName] = useState('')
+  const [selectedAthleteSport, setSelectedAthleteSport] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -67,6 +72,39 @@ export default function PsychologyRatingPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const openComparison = (athleteId: string) => {
+    const athleteRatings = ratings.filter(r => r.athlete_id === athleteId)
+    if (athleteRatings.length === 0) return
+
+    const athlete = athleteRatings[0].athlete
+    setSelectedAthleteName(athlete?.name ?? 'Unknown')
+    setSelectedAthleteSport(athlete?.sport?.name ?? 'Unknown')
+
+    // Group ratings by phase
+    const phaseData: Record<string, any> = {
+      Persediaan: null,
+      Pertandingan: null,
+      Pemulihan: null,
+    }
+
+    athleteRatings.forEach(r => {
+      const phaseLabel = PHASE_LABEL[r.phase]
+      if (!phaseData[phaseLabel] || new Date(r.assessment_date) > new Date(phaseData[phaseLabel].date)) {
+        phaseData[phaseLabel] = {
+          phase: phaseLabel,
+          cognitive_anxiety: r.cognitive_anxiety_score,
+          somatic_anxiety: r.somatic_anxiety_score,
+          confidence: r.self_confidence_score,
+          date: r.assessment_date,
+        }
+      }
+    })
+
+    const chartData = Object.values(phaseData).filter(Boolean)
+    setComparisonData(chartData)
+    setSelectedAthleteId(athleteId)
   }
 
   const calculateScores = (responses: Record<string, number>) => {
@@ -470,7 +508,14 @@ export default function PsychologyRatingPage() {
                 <tbody>
                   {filteredRatings.map(r => (
                     <tr key={r.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
-                      <td className="px-4 py-3 font-medium text-[#111]">{r.athlete?.name ?? '—'}</td>
+                      <td className="px-4 py-3 font-medium">
+                        <button
+                          onClick={() => openComparison(r.athlete_id)}
+                          className="text-[#F56A00] hover:underline cursor-pointer"
+                        >
+                          {r.athlete?.name ?? '—'}
+                        </button>
+                      </td>
                       <td className="px-4 py-3 text-[#888]">{r.athlete?.sport?.name ?? '—'}</td>
                       <td className="px-4 py-3">
                         <span className="inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
@@ -501,6 +546,101 @@ export default function PsychologyRatingPage() {
                 </tbody>
               </table>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Comparison Modal */}
+      {selectedAthleteId && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-lg max-w-3xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <div>
+                <h2 className="text-xl font-bold text-[#111]">{selectedAthleteName}</h2>
+                <p className="text-sm text-[#888] mt-1">{selectedAthleteSport}</p>
+              </div>
+              <button
+                onClick={() => setSelectedAthleteId(null)}
+                className="text-[#888] hover:text-[#111] text-2xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-6">
+              {comparisonData.length === 0 ? (
+                <div className="text-center text-[#888] py-8">
+                  Tiada data untuk dibandingkan
+                </div>
+              ) : (
+                <>
+                  {/* Chart */}
+                  {comparisonData.length > 0 && (
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <h3 className="text-sm font-semibold text-[#111] mb-4">Perbandingan Skor Merentasi Fasa</h3>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <BarChart data={comparisonData}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="phase" />
+                          <YAxis />
+                          <Tooltip />
+                          <Legend />
+                          <Bar dataKey="cognitive_anxiety" fill="#FF6B6B" name="Kebimbangan Kognitif" />
+                          <Bar dataKey="somatic_anxiety" fill="#FFA94D" name="Kebimbangan Somatis" />
+                          <Bar dataKey="confidence" fill="#51CF66" name="Kepercayaan Diri" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+
+                  {/* Comparison Table */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-[#111] mb-3">Jadual Perbandingan</h3>
+                    <table className="w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
+                      <thead>
+                        <tr className="bg-gray-50">
+                          <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase text-[#888]">Fasa</th>
+                          <th className="px-4 py-3 text-center text-[10px] font-semibold uppercase text-[#888]">Kebimbangan Kognitif</th>
+                          <th className="px-4 py-3 text-center text-[10px] font-semibold uppercase text-[#888]">Kebimbangan Somatis</th>
+                          <th className="px-4 py-3 text-center text-[10px] font-semibold uppercase text-[#888]">Kepercayaan Diri</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {comparisonData.map((data, idx) => (
+                          <tr key={idx} className="border-t border-gray-100 hover:bg-gray-50">
+                            <td className="px-4 py-3 font-medium text-[#111]">{data.phase}</td>
+                            <td className="px-4 py-3 text-center">
+                              <span className="inline-block font-semibold text-[#111]">{data.cognitive_anxiety}</span>
+                              <span className="text-[11px] text-[#888] ml-1">{data.cognitive_anxiety > 15 ? '(Tinggi)' : data.cognitive_anxiety > 10 ? '(Sederhana)' : '(Rendah)'}</span>
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <span className="inline-block font-semibold text-[#111]">{data.somatic_anxiety}</span>
+                              <span className="text-[11px] text-[#888] ml-1">{data.somatic_anxiety > 17 ? '(Tinggi)' : data.somatic_anxiety > 10 ? '(Sederhana)' : '(Rendah)'}</span>
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <span className="inline-block font-semibold text-[#111]">{data.confidence}</span>
+                              <span className="text-[11px] text-[#888] ml-1">{data.confidence >= 15 ? '(Tinggi)' : data.confidence >= 10 ? '(Sederhana)' : '(Rendah)'}</span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Key Insights */}
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <h3 className="text-sm font-semibold text-blue-900 mb-2">📊 Panduan Pembacaan</h3>
+                    <ul className="text-sm text-blue-800 space-y-1">
+                      <li>• <strong>Kebimbangan Kognitif:</strong> Kerisauan fikiran tentang prestasi (skor tinggi = lebih risau)</li>
+                      <li>• <strong>Kebimbangan Somatis:</strong> Kegelisahan fizikal seperti jantung berdegup (skor tinggi = lebih gelisah)</li>
+                      <li>• <strong>Kepercayaan Diri:</strong> Keyakinan diri dan kemampuan (skor tinggi = lebih yakin)</li>
+                    </ul>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}

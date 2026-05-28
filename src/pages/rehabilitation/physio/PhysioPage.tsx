@@ -133,6 +133,8 @@ export default function PhysioPage() {
 
   const [confirmDelete, setConfirmDelete] = useState<PhysioSlot | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const SLOTS_PER_PAGE = 20
 
   useEffect(() => { fetchAll() }, [])
 
@@ -298,6 +300,17 @@ export default function PhysioPage() {
     return matchAthlete
   }).sort((a, b) => new Date(b.slot_date).getTime() - new Date(a.slot_date).getTime())
 
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [filterAthlete])
+
+  // Pagination logic
+  const totalPages = Math.ceil(filteredSlots.length / SLOTS_PER_PAGE)
+  const startIdx = (currentPage - 1) * SLOTS_PER_PAGE
+  const endIdx = startIdx + SLOTS_PER_PAGE
+  const paginatedSlots = filteredSlots.slice(startIdx, endIdx)
+
   const allSports = [...new Set(athletes.map(a => a.sport?.name))].filter(Boolean).sort()
   const modalAthletes = formSport ? athletes.filter(a => a.sport?.name === formSport) : athletes
 
@@ -358,16 +371,20 @@ export default function PhysioPage() {
                 {slots.length === 0 ? 'Tiada rekod slot lagi.' : 'Tiada rekod sepadan penapis.'}
               </div>
             ) : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-100">
-                    {['Tarikh', 'Atlet', 'Kecederaan', 'Status', ''].map(h => (
-                      <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-wider text-[#888] px-4 py-3">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredSlots.map(s => (
+              <>
+                <div className="flex justify-between items-center px-4 py-3 bg-gray-50 border-b border-gray-100 text-sm text-[#888]">
+                  <span>{filteredSlots.length} rekod ({currentPage} dari {totalPages} halaman)</span>
+                </div>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100">
+                      {['Tarikh', 'Atlet', 'Kecederaan', 'Status', ''].map(h => (
+                        <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-wider text-[#888] px-4 py-3">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedSlots.map(s => (
                     <tr key={s.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
                       <td className="px-4 py-3 font-mono text-[12px] text-[#444] whitespace-nowrap">{fmtDate(s.slot_date)}</td>
                       <td className="px-4 py-3 font-medium text-[#111]">{s.athlete?.name ?? '—'}</td>
@@ -387,8 +404,44 @@ export default function PhysioPage() {
                       </td>
                     </tr>
                   ))}
-                </tbody>
-              </table>
+                  </tbody>
+                </table>
+
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between px-4 py-4 bg-white border-t border-gray-100">
+                    <button
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      className="px-3 py-2 text-sm text-[#F56A00] border border-gray-300 rounded-lg hover:bg-orange-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                    >
+                      ← Sebelumnya
+                    </button>
+                    <div className="flex gap-2">
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                        <button
+                          key={page}
+                          onClick={() => setCurrentPage(page)}
+                          className={`px-3 py-2 text-sm rounded-lg transition ${
+                            currentPage === page
+                              ? 'bg-[#F56A00] text-white font-semibold'
+                              : 'text-[#444] border border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                      className="px-3 py-2 text-sm text-[#F56A00] border border-gray-300 rounded-lg hover:bg-orange-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                    >
+                      Seterusnya →
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

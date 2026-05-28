@@ -167,6 +167,8 @@ export default function InBodyPage() {
   const [profilAthlete, setProfilAthlete] = useState<string>('')
   const [profilRecords, setProfilRecords] = useState<InBodyRecord[]>([])
   const [profilLoading, setProfilLoading] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const RECORDS_PER_PAGE = 25
 
   // Diet plan upload
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -352,6 +354,17 @@ export default function InBodyPage() {
     return matchSport && matchAthlete && matchFrom && matchTo
   })
 
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [filterSport, filterAthlete, filterFrom, filterTo])
+
+  // Pagination logic
+  const totalPages = Math.ceil(filtered.length / RECORDS_PER_PAGE)
+  const startIdx = (currentPage - 1) * RECORDS_PER_PAGE
+  const endIdx = startIdx + RECORDS_PER_PAGE
+  const paginatedRecords = filtered.slice(startIdx, endIdx)
+
   function fmtDate(d: string) {
     return new Date(d).toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric' })
   }
@@ -424,16 +437,20 @@ export default function InBodyPage() {
             {records.length === 0 ? 'Tiada rekod InBody lagi.' : 'Tiada rekod sepadan penapis.'}
           </div>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100">
-                {['Tarikh', 'Atlet', 'Sukan', 'Berat (kg)', 'BMI', 'Lemak (%)', 'SMM (kg)', 'Skor InBody', 'Diet Plan', ''].map(h => (
-                  <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-wider text-[#888] px-4 py-3">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(r => {
+          <>
+            <div className="flex justify-between items-center px-4 py-3 bg-gray-50 border-b border-gray-100 text-sm text-[#888]">
+              <span>{filtered.length} rekod ({currentPage} dari {totalPages} halaman)</span>
+            </div>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100">
+                  {['Tarikh', 'Atlet', 'Sukan', 'Berat (kg)', 'BMI', 'Lemak (%)', 'SMM (kg)', 'Skor InBody', 'Diet Plan', ''].map(h => (
+                    <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-wider text-[#888] px-4 py-3">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedRecords.map(r => {
                 const badge = scoreBadge(r.inbody_score)
                 return (
                   <tr key={r.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
@@ -475,7 +492,43 @@ export default function InBodyPage() {
                 )
               })}
             </tbody>
-          </table>
+            </table>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between px-4 py-4 bg-white border-t border-gray-100">
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-2 text-sm text-[#F56A00] border border-gray-300 rounded-lg hover:bg-orange-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                >
+                  ← Sebelumnya
+                </button>
+                <div className="flex gap-2">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                    <button
+                      key={page}
+                      onClick={() => setCurrentPage(page)}
+                      className={`px-3 py-2 text-sm rounded-lg transition ${
+                        currentPage === page
+                          ? 'bg-[#F56A00] text-white font-semibold'
+                          : 'text-[#444] border border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-2 text-sm text-[#F56A00] border border-gray-300 rounded-lg hover:bg-orange-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                >
+                  Seterusnya →
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
         </>
