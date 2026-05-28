@@ -30,9 +30,9 @@ export default function FitnessTestConfigPage() {
   async function fetchData() {
     setLoading(true)
     try {
-      const [defsRes, athletesRes] = await Promise.all([
+      const [defsRes, sportsRes] = await Promise.all([
         supabase.from('fitness_test_definitions').select('id, test_name, category, unit, description, created_at').order('category').order('test_name'),
-        supabase.from('athletes').select('sport').limit(1000),
+        supabase.from('sports').select('name').order('name'),
       ])
 
       console.log('Definitions fetched:', defsRes.data?.length)
@@ -47,12 +47,12 @@ export default function FitnessTestConfigPage() {
       })
       setExpandedCategories(expandedState)
 
-      const uniqueSports = [...new Set((athletesRes.data ?? []).map(a => a.sport))].filter(Boolean)
-      setSports(uniqueSports)
+      const sportNames = (sportsRes.data ?? []).map(s => s.name).filter(Boolean)
+      setSports(sportNames)
 
-      if (uniqueSports && uniqueSports.length > 0) {
-        setSelectedSport(uniqueSports[0])
-        await fetchSportTests(uniqueSports[0])
+      if (sportNames && sportNames.length > 0) {
+        setSelectedSport(sportNames[0])
+        await fetchSportTests(sportNames[0])
       }
     } catch (err) {
       console.error('Error fetching data:', err)

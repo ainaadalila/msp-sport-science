@@ -9,7 +9,8 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 interface Athlete {
   id: string
   name: string
-  sport: string
+  sport_id: string
+  sport?: { name: string }
 }
 
 interface InBodyRecord {
@@ -28,7 +29,7 @@ interface InBodyRecord {
   diet_plan_url: string | null
   diet_plan_name: string | null
   created_at: string
-  athlete?: { name: string; sport: string }
+  athlete?: { name: string; sport?: { name: string } }
 }
 
 type FormState = Omit<InBodyRecord, 'id' | 'created_at' | 'athlete'>
@@ -191,10 +192,10 @@ export default function InBodyPage() {
     const [recRes, athRes] = await Promise.all([
       supabase
         .from('inbody_records')
-        .select('*, athlete:athletes(name, sport)')
+        .select('id, athlete_id, recorded_date, weight, smm, body_fat_mass, bmi, fat_pct, inbody_score, diet_plan_url, athlete:athletes(name, sport_id, sport:sport_id(name))')
         .order('recorded_date', { ascending: false }),
-      supabase.from('athletes').select('id, name, sport').order('name'),
-    ])
+      supabase.from('athletes').select('id, name, sport_id, sport:sport_id(name)').order('name'),
+    ]) as any
     setRecords(recRes.data ?? [])
     setAthletes(athRes.data ?? [])
     setLoading(false)
@@ -205,9 +206,9 @@ export default function InBodyPage() {
     setProfilLoading(true)
     const { data } = await supabase
       .from('inbody_records')
-      .select('*, athlete:athletes(name, sport)')
+      .select('id, athlete_id, recorded_date, weight, smm, body_fat_mass, bmi, fat_pct, inbody_score, diet_plan_url, athlete:athletes(name, sport_id, sport:sport_id(name))')
       .eq('athlete_id', athleteId)
-      .order('recorded_date', { ascending: true })
+      .order('recorded_date', { ascending: true }) as any
     setProfilRecords(data ?? [])
     setProfilLoading(false)
   }
@@ -224,7 +225,7 @@ export default function InBodyPage() {
     setEditing(r)
     const { id, created_at, athlete, ...rest } = r
     setForm(rest)
-    setFormSportFilter(r.athlete?.sport ?? '')
+    setFormSportFilter(r.athlete?.sport?.name ?? '')
     setError(null)
     setModalOpen(true)
   }
@@ -344,7 +345,7 @@ export default function InBodyPage() {
   }
 
   const filtered = records.filter(r => {
-    const matchSport = !filterSport || r.athlete?.sport === filterSport
+    const matchSport = !filterSport || r.athlete?.sport?.name === filterSport
     const matchAthlete = !filterAthlete || r.athlete_id === filterAthlete
     const matchFrom = !filterFrom || r.recorded_date >= filterFrom
     const matchTo = !filterTo || r.recorded_date <= filterTo
@@ -394,13 +395,13 @@ export default function InBodyPage() {
           <div className="flex flex-wrap gap-2">
             <select value={filterSport} onChange={e => { setFilterSport(e.target.value); setFilterAthlete('') }} className={filterCls}>
               <option value="">Semua Sukan</option>
-              {Array.from(new Set(athletes.map(a => a.sport))).sort().map(sport => (
+              {Array.from(new Set(athletes.map(a => a.sport?.name))).sort().map(sport => (
                 <option key={sport} value={sport}>{sport}</option>
               ))}
             </select>
             <select value={filterAthlete} onChange={e => setFilterAthlete(e.target.value)} className={filterCls}>
               <option value="">Semua Atlet</option>
-              {athletes.filter(a => !filterSport || a.sport === filterSport).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              {athletes.filter(a => !filterSport || a.sport?.name === filterSport).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
             <div className="flex items-center gap-2">
               <input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)} className={filterCls} placeholder="Dari" />
@@ -440,7 +441,7 @@ export default function InBodyPage() {
                     <td className="px-4 py-3 font-medium">
                       {r.athlete?.name ? (
                         <button
-                          onClick={() => { setActiveTab('profil'); setProfilAthlete(r.athlete_id); setProfilSport(r.athlete?.sport || '') }}
+                          onClick={() => { setActiveTab('profil'); setProfilAthlete(r.athlete_id); setProfilSport(r.athlete?.sport?.name || '') }}
                           className="text-[#F56A00] hover:underline font-medium cursor-pointer"
                         >
                           {r.athlete.name}
@@ -449,7 +450,7 @@ export default function InBodyPage() {
                         '—'
                       )}
                     </td>
-                    <td className="px-4 py-3 text-[#888]">{r.athlete?.sport ?? '—'}</td>
+                    <td className="px-4 py-3 text-[#888]">{r.athlete?.sport?.name ?? '—'}</td>
                     <td className="px-4 py-3 text-[#444]">{n(r.weight, ' kg')}</td>
                     <td className="px-4 py-3 text-[#444]">{n(r.bmi)}</td>
                     <td className="px-4 py-3 text-[#444]">{n(r.fat_pct, '%')}</td>
@@ -484,13 +485,13 @@ export default function InBodyPage() {
           <div className="flex gap-2">
             <select value={profilSport} onChange={e => { setProfilSport(e.target.value); setProfilAthlete('') }} className={filterCls} style={{ flex: 1 }}>
               <option value="">— Semua Sukan —</option>
-              {Array.from(new Set(athletes.map(a => a.sport))).sort().map(sport => (
+              {Array.from(new Set(athletes.map(a => a.sport?.name))).sort().map(sport => (
                 <option key={sport} value={sport}>{sport}</option>
               ))}
             </select>
             <select value={profilAthlete} onChange={e => setProfilAthlete(e.target.value)} className={filterCls} style={{ flex: 2 }}>
               <option value="">— Pilih Atlet —</option>
-              {athletes.filter(a => !profilSport || a.sport === profilSport).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              {athletes.filter(a => !profilSport || a.sport?.name === profilSport).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
           </div>
 
@@ -668,7 +669,7 @@ export default function InBodyPage() {
                   <Field label="Sukan" required>
                     <select value={formSportFilter} onChange={e => { setFormSportFilter(e.target.value); setField('athlete_id', '') }} className={inputCls}>
                       <option value="">— Pilih sukan —</option>
-                      {[...new Set(athletes.map(a => a.sport))].sort().map(s => <option key={s} value={s}>{s}</option>)}
+                      {[...new Set(athletes.map(a => a.sport?.name))].sort().map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </Field>
                 </div>
@@ -676,7 +677,7 @@ export default function InBodyPage() {
                   <Field label="Atlet" required>
                     <select value={form.athlete_id} onChange={e => setField('athlete_id', e.target.value)} className={inputCls}>
                       <option value="">— Pilih atlet —</option>
-                      {athletes.filter(a => !formSportFilter || a.sport === formSportFilter).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                      {athletes.filter(a => !formSportFilter || a.sport?.name === formSportFilter).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                     </select>
                   </Field>
                 </div>
