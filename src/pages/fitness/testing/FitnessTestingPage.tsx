@@ -77,7 +77,7 @@ export default function FitnessTestingPage() {
 
   async function fetchAthletes() {
     setLoading(true)
-    const res = await supabase.from('athletes').select('*, ic_number').order('name')
+    const res = await supabase.from('athletes').select('id, name, ic_number, category, sport_id, sport:sport_id(name)').order('name') as any
     setAthletes(res.data ?? [])
     setLoading(false)
   }
@@ -94,7 +94,7 @@ export default function FitnessTestingPage() {
     const testsRes = await supabase
       .from('sport_fitness_tests')
       .select('*, test:test_id(test_name, unit, category)')
-      .eq('sport', athlete.sport)
+      .eq('sport', athlete.sport?.name)
 
     const sportTestsData = (testsRes.data ?? []) as SportFitnessTest[]
     setSportTests(sportTestsData)
@@ -375,7 +375,7 @@ export default function FitnessTestingPage() {
                   className="w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2 text-sm"
                 >
                   <option value="">Semua Sukan</option>
-                  {[...new Set(athletes.map(a => a.sport))].sort().map(sport => (
+                  {[...new Set(athletes.map(a => a.sport?.name))].filter(Boolean).sort().map(sport => (
                     <option key={sport} value={sport}>{sport}</option>
                   ))}
                 </select>
@@ -406,7 +406,7 @@ export default function FitnessTestingPage() {
               <tbody>
                 {(() => {
                   const filtered = athletes
-                    .filter(a => !filterSport || a.sport === filterSport)
+                    .filter(a => !filterSport || a.sport?.name === filterSport)
                     .filter(a => !filterName || a.name.toLowerCase().includes(filterName.toLowerCase()))
                   return filtered.length === 0 ? (
                     <tr>
@@ -423,7 +423,7 @@ export default function FitnessTestingPage() {
                       >
                         <td className="px-4 py-3 font-semibold text-[#111] hover:underline">{a.name}</td>
                         <td className="px-4 py-3 text-[#888]">{a.ic_number}</td>
-                        <td className="px-4 py-3 text-[#888]">{a.sport}</td>
+                        <td className="px-4 py-3 text-[#888]">{a.sport?.name}</td>
                         <td className="px-4 py-3 text-[#888]">{a.category || '—'}</td>
                       </tr>
                     ))
@@ -438,7 +438,7 @@ export default function FitnessTestingPage() {
           <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 flex items-center justify-between">
             <div>
               <p className="font-semibold text-[#111]">{selectedAthlete.name}</p>
-              <p className="text-xs text-[#888]">{selectedAthlete.sport}</p>
+              <p className="text-xs text-[#888]">{selectedAthlete.sport?.name}</p>
             </div>
             <button
               onClick={() => {
@@ -801,7 +801,7 @@ export default function FitnessTestingPage() {
                   </div>
                   <div className="flex items-end">
                     <span className="text-[12px] text-[#888]">
-                      {sportTests.length} ujian untuk {selectedAthlete.sport}
+                      {sportTests.length} ujian untuk {selectedAthlete.sport?.name}
                     </span>
                   </div>
                 </div>

@@ -9,7 +9,8 @@ interface Athlete {
   id: string
   name: string
   ic_number: string
-  sport: string
+  sport_id: string
+  sport?: { name: string }
   date_of_birth: string | null
   gender: 'M' | 'F' | null
 }
@@ -24,7 +25,7 @@ interface PhysioCase {
   referred_date: string | null
   physio_id: string | null
   created_at: string
-  athlete?: { id: string; name: string; ic_number: string; sport: string; date_of_birth: string | null; gender: 'M' | 'F' | null } | null
+  athlete?: { id: string; name: string; ic_number: string; sport_id: string; sport?: { name: string }; date_of_birth: string | null; gender: 'M' | 'F' | null } | null
 }
 
 interface PhysioSlot {
@@ -34,7 +35,7 @@ interface PhysioSlot {
   pain_scale: number | null
   session_type: 'standard' | 'manual' | 'injury' | null
   attendance_status: 'scheduled' | 'arrived' | 'completed' | 'no_show'
-  athlete?: { name: string; sport: string } | null
+  athlete?: { name: string; sport?: { name: string } } | null
 }
 
 interface CaseStats {
@@ -107,10 +108,10 @@ export default function PhysioCasePage() {
   async function fetchAll() {
     setLoading(true)
     const [casesRes, slotsRes, athRes] = await Promise.all([
-      supabase.from('physio_cases').select('*, athlete:athletes(id, name, ic_number, sport, date_of_birth, gender)').order('open_date', { ascending: false }),
+      supabase.from('physio_cases').select('id, athlete_id, open_date, status, referred_to_doctor, injury_type, athlete:athletes(id, name, ic_number, sport_id, sport:sport_id(name), date_of_birth, gender)').order('open_date', { ascending: false }),
       supabase.from('physio_slots').select('case_id, pain_scale, slot_date').not('case_id', 'is', null),
-      supabase.from('athletes').select('id, name, ic_number, sport, date_of_birth, gender').order('name'),
-    ])
+      supabase.from('athletes').select('id, name, ic_number, sport_id, sport:sport_id(name), date_of_birth, gender').order('name'),
+    ]) as any
     setCases(casesRes.data ?? [])
     setAthletes(athRes.data ?? [])
 
@@ -130,10 +131,9 @@ export default function PhysioCasePage() {
     setCaseLoading(true)
     const { data } = await supabase
       .from('physio_slots')
-      .select('id, slot_date, time_slot, pain_scale, session_type, attendance_status, assessment_notes, athlete:athletes(name, sport)')
+      .select('id, slot_date, time_slot, pain_scale, session_type, attendance_status, assessment_notes, athlete:athletes(name, sport_id, sport:sport_id(name))')
       .eq('case_id', caseId)
-      .order('slot_date', { ascending: true })
-      .order('time_slot')
+      .order('slot_date', { ascending: true }) as any
     setCaseSlots((data as any) ?? [])
     setCaseLoading(false)
   }
@@ -275,7 +275,7 @@ export default function PhysioCasePage() {
     const athleteInfo = [
       ['Nama:', c.athlete?.name ?? '—'],
       ['No. K/P:', c.athlete?.ic_number ?? '—'],
-      ['Sukan:', c.athlete?.sport ?? '—'],
+      ['Sukan:', c.athlete?.sport?.name ?? '—'],
       ['Jantina:', c.athlete?.gender ? (c.athlete.gender === 'M' ? 'Lelaki' : 'Perempuan') : '—'],
     ]
     athleteInfo.forEach(([label, value]) => {
@@ -360,8 +360,8 @@ export default function PhysioCasePage() {
   const closedCases = cases.filter(c => c.status === 'closed')
   const displayCases = tab === 'active' ? activeCases : closedCases
 
-  const allSports = [...new Set(athletes.map(a => a.sport))].sort()
-  const modalAthletes = createFormSport ? athletes.filter(a => a.sport === createFormSport) : athletes
+  const allSports = [...new Set(athletes.map(a => a.sport?.name))].filter(Boolean).sort()
+  const modalAthletes = createFormSport ? athletes.filter(a => a.sport?.name === createFormSport) : athletes
 
   return (
     <div className="space-y-4">
@@ -410,7 +410,7 @@ export default function PhysioCasePage() {
                 {displayCases.map(c => (
                   <tr key={c.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
                     <td className="px-4 py-3 font-medium text-[#111]">{c.athlete?.name ?? '—'}</td>
-                    <td className="px-4 py-3 text-[#888]">{c.athlete?.sport ?? '—'}</td>
+                    <td className="px-4 py-3 text-[#888]">{c.athlete?.sport?.name ?? '—'}</td>
                     <td className="px-4 py-3 font-mono text-[12px]">{fmtDate(c.open_date)}</td>
                     <td className="px-4 py-3 font-semibold text-[#111]">{caseStats[c.id]?.count ?? 0}</td>
                     <td className="px-4 py-3">
@@ -549,7 +549,7 @@ export default function PhysioCasePage() {
             <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between shrink-0">
               <div>
                 <h3 className="font-bold text-[#111]">{detailCase.athlete?.name ?? 'Tiada Atlet'}</h3>
-                <p className="text-[12px] text-[#888]">{detailCase.injury_type ? detailCase.injury_type + ' · ' : ''}{fmtDate(detailCase.open_date)} · {detailCase.athlete?.sport ?? ''}</p>
+                <p className="text-[12px] text-[#888]">{detailCase.injury_type ? detailCase.injury_type + ' · ' : ''}{fmtDate(detailCase.open_date)} · {detailCase.athlete?.sport?.name ?? ''}</p>
               </div>
               <button onClick={() => setDetailCase(null)} className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
             </div>

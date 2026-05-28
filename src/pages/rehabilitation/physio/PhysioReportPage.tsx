@@ -14,7 +14,7 @@ interface SlotData {
   athlete_id: string
   slot_date: string
   pain_scale: number | null
-  athlete: { name: string; sport: string } | null
+  athlete: { name: string; sport?: { name: string } } | null
 }
 
 const MONTHS_MY = ['Januari', 'Februari', 'Mac', 'April', 'Mei', 'Jun', 'Julai', 'Ogos', 'September', 'Oktober', 'November', 'Disember']
@@ -42,8 +42,8 @@ export default function PhysioReportPage() {
   }, [])
 
   async function fetchSports() {
-    const { data } = await supabase.from('athletes').select('sport').order('sport')
-    const unique = [...new Set((data ?? []).map(a => a.sport))].filter(Boolean) as string[]
+    const { data } = await supabase.from('athletes').select('sport_id, sport:sport_id(name)').order('sport')
+    const unique = [...new Set((data ?? []).map(a => a.sport?.name))].filter(Boolean) as string[]
     setSports(unique)
   }
 
@@ -53,12 +53,12 @@ export default function PhysioReportPage() {
     // Filter and group by athlete
     const grouped = new Map<string, ReportRow>()
     rawSlots.forEach(s => {
-      if (filterSport && s.athlete?.sport !== filterSport) return
+      if (filterSport && s.athlete?.sport?.name !== filterSport) return
       if (!grouped.has(s.athlete_id)) {
         grouped.set(s.athlete_id, {
           athlete_id: s.athlete_id,
           athlete_name: s.athlete?.name ?? '—',
-          sport: s.athlete?.sport ?? '—',
+          sport: s.athlete?.sport?.name ?? '—',
           session_count: 0,
           session_dates: [],
           latest_pain_scale: null,
@@ -83,11 +83,11 @@ export default function PhysioReportPage() {
 
     const { data, error } = await supabase
       .from('physio_slots')
-      .select('athlete_id, slot_date, pain_scale, athlete:athletes(name, sport)')
+      .select('athlete_id, slot_date, pain_scale, athlete:athletes(name, sport_id, sport:sport_id(name))')
       .gte('slot_date', startDate)
       .lte('slot_date', endDate)
       .not('athlete_id', 'is', null)
-      .order('slot_date', { ascending: true })
+      .order('slot_date', { ascending: true }) as any
 
     if (error) {
       setLoading(false)
@@ -108,12 +108,12 @@ export default function PhysioReportPage() {
       setTimeout(() => {
         const grouped = new Map<string, ReportRow>()
         rawSlots.forEach(s => {
-          if (sport && s.athlete?.sport !== sport) return
+          if (sport && s.athlete?.sport?.name !== sport) return
           if (!grouped.has(s.athlete_id)) {
             grouped.set(s.athlete_id, {
               athlete_id: s.athlete_id,
               athlete_name: s.athlete?.name ?? '—',
-              sport: s.athlete?.sport ?? '—',
+              sport: s.athlete?.sport?.name ?? '—',
               session_count: 0,
               session_dates: [],
               latest_pain_scale: null,

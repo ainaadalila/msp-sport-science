@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { logAction } from '../../lib/audit'
 import { usePermissions } from '../../hooks/usePermissions'
+import { useSports } from '../../hooks/useSports'
 
 interface Athlete {
   id: string
@@ -12,7 +13,7 @@ interface Athlete {
   ic_number: string
   date_of_birth: string | null
   gender: 'M' | 'F' | null
-  sport: string
+  sport_id: string
   category: string | null
   status: 'active' | 'rest' | 'injured'
   weight: number | null
@@ -20,6 +21,7 @@ interface Athlete {
   photo_url: string | null
   is_elite: boolean
   created_at: string
+  sport?: { name: string }
 }
 
 interface FormState {
@@ -27,7 +29,7 @@ interface FormState {
   ic_number: string
   date_of_birth: string
   gender: 'M' | 'F' | ''
-  sport: string
+  sport_id: string
   category: string
   status: 'active' | 'rest' | 'injured'
   weight: number | null
@@ -41,7 +43,7 @@ const emptyForm: FormState = {
   ic_number: '',
   date_of_birth: '',
   gender: '',
-  sport: '',
+  sport_id: '',
   category: '',
   status: 'active',
   weight: null,
@@ -122,6 +124,7 @@ function initials(name: string) {
 export default function AthletesPage() {
   const { profile } = useAuth()
   const { can } = usePermissions()
+  const { sports } = useSports()
   const isAdmin = profile?.role === 'superadmin' || profile?.role === 'admin'
   const navigate = useNavigate()
 
@@ -147,7 +150,7 @@ export default function AthletesPage() {
 
   async function fetchAthletes() {
     setLoading(true)
-    const { data, error } = await supabase.from('athletes').select('id, name, ic_number, sport, status, gender, date_of_birth, weight, height, is_elite, photo_url, category, created_at').order('name')
+    const { data, error } = await supabase.from('athletes').select('id, name, ic_number, sport_id, status, gender, date_of_birth, weight, height, is_elite, photo_url, category, created_at, sport:sports!sport_id(name)').order('name') as any
     if (!error) setAthletes(data ?? [])
     setLoading(false)
   }
@@ -166,7 +169,7 @@ export default function AthletesPage() {
       ic_number: a.ic_number,
       date_of_birth: a.date_of_birth ?? '',
       gender: a.gender ?? '',
-      sport: a.sport,
+      sport_id: a.sport_id,
       category: a.category ?? '',
       status: a.status,
       weight: a.weight,
@@ -190,7 +193,7 @@ export default function AthletesPage() {
   }
 
   async function handleSave() {
-    if (!form.name.trim() || !form.ic_number.trim() || !form.sport.trim()) {
+    if (!form.name.trim() || !form.ic_number.trim() || !form.sport_id) {
       setError('Nama, No. IC, dan Sukan wajib diisi.')
       return
     }
@@ -202,7 +205,7 @@ export default function AthletesPage() {
       ic_number: form.ic_number.trim(),
       date_of_birth: form.date_of_birth || null,
       gender: form.gender || null,
-      sport: form.sport.trim(),
+      sport_id: form.sport_id,
       category: form.category || null,
       status: form.status,
       weight: form.weight,
@@ -250,18 +253,17 @@ export default function AthletesPage() {
     }
   }
 
-  const sports = [...new Set(athletes.map(a => a.sport))].sort()
-
   const filtered = athletes.filter(a => {
     const q = search.toLowerCase()
-    const matchSearch = !q || a.name.toLowerCase().includes(q) || a.ic_number.includes(q) || a.sport.toLowerCase().includes(q)
+    const sportName = a.sport?.name?.toLowerCase() || ''
+    const matchSearch = !q || a.name.toLowerCase().includes(q) || a.ic_number.includes(q) || sportName.includes(q)
     const matchStatus = !filterStatus || a.status === filterStatus
-    const matchSport = !filterSport || a.sport === filterSport
+    const matchSport = !filterSport || a.sport_id === filterSport
     const matchElite = !filterElite || a.is_elite
     return matchSearch && matchStatus && matchSport && matchElite
   })
 
-  const totalSports = new Set(athletes.map(a => a.sport)).size
+  const totalSports = new Set(athletes.map(a => a.sport_id)).size
   const maleAthletes = athletes.filter(a => a.gender === 'M').length
   const femaleAthletes = athletes.filter(a => a.gender === 'F').length
   const activeAthletes = athletes.filter(a => a.status === 'active').length
@@ -331,7 +333,7 @@ export default function AthletesPage() {
         {sports.length > 0 && (
           <select value={filterSport} onChange={e => setFilterSport(e.target.value)} className={filterCls}>
             <option value="">Semua Sukan</option>
-            {sports.map(s => <option key={s} value={s}>{s}</option>)}
+            {sports.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         )}
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className={filterCls}>
@@ -432,7 +434,7 @@ export default function AthletesPage() {
                     </td>
                     <td className="px-5 py-3 font-mono text-[12px] text-[#444]">{a.ic_number}</td>
                     <td className="px-5 py-3 text-[#444]">{a.gender ?? '—'}</td>
-                    <td className="px-5 py-3 text-[#444]">{a.sport}</td>
+                    <td className="px-5 py-3 text-[#444]">{a.sport?.name ?? '—'}</td>
                     <td className="px-5 py-3 text-[#888]">{a.category ?? '—'}</td>
                     <td className="px-5 py-3">
                       <StatusBadge status={a.status} />
@@ -530,7 +532,10 @@ export default function AthletesPage() {
                   </select>
                 </Field>
                 <Field label="Sukan" required>
-                  <input value={form.sport} onChange={e => setForm(f => ({ ...f, sport: e.target.value.toUpperCase() }))} className={inputCls} placeholder="BADMINTON" />
+                  <select value={form.sport_id} onChange={e => setForm(f => ({ ...f, sport_id: e.target.value }))} className={inputCls}>
+                    <option value="">— Pilih Sukan —</option>
+                    {sports.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
                 </Field>
                 <Field label="Kategori / Acara">
                   <input value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value.toUpperCase() }))} className={inputCls} placeholder="LELAKI BAWAH 21" />

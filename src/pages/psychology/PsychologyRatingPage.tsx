@@ -57,11 +57,11 @@ export default function PsychologyRatingPage() {
       setError('')
       const { data, error: err } = await supabase
         .from('psychology_ratings')
-        .select('*, athlete:athletes(id, name, sport)')
+        .select('*, athlete:athletes(id, name, sport_id, sport:sport_id(name))')
         .order('assessment_date', { ascending: false })
 
       if (err) throw err
-      setRatings(data || [])
+      setRatings((data as any) || [])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load ratings')
     } finally {
@@ -295,7 +295,7 @@ export default function PsychologyRatingPage() {
   const filteredRatings = ratings.filter((r) => {
     const matchPhase = filterPhase === 'all' || r.phase === filterPhase
     const matchAthlete = !filterAthlete || r.athlete_id === filterAthlete
-    const matchSport = !filterSport || r.athlete?.sport === filterSport
+    const matchSport = !filterSport || r.athlete?.sport?.name === filterSport
     const matchSearch = !search || (r.athlete?.name ?? '').toLowerCase().includes(search.toLowerCase())
     return matchPhase && matchAthlete && matchSport && matchSearch
   })
@@ -408,7 +408,7 @@ export default function PsychologyRatingPage() {
                 className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#F56A00]"
               >
                 <option value="">Semua Sukan</option>
-                {[...new Set(ratings.map(r => r.athlete?.sport))].filter(Boolean).map((sport) => (
+                {[...new Set(ratings.map(r => r.athlete?.sport?.name))].filter(Boolean).map((sport) => (
                   <option key={sport} value={sport}>
                     {sport}
                   </option>
@@ -471,7 +471,7 @@ export default function PsychologyRatingPage() {
                   {filteredRatings.map(r => (
                     <tr key={r.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
                       <td className="px-4 py-3 font-medium text-[#111]">{r.athlete?.name ?? '—'}</td>
-                      <td className="px-4 py-3 text-[#888]">{r.athlete?.sport ?? '—'}</td>
+                      <td className="px-4 py-3 text-[#888]">{r.athlete?.sport?.name ?? '—'}</td>
                       <td className="px-4 py-3">
                         <span className="inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
                           {PHASE_LABEL[r.phase]}

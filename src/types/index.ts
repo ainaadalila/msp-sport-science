@@ -37,7 +37,8 @@ export interface Athlete {
   id: string
   name: string
   ic_number: string
-  sport: string
+  sport_id: string
+  sport?: { name: string }
   category?: string
   coach_id?: string
   school?: string
@@ -129,7 +130,7 @@ export interface PhysioSlot {
   case_id: string | null
   physiotherapist_id: string | null
   created_at: string
-  athlete?: { name: string; sport: string } | null
+  athlete?: { name: string; sport?: { name: string } } | null
 }
 
 export interface PhysioCase {
@@ -143,7 +144,7 @@ export interface PhysioCase {
   referred_to: string | null
   physio_id: string | null
   created_at: string
-  athlete?: { name: string; sport: string } | null
+  athlete?: { name: string; sport?: { name: string } } | null
 }
 
 export interface WeeklyExercise {
@@ -235,7 +236,7 @@ export interface FitnessTestSession {
   recorded_by: string
   is_draft: boolean
   created_at: string
-  athlete?: { name: string; sport: string } | null
+  athlete?: { name: string; sport?: { name: string } } | null
 }
 
 export interface FitnessTestResult {
@@ -261,5 +262,5 @@ export interface PhysioRating {
   recorded_by?: string
   created_at: string
   updated_at: string
-  athlete?: { name: string; sport: string }
+  athlete?: { name: string; sport?: { name: string } }
 }

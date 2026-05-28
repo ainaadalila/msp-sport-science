@@ -266,8 +266,8 @@ export default function ReportsPage() {
 
   useEffect(() => {
     async function fetchSports() {
-      const { data: rows } = await supabase.from('athletes').select('sport').order('sport')
-      const unique = [...new Set((rows ?? []).map((a: any) => a.sport))].filter(Boolean) as string[]
+      const { data: rows } = await supabase.from('athletes').select('sport_id, sport:sport_id(name)').order('sport')
+      const unique = [...new Set((rows ?? []).map((a: any) => a.sport?.name))].filter(Boolean) as string[]
       setSports(unique)
     }
     fetchSports()
@@ -298,7 +298,7 @@ export default function ReportsPage() {
       if (active === 'fitness') {
         let q = supabase
           .from('fitness_test_sessions')
-          .select('*, athlete:athletes(name, sport)')
+          .select('*, athlete:athletes(name, sport_id, sport:sport_id(name))')
           .order('recorded_date', { ascending: false })
         if (filterSession) {
           q = q.eq('session', filterSession)
@@ -332,12 +332,12 @@ export default function ReportsPage() {
         console.log('Fitness test results:', Array.from(resultMap.entries()))
         console.log('Fitness test sessions fetched:', sessions?.length ?? 0, 'sessions with', resultMap.size, 'sessions having results')
         setData((sessions ?? [])
-          .filter(r => !filterSport || r.athlete?.sport === filterSport)
+          .filter(r => !filterSport || r.athlete?.sport?.name === filterSport)
           .map(r => {
             const rowResults = resultMap.get(r.id) || new Map()
             return {
               'Nama Atlet': r.athlete?.name ?? '—',
-              'Sukan': r.athlete?.sport ?? '—',
+              'Sukan': r.athlete?.sport?.name ?? '—',
               'Fasa': r.session,
               'Tahun': r.year,
               'Tarikh': r.recorded_date,
@@ -346,16 +346,16 @@ export default function ReportsPage() {
           })
         )
       } else if (active === 'inbody') {
-        let q = supabase.from('inbody_records').select('*, athlete:athletes(name, sport)').order('recorded_date', { ascending: false })
+        let q = supabase.from('inbody_records').select('recorded_date, weight, smm, body_fat_mass, bmi, fat_pct, bmr, inbody_score, skor, ulasan, athlete:athletes(name, sport_id, sport:sport_id(name))').order('recorded_date', { ascending: false }) as any
         if (filterFrom) q = q.gte('recorded_date', filterFrom)
         if (filterTo) q = q.lte('recorded_date', filterTo)
         const { data: rows } = await q
         setData((rows ?? [])
-          .filter(r => !filterSport || r.athlete?.sport === filterSport)
+          .filter(r => !filterSport || r.athlete?.sport?.name === filterSport)
           .map(r => ({
             'Tarikh': r.recorded_date,
             'Nama Atlet': r.athlete?.name ?? '—',
-            'Sukan': r.athlete?.sport ?? '—',
+            'Sukan': r.athlete?.sport?.name ?? '—',
             'Berat (kg)': r.weight ?? '',
             'SMM (kg)': r.smm ?? '',
             'Lemak Badan (kg)': r.body_fat_mass ?? '',
@@ -368,18 +368,18 @@ export default function ReportsPage() {
           }))
         )
       } else if (active === 'attendance') {
-        let q = supabase.from('strength_conditioning').select('*, athlete:athletes(name, sport)').order('session_date', { ascending: false })
+        let q = supabase.from('strength_conditioning').select('session_date, attendance, training_program, notes, athlete:athletes(name, sport_id, sport:sport_id(name))').order('session_date', { ascending: false }) as any
         if (filterFrom) q = q.gte('session_date', filterFrom)
         if (filterTo) q = q.lte('session_date', filterTo)
         if (filterStatus) q = q.eq('attendance', filterStatus)
         const { data: rows } = await q
         const attendanceMap: Record<string, string> = { present: 'Hadir', absent: 'Tidak Hadir', mc: 'MC' }
         setData((rows ?? [])
-          .filter(r => !filterSport || r.athlete?.sport === filterSport)
+          .filter(r => !filterSport || r.athlete?.sport?.name === filterSport)
           .map(r => ({
             'Tarikh': r.session_date,
             'Nama Atlet': r.athlete?.name ?? '—',
-            'Sukan': r.athlete?.sport ?? '—',
+            'Sukan': r.athlete?.sport?.name ?? '—',
             'Kehadiran': attendanceMap[r.attendance] ?? r.attendance,
             'Program Latihan': r.training_program ?? '',
             'Nota': r.notes ?? '',
@@ -419,18 +419,18 @@ export default function ReportsPage() {
           // Detail mode: per-session clinical data
           const startDate = filterFrom || `${filterYear}-${String(filterMonth).padStart(2, '0')}-01`
           const endDate = filterTo || new Date(filterYear, filterMonth, 0).toISOString().slice(0, 10)
-          const { data: rows } = await supabase
+          const { data: rows } = await (supabase
             .from('physio_slots')
-            .select(`slot_date, diagnosis, chief_complaint, treatment_type, pain_scale, referred_by, date_of_injury, attendance_status, athlete_id, athlete:athletes(name, sport), physio_case:physio_cases(referred_to_doctor, referred_date, status)`)
+            .select(`slot_date, diagnosis, chief_complaint, treatment_type, pain_scale, referred_by, date_of_injury, attendance_status, athlete_id, athlete:athletes(name, sport_id, sport:sport_id(name)), physio_case:physio_cases(referred_to_doctor, referred_date, status)`)
             .gte('slot_date', startDate)
             .lte('slot_date', endDate)
             .not('athlete_id', 'is', null)
-            .order('slot_date', { ascending: true })
+            .order('slot_date', { ascending: true }) as any)
 
           const grouped = new Map<string, Record<string, unknown>>()
           ;(rows ?? []).forEach((s: any) => {
             const athleteName = Array.isArray(s.athlete) ? s.athlete[0]?.name : s.athlete?.name
-            const athleteSport = Array.isArray(s.athlete) ? s.athlete[0]?.sport : s.athlete?.sport
+            const athleteSport = Array.isArray(s.athlete) ? s.athlete[0]?.sport?.name : s.athlete?.sport?.name
             if (filterSport && athleteSport !== filterSport) return
             const key = `${s.athlete_id}`
             if (!grouped.has(key)) {
@@ -456,18 +456,18 @@ export default function ReportsPage() {
           // Summary mode: monthly by athlete (original)
           const startDate = `${filterYear}-${String(filterMonth).padStart(2, '0')}-01`
           const endDate = new Date(filterYear, filterMonth, 0).toISOString().slice(0, 10)
-          const { data: rows } = await supabase
+          const { data: rows } = await (supabase
             .from('physio_slots')
-            .select('athlete_id, slot_date, pain_scale, case_id, athlete:athletes(name, sport), physio_case:physio_cases(referred_to_doctor)')
+            .select('athlete_id, slot_date, pain_scale, case_id, athlete:athletes(name, sport_id, sport:sport_id(name)), physio_case:physio_cases(referred_to_doctor)')
             .gte('slot_date', startDate)
             .lte('slot_date', endDate)
             .not('athlete_id', 'is', null)
-            .order('slot_date', { ascending: true })
+            .order('slot_date', { ascending: true }) as any)
 
           const grouped = new Map<string, Record<string, unknown>>()
           ;(rows ?? []).forEach((s: any) => {
             const athleteName = Array.isArray(s.athlete) ? s.athlete[0]?.name : s.athlete?.name
-            const athleteSport = Array.isArray(s.athlete) ? s.athlete[0]?.sport : s.athlete?.sport
+            const athleteSport = Array.isArray(s.athlete) ? s.athlete[0]?.sport?.name : s.athlete?.sport?.name
             const isReferred = Array.isArray(s.physio_case) ? s.physio_case[0]?.referred_to_doctor : s.physio_case?.referred_to_doctor
             if (filterSport && athleteSport !== filterSport) return
             if (!grouped.has(s.athlete_id)) {

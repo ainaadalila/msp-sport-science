@@ -3,11 +3,12 @@ import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
 import { usePermissions } from '../../../hooks/usePermissions'
+import { useSports } from '../../../hooks/useSports'
 import { logAction } from '../../../lib/audit'
 import StructuredProgramBuilder from './StructuredProgramBuilder'
 import type { StructuredProgramData } from '../../../types'
 
-interface Athlete { id: string; name: string; sport: string }
+interface Athlete { id: string; name: string; sport_id: string; sport?: { name: string } }
 interface Coach { id: string; full_name: string }
 
 interface SCRecord {
@@ -15,13 +16,13 @@ interface SCRecord {
   attendance: 'present' | 'absent' | 'mc'
   training_program: string | null; notes: string | null
   start_time: string | null; end_time: string | null
-  athlete?: { name: string; sport: string }
+  athlete?: { name: string; sport?: { name: string } }
 }
 
 interface SCProgram {
   id: string; sport: string; month: number; year: number
-  content: string; coach_id: string | null
-  program_type: 'text' | 'structured'
+  coach_id: string | null
+  program_type: 'structured'
   structured_data: StructuredProgramData | null
   start_date: string | null
   end_date: string | null
@@ -59,8 +60,8 @@ interface AttendanceForm {
 }
 
 interface ProgramForm {
-  sport: string; month: number; year: number; content: string
-  program_type: 'text' | 'structured'
+  sport: string; month: number; year: number
+  program_type: 'structured'
   structured_data: StructuredProgramData
   start_date: string
   end_date: string
@@ -109,13 +110,14 @@ function convert12To24(hour: string, minute: string, ampm: 'AM' | 'PM'): string 
 }
 
 const emptyProgramForm: ProgramForm = {
-  sport: '', month: new Date().getMonth() + 1, year: new Date().getFullYear(), content: '',
-  program_type: 'text', structured_data: emptyStructuredData, start_date: '', end_date: '',
+  sport: '', month: new Date().getMonth() + 1, year: new Date().getFullYear(),
+  program_type: 'structured', structured_data: emptyStructuredData, start_date: '', end_date: '',
 }
 
 export default function StrengthPage() {
   const { profile } = useAuth()
   const { can } = usePermissions()
+  const { sports } = useSports()
   const [searchParams] = useSearchParams()
   const athleteIdParam = searchParams.get('athlete')
   const tabParam = searchParams.get('tab') as 'kehadiran' | 'program' | 'jadual' | null
@@ -190,12 +192,12 @@ export default function StrengthPage() {
   async function fetchAll() {
     setLoading(true)
     const [recRes, athRes, progRes, schedRes, coachRes] = await Promise.all([
-      supabase.from('strength_conditioning').select('*, athlete:athletes(name, sport)').order('session_date', { ascending: false }),
-      supabase.from('athletes').select('id, name, sport').order('name'),
-      supabase.from('sc_programs').select('*, coach:profiles(full_name)').order('year', { ascending: false }).order('month'),
-      supabase.from('coach_schedules').select('*, slots:coach_schedule_slots(*)').order('valid_from', { ascending: false }),
+      supabase.from('strength_conditioning').select('id, session_date, start_time, end_time, athlete_id, attendance, training_program, notes, athlete:athletes(name, sport_id, sport:sport_id(name))').order('session_date', { ascending: false }),
+      supabase.from('athletes').select('id, name, sport_id, sport:sport_id(name)').order('name'),
+      supabase.from('sc_programs').select('id, sport, month, year, program_type, coach_id, structured_data, start_date, end_date, coach:profiles(full_name)').order('year', { ascending: false }).order('month'),
+      supabase.from('coach_schedules').select('id, coach_id, sport, schedule_name, valid_from, repeats, repeat_pattern, repeat_until, slots:coach_schedule_slots(id, schedule_id, slot_date, start_time, end_time)').order('valid_from', { ascending: false }),
       supabase.from('profiles').select('id, full_name').eq('role', 'coach').order('full_name'),
-    ])
+    ]) as any
     setRecords(recRes.data ?? [])
     setAthletes(athRes.data ?? [])
     setPrograms(progRes.data ?? [])
@@ -204,7 +206,7 @@ export default function StrengthPage() {
     setLoading(false)
   }
 
-  const allSports = [...new Set(athletes.map(a => a.sport))].sort()
+  const allSports = sports.map(s => s.name)
 
   // --- ATTENDANCE ---
   function openAddAttendance() {
@@ -249,8 +251,8 @@ export default function StrengthPage() {
   function openEditProgram(p: SCProgram) {
     setEditingProgram(p)
     setProgramForm({
-      sport: p.sport, month: p.month, year: p.year, content: p.content,
-      program_type: p.program_type ?? 'text',
+      sport: p.sport, month: p.month, year: p.year,
+      program_type: 'structured',
       structured_data: p.structured_data ?? { phase: '', training_goals: [''], sessions: [] },
       start_date: p.start_date ?? '', end_date: p.end_date ?? '',
     })
@@ -258,14 +260,12 @@ export default function StrengthPage() {
   }
   async function handleSaveProgram() {
     if (!programForm.sport) { setError('Sukan wajib dipilih.'); return }
-    if (programForm.program_type === 'text' && !programForm.content) { setError('Kandungan program wajib diisi.'); return }
-    if (programForm.program_type === 'structured' && programForm.structured_data.sessions.length === 0) { setError('Sila tambah sekurang-kurangnya satu sesi.'); return }
+    if (programForm.structured_data.sessions.length === 0) { setError('Sila tambah sekurang-kurangnya satu sesi mingguan.'); return }
     setSaving(true); setError(null)
     const payload = {
       sport: programForm.sport, month: programForm.month, year: programForm.year,
-      content: programForm.program_type === 'text' ? programForm.content : '',
-      program_type: programForm.program_type,
-      structured_data: programForm.program_type === 'structured' ? programForm.structured_data : null,
+      program_type: 'structured',
+      structured_data: programForm.structured_data,
       start_date: programForm.start_date || null, end_date: programForm.end_date || null,
       coach_id: profile?.id ?? null,
     }
@@ -519,7 +519,7 @@ export default function StrengthPage() {
   }
 
   // --- DERIVED ---
-  const filteredAthletes = filterSport ? athletes.filter(a => a.sport === filterSport) : athletes
+  const filteredAthletes = filterSport ? athletes.filter(a => a.sport?.name === filterSport) : athletes
   const filteredAthleteIds = new Set(filteredAthletes.map(a => a.id))
 
   const filteredAttendance = records.filter(r => {
@@ -636,7 +636,7 @@ export default function StrengthPage() {
                         {r.start_time && r.end_time ? `${formatTimeWithAMPM(r.start_time)} - ${formatTimeWithAMPM(r.end_time)}` : '—'}
                       </td>
                       <td className="px-4 py-3 font-medium text-[#111]">{r.athlete?.name ?? '—'}</td>
-                      <td className="px-4 py-3 text-[#888]">{r.athlete?.sport ?? '—'}</td>
+                      <td className="px-4 py-3 text-[#888]">{r.athlete?.sport?.name ?? '—'}</td>
                       <td className="px-4 py-3">
                         <span className={`inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full ${attendanceStyle[r.attendance]}`}>
                           {attendanceLabel[r.attendance]}
@@ -712,7 +712,7 @@ export default function StrengthPage() {
                                   <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[rgba(245,106,0,0.1)] text-[#F56A00] border border-[rgba(245,106,0,0.2)]">MINGGUAN</span>
                                 )}
                               </div>
-                              {p.program_type === 'structured' && p.structured_data ? (
+                              {p.structured_data && (
                                 <>
                                   {p.structured_data.phase && <p className="text-[11px] font-medium text-[#444]">{p.structured_data.phase}</p>}
                                   {(p.start_date || p.end_date) && (
@@ -722,17 +722,13 @@ export default function StrengthPage() {
                                   )}
                                   <p className="text-[11px] text-[#888] mt-0.5">{p.structured_data.sessions.length} sesi</p>
                                 </>
-                              ) : (
-                                <p className="text-[12px] text-[#444] mt-0.5 line-clamp-3">{p.content}</p>
                               )}
                               {p.coach?.full_name && (
                                 <p className="text-[10px] text-[#aaa] mt-1">{p.coach.full_name}</p>
                               )}
                             </div>
                             <div className="flex flex-col gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition items-end">
-                              {p.program_type === 'structured' && (
-                                <button onClick={() => setViewProgram(p)} className="text-xs text-[#3A7EC8] hover:underline font-medium">Lihat</button>
-                              )}
+                              <button onClick={() => setViewProgram(p)} className="text-xs text-[#3A7EC8] hover:underline font-medium">Lihat</button>
                               {can('strength', 'update') && <button onClick={() => openEditProgram(p)} className="text-xs text-[#F56A00] hover:underline">Edit</button>}
                               {can('strength', 'delete') && <button onClick={() => setConfirmDeleteProgram(p)} className="text-xs text-[#D44040] hover:underline">Padam</button>}
                             </div>
@@ -893,7 +889,7 @@ export default function StrengthPage() {
               <Field label="Atlet" required>
                 <select value={attendanceForm.athlete_id} onChange={e => setAttendanceForm(f => ({ ...f, athlete_id: e.target.value }))} className={inputCls}>
                   <option value="">— Pilih atlet —</option>
-                  {(modalFilterSport ? athletes.filter(a => a.sport === modalFilterSport) : athletes).map(a => <option key={a.id} value={a.id}>{a.name} ({a.sport})</option>)}
+                  {(modalFilterSport ? athletes.filter(a => a.sport?.name === modalFilterSport) : athletes).map(a => <option key={a.id} value={a.id}>{a.name} ({a.sport?.name})</option>)}
                 </select>
               </Field>
               <div className="grid grid-cols-2 gap-4">
@@ -948,23 +944,6 @@ export default function StrengthPage() {
             <div className="px-6 py-5 space-y-4 overflow-y-auto flex-1">
               {error && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-600">{error}</div>}
 
-              {/* Program type toggle */}
-              <div>
-                <label className="block text-[10px] font-semibold uppercase tracking-widest text-[#888] mb-1.5">Jenis Program</label>
-                <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
-                  {(['text', 'structured'] as const).map(type => (
-                    <button
-                      key={type}
-                      type="button"
-                      onClick={() => setProgramForm(f => ({ ...f, program_type: type }))}
-                      className={`px-3 py-1.5 text-[12px] font-semibold rounded-md transition ${programForm.program_type === type ? 'bg-white text-[#F56A00] shadow-sm' : 'text-[#888] hover:text-[#444]'}`}
-                    >
-                      {type === 'text' ? 'Teks' : 'Berstruktur (Mingguan)'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Field label="Sukan" required>
                   <select value={programForm.sport} onChange={e => setProgramForm(f => ({ ...f, sport: e.target.value }))} className={inputCls}>
@@ -990,38 +969,24 @@ export default function StrengthPage() {
                 </Field>
               </div>
 
-              {programForm.program_type === 'text' ? (
-                <Field label="Kandungan Program" required>
-                  <textarea
-                    value={programForm.content}
-                    onChange={e => setProgramForm(f => ({ ...f, content: e.target.value.toUpperCase() }))}
-                    className={`${inputCls} resize-none`}
-                    rows={6}
-                    placeholder="HURAIKAN PROGRAM LATIHAN UNTUK BULAN INI..."
-                  />
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Tarikh Mula">
+                  <input type="date" value={programForm.start_date} onChange={e => {
+                    const start = e.target.value
+                    setProgramForm(f => {
+                      const end = f.end_date && start > f.end_date ? start : f.end_date
+                      return { ...f, start_date: start, end_date: end }
+                    })
+                  }} className={inputCls} />
                 </Field>
-              ) : (
-                <>
-                  <div className="grid grid-cols-2 gap-4">
-                    <Field label="Tarikh Mula">
-                      <input type="date" value={programForm.start_date} onChange={e => {
-                        const start = e.target.value
-                        setProgramForm(f => {
-                          const end = f.end_date && start > f.end_date ? start : f.end_date
-                          return { ...f, start_date: start, end_date: end }
-                        })
-                      }} className={inputCls} />
-                    </Field>
-                    <Field label="Tarikh Tamat">
-                      <input type="date" value={programForm.end_date} onChange={e => setProgramForm(f => ({ ...f, end_date: e.target.value }))} min={programForm.start_date} className={inputCls} />
-                    </Field>
-                  </div>
-                  <StructuredProgramBuilder
-                    value={programForm.structured_data}
-                    onChange={sd => setProgramForm(f => ({ ...f, structured_data: sd }))}
-                  />
-                </>
-              )}
+                <Field label="Tarikh Tamat">
+                  <input type="date" value={programForm.end_date} onChange={e => setProgramForm(f => ({ ...f, end_date: e.target.value }))} min={programForm.start_date} className={inputCls} />
+                </Field>
+              </div>
+              <StructuredProgramBuilder
+                value={programForm.structured_data}
+                onChange={sd => setProgramForm(f => ({ ...f, structured_data: sd }))}
+              />
             </div>
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 shrink-0">
               <button onClick={() => setProgramModalOpen(false)} className="px-4 py-2 text-sm text-[#888] hover:text-[#111] transition">Batal</button>

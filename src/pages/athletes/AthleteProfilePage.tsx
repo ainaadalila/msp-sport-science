@@ -8,7 +8,8 @@ interface Athlete {
   ic_number: string
   date_of_birth: string | null
   gender: 'M' | 'F' | null
-  sport: string
+  sport_id: string
+  sport?: { name: string }
   category: string | null
   status: 'active' | 'rest' | 'injured'
   weight: number | null
@@ -114,7 +115,7 @@ export default function AthleteProfilePage() {
     setLoading(true)
 
     // Fetch athlete first to get sport for supplement query
-    const { data: athData } = await supabase.from('athletes').select('id, name, ic_number, sport, status, gender, date_of_birth, weight, height, is_elite, photo_url, category, created_at').eq('id', athleteId).single()
+    const { data: athData } = await supabase.from('athletes').select('id, name, ic_number, sport_id, sport:sports!sport_id(name), status, gender, date_of_birth, weight, height, is_elite, photo_url, category, created_at').eq('id', athleteId).single() as any
     if (!athData) { navigate('/athletes', { replace: true }); return }
     setAthlete(athData)
 
@@ -187,7 +188,7 @@ export default function AthleteProfilePage() {
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div>
               <h2 className="text-xl font-bold text-[#111]">{athlete.name}</h2>
-              <p className="text-sm text-[#888] mt-0.5">{athlete.sport}{athlete.category ? ` · ${athlete.category}` : ''}</p>
+              <p className="text-sm text-[#888] mt-0.5">{athlete.sport?.name}{athlete.category ? ` · ${athlete.category}` : ''}</p>
             </div>
             <div className="flex gap-2 flex-wrap items-start">
               <span className={`text-[11px] font-semibold px-3 py-1 rounded-full ${statusStyle[athlete.status]}`}>

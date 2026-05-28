@@ -133,8 +133,8 @@ export default function SupplementPage() {
       supabase.from('supplement_requests')
         .select('*, supplement:supplement_id(name, unit)')
         .order('created_at', { ascending: sortBy === 'date_asc' }),
-      supabase.from('athletes').select('id, name, sport').order('name'),
-    ])
+      supabase.from('athletes').select('id, name, sport_id, sport:sport_id(name)').order('name'),
+    ]) as any
     console.log('Supplements fetch:', { data: supRes.data, error: supRes.error })
     console.log('Requests fetch:', { data: reqRes.data, error: reqRes.error })
     console.log('Athletes fetch:', { data: athRes.data, error: athRes.error })
@@ -589,7 +589,7 @@ export default function SupplementPage() {
               <Field label="Sukan" required>
                 <select value={reqForm.sport} onChange={e => setReqForm(f => ({ ...f, sport: e.target.value }))} className={inputCls}>
                   <option value="">— Pilih sukan —</option>
-                  {[...new Set(athletes.map(a => a.sport))].sort().map(s => (
+                  {[...new Set(athletes.map(a => a.sport?.name))].filter(Boolean).sort().map(s => (
                     <option key={s} value={s}>{s}</option>
                   ))}
                 </select>
