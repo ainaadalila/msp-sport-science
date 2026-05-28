@@ -42,9 +42,9 @@ export default function PhysioReportPage() {
   }, [])
 
   async function fetchSports() {
-    const { data } = await supabase.from('athletes').select('sport_id, sport:sport_id(name)').order('sport')
-    const unique = [...new Set((data ?? []).map(a => a.sport?.name))].filter(Boolean) as string[]
-    setSports(unique)
+    const { data } = await supabase.from('sports').select('name').order('name')
+    const sportNames = (data ?? []).map(s => s.name).filter(Boolean) as string[]
+    setSports(sportNames)
   }
 
   function generateReport() {

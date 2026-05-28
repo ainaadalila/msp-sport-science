@@ -351,8 +351,8 @@ export default function ReportsPage() {
         if (filterTo) q = q.lte('recorded_date', filterTo)
         const { data: rows } = await q
         setData((rows ?? [])
-          .filter(r => !filterSport || r.athlete?.sport?.name === filterSport)
-          .map(r => ({
+          .filter((r: any) => !filterSport || r.athlete?.sport?.name === filterSport)
+          .map((r: any) => ({
             'Tarikh': r.recorded_date,
             'Nama Atlet': r.athlete?.name ?? '—',
             'Sukan': r.athlete?.sport?.name ?? '—',
@@ -375,8 +375,8 @@ export default function ReportsPage() {
         const { data: rows } = await q
         const attendanceMap: Record<string, string> = { present: 'Hadir', absent: 'Tidak Hadir', mc: 'MC' }
         setData((rows ?? [])
-          .filter(r => !filterSport || r.athlete?.sport?.name === filterSport)
-          .map(r => ({
+          .filter((r: any) => !filterSport || r.athlete?.sport?.name === filterSport)
+          .map((r: any) => ({
             'Tarikh': r.session_date,
             'Nama Atlet': r.athlete?.name ?? '—',
             'Sukan': r.athlete?.sport?.name ?? '—',

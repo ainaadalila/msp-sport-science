@@ -118,7 +118,7 @@ export default function PhysioCasePage() {
     // Compute per-case stats
     const stats: CaseStats = {}
     const slots = slotsRes.data ?? []
-    slots.forEach(s => {
+    slots.forEach((s: any) => {
       if (!stats[s.case_id]) stats[s.case_id] = { count: 0, latestPain: null }
       stats[s.case_id].count++
       if (s.pain_scale !== null) stats[s.case_id].latestPain = s.pain_scale

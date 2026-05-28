@@ -9,7 +9,8 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 interface Athlete {
   id: string
   name: string
-  sport: string
+  sport_id: string
+  sport?: { name: string }
 }
 
 interface InBodyRecord {

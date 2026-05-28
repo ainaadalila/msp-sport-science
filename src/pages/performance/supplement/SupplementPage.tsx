@@ -35,7 +35,8 @@ interface SupplementRequest {
 interface Athlete {
   id: string
   name: string
-  sport: string
+  sport_id: string
+  sport?: { name: string }
 }
 
 type Tab = 'requests' | 'inventory'

@@ -147,12 +147,12 @@ export default function PhysioPage() {
     const [slotRes, athRes, caseRes] = await Promise.all([
       supabase.from('physio_slots')
         .select('id, athlete_id, case_id, slot_date, pain_scale, chief_complaint, injury_type, date_of_injury, diagnosis, treatment_type, referred_by, target_muscle, rehab_plan, progress_notes, assessment_notes, attendance_status, athlete:athletes(name, sport_id, sport:sport_id(name))')
-        .order('slot_date', { ascending: false }),
-      supabase.from('athletes').select('id, name, sport_id, sport:sport_id(name)').order('name'),
+        .order('slot_date', { ascending: false }) as any,
+      supabase.from('athletes').select('id, name, sport_id, sport:sport_id(name)').order('name') as any,
       supabase.from('physio_cases')
-        .select('id, athlete_id, injury_type, open_date, athlete:athletes(name, sport_id, sport:sport_id(name))')
+        .select('id, athlete_id, injury_type, open_date, status, referred_to_doctor, athlete:athletes(name, sport_id, sport:sport_id(name))')
         .eq('status', 'active')
-        .order('open_date', { ascending: false }),
+        .order('open_date', { ascending: false }) as any,
     ])
     setSlots(slotRes.data ?? [])
     setAthletes(athRes.data ?? [])
@@ -264,7 +264,7 @@ export default function PhysioPage() {
     setAssessmentSaving(false)
     setAssessmentModalOpen(false)
     if (detailSlot?.id === assessmentEditing?.id) {
-      const updated = await supabase.from('physio_slots').select('id, athlete_id, case_id, slot_date, pain_scale, chief_complaint, injury_type, date_of_injury, diagnosis, treatment_type, referred_by, target_muscle, rehab_plan, progress_notes, assessment_notes, attendance_status, athlete:athletes(name, sport_id, sport:sport_id(name))').eq('id', assessmentEditing!.id).single()
+      const updated = await (supabase.from('physio_slots').select('id, athlete_id, case_id, slot_date, pain_scale, chief_complaint, injury_type, date_of_injury, diagnosis, treatment_type, referred_by, target_muscle, rehab_plan, progress_notes, assessment_notes, attendance_status, athlete:athletes(name, sport_id, sport:sport_id(name))').eq('id', assessmentEditing!.id).single() as any)
       if (updated.data) setDetailSlot(updated.data)
     }
     fetchAll()
@@ -287,7 +287,7 @@ export default function PhysioPage() {
     if (s.attendance_status !== 'scheduled') return
     await supabase.from('physio_slots').update({ attendance_status: 'arrived' }).eq('id', s.id)
     await logAction(profile!.id, 'mark_arrived_physio_slot', 'physio_slots', s.id)
-    const updated = await supabase.from('physio_slots').select('id, athlete_id, case_id, slot_date, pain_scale, chief_complaint, injury_type, date_of_injury, diagnosis, treatment_type, referred_by, target_muscle, rehab_plan, progress_notes, assessment_notes, attendance_status, athlete:athletes(name, sport_id, sport:sport_id(name))').eq('id', s.id).single()
+    const updated = await (supabase.from('physio_slots').select('id, athlete_id, case_id, slot_date, pain_scale, chief_complaint, injury_type, date_of_injury, diagnosis, treatment_type, referred_by, target_muscle, rehab_plan, progress_notes, assessment_notes, attendance_status, athlete:athletes(name, sport_id, sport:sport_id(name))').eq('id', s.id).single() as any)
     if (updated.data) setDetailSlot(updated.data)
     fetchAll()
   }
