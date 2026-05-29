@@ -15,7 +15,7 @@ interface Athlete {
   gender: 'M' | 'F' | null
   sport_id: string
   category: string | null
-  status: 'active' | 'rest' | 'injured'
+  status: 'active' | 'rest' | 'injured' | 'not_active'
   weight: number | null
   height: number | null
   photo_url: string | null
@@ -31,7 +31,7 @@ interface FormState {
   gender: 'M' | 'F' | ''
   sport_id: string
   category: string
-  status: 'active' | 'rest' | 'injured'
+  status: 'active' | 'rest' | 'injured' | 'not_active'
   weight: number | null
   height: number | null
   photo_url: string | null
@@ -83,7 +83,7 @@ const statusConfig: Record<string, { label: string; cls: string; icon: React.Rea
   },
 }
 
-function StatusBadge({ status }: { status: 'active' | 'rest' | 'injured' }) {
+function StatusBadge({ status }: { status: 'active' | 'rest' | 'injured' | 'not_active' }) {
   const cfg = statusConfig[status]
   return (
     <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${cfg.cls}`}>
@@ -140,8 +140,6 @@ export default function AthletesPage() {
   const [form, setForm] = useState<FormState>(emptyForm)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [confirmDelete, setConfirmDelete] = useState<Athlete | null>(null)
-  const [deleting, setDeleting] = useState(false)
 
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -237,20 +235,6 @@ export default function AthletesPage() {
     setSaving(false)
     setModalOpen(false)
     fetchAthletes()
-  }
-
-  async function handleDelete(a: Athlete) {
-    try {
-      setDeleting(true)
-      const { error } = await supabase.from('athletes').delete().eq('id', a.id)
-      if (!error) {
-        await logAction(profile!.id, 'delete_athlete', 'athletes', a.id)
-        setConfirmDelete(null)
-        await fetchAthletes()
-      }
-    } finally {
-      setDeleting(false)
-    }
   }
 
   const filtered = athletes.filter(a => {
@@ -454,12 +438,6 @@ export default function AthletesPage() {
                             className="text-xs text-[#F56A00] hover:underline font-medium opacity-0 group-hover:opacity-100 transition"
                           >Edit</button>
                         )}
-                        {can('athletes', 'delete') && (
-                          <button
-                            onClick={e => { e.stopPropagation(); setConfirmDelete(a) }}
-                            className="text-xs text-[#D44040] hover:underline font-medium opacity-0 group-hover:opacity-100 transition"
-                          >Padam</button>
-                        )}
                         <svg className="w-3.5 h-3.5 text-[#bbb] group-hover:text-[#F56A00] transition shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                           <polyline points="9 18 15 12 9 6"/>
                         </svg>
@@ -545,6 +523,7 @@ export default function AthletesPage() {
                     <option value="active">AKTIF</option>
                     <option value="rest">REHAT</option>
                     <option value="injured">CEDERA</option>
+                    <option value="not_active">TIDAK AKTIF</option>
                   </select>
                 </Field>
                 <Field label="Berat (kg)">
@@ -578,19 +557,6 @@ export default function AthletesPage() {
         </div>
       )}
 
-      {/* Delete Confirmation */}
-      {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 text-center">
-            <p className="text-sm font-semibold text-[#111] mb-1">Padam atlet ini?</p>
-            <p className="text-[13px] text-[#888] mb-6">{confirmDelete.name} akan dipadam secara kekal.</p>
-            <div className="flex gap-3 justify-center">
-              <button onClick={() => setConfirmDelete(null)} className="px-4 py-2 text-sm text-[#888] border border-gray-200 rounded-lg hover:border-gray-400 transition">Batal</button>
-              <button onClick={() => handleDelete(confirmDelete)} disabled={deleting} className="px-4 py-2 text-sm font-semibold text-white bg-[#D44040] hover:bg-red-700 disabled:opacity-60 rounded-lg transition">{deleting ? 'Padam...' : 'Padam'}</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
