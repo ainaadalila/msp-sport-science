@@ -73,8 +73,8 @@ export default function Layout() {
 
   async function handleChangePassword() {
     setCpError(null)
-    if (cpForm.password.length < 8) {
-      setCpError('Kata laluan mestilah sekurang-kurangnya 8 aksara.')
+    if (cpForm.password.length < 12) {
+      setCpError('Kata laluan mestilah sekurang-kurangnya 12 aksara.')
       return
     }
     if (cpForm.password !== cpForm.confirm) {

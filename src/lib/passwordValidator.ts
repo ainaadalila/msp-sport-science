@@ -10,9 +10,9 @@ export function validatePassword(password: string): PasswordStrengthResult {
   const suggestions: string[] = []
   let score = 0
 
-  // Check minimum length (8 characters)
-  if (password.length < 8) {
-    errors.push('Sekurang-kurangnya 8 aksara')
+  // Check minimum length (12 characters)
+  if (password.length < 12) {
+    errors.push('Sekurang-kurangnya 12 aksara')
   } else {
     score++
   }
