@@ -11,7 +11,7 @@ interface Athlete {
   sport_id: string
   sport?: { name: string }
   category: string | null
-  status: 'active' | 'rest' | 'injured'
+  status: 'active' | 'rest' | 'injured' | 'not_active'
   weight: number | null
   height: number | null
   photo_url: string | null
@@ -52,11 +52,11 @@ interface PhysioSlot {
   injury_type: string | null
 }
 
-const statusLabel: Record<string, string> = { active: 'Aktif', rest: 'Rehat', injured: 'Cedera' }
 const statusStyle: Record<string, string> = {
   active: 'bg-green-50 text-[#3A9E6A] border border-green-200',
   rest: 'bg-gray-100 text-[#888] border border-gray-200',
   injured: 'bg-red-50 text-[#D44040] border border-red-200',
+  not_active: 'bg-slate-100 text-[#666] border border-slate-300',
 }
 
 const attendanceStyle: Record<string, string> = {
@@ -106,6 +106,7 @@ export default function AthleteProfilePage() {
   const [scRecords, setScRecords] = useState<SCRecord[]>([])
   const [physio, setPhysio] = useState<PhysioSlot | null>(null)
   const [loading, setLoading] = useState(true)
+  const [updatingStatus, setUpdatingStatus] = useState(false)
 
   useEffect(() => {
     if (id) fetchAll(id)
@@ -159,6 +160,24 @@ export default function AthleteProfilePage() {
     setLoading(false)
   }
 
+  const updateStatus = async (newStatus: Athlete['status']) => {
+    if (!athlete) return
+    setUpdatingStatus(true)
+    try {
+      const { error } = await supabase
+        .from('athletes')
+        .update({ status: newStatus })
+        .eq('id', athlete.id)
+
+      if (error) throw error
+      setAthlete({ ...athlete, status: newStatus })
+    } catch (err) {
+      console.error('Failed to update status:', err)
+    } finally {
+      setUpdatingStatus(false)
+    }
+  }
+
   if (loading) {
     return <div className="py-24 text-center text-[#888] text-sm">Memuatkan profil...</div>
   }
@@ -191,9 +210,17 @@ export default function AthleteProfilePage() {
               <p className="text-sm text-[#888] mt-0.5">{athlete.sport?.name}{athlete.category ? ` · ${athlete.category}` : ''}</p>
             </div>
             <div className="flex gap-2 flex-wrap items-start">
-              <span className={`text-[11px] font-semibold px-3 py-1 rounded-full ${statusStyle[athlete.status]}`}>
-                {statusLabel[athlete.status]}
-              </span>
+              <select
+                value={athlete.status}
+                onChange={(e) => updateStatus(e.target.value as Athlete['status'])}
+                disabled={updatingStatus}
+                className={`text-[11px] font-semibold px-3 py-1 rounded-full border-0 cursor-pointer disabled:opacity-50 ${statusStyle[athlete.status]}`}
+              >
+                <option value="active">Aktif</option>
+                <option value="rest">Rehat</option>
+                <option value="injured">Cedera</option>
+                <option value="not_active">Tidak Aktif</option>
+              </select>
               {athlete.is_elite && (
                 <span className="inline-block text-[11px] font-bold px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-600 border border-yellow-200">
                   ATLET ELIT
