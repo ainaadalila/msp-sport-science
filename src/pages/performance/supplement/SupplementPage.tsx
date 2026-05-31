@@ -188,9 +188,23 @@ export default function SupplementPage() {
   async function handleDelSup(s: Supplement) {
     setDeleteSup(true)
     try {
-      await supabase.from('supplements').delete().eq('id', s.id)
+      console.log('Starting delete for supplement:', s.id)
+      const { error } = await supabase.from('supplements').delete().eq('id', s.id)
+      console.log('Delete response:', { error })
+      if (error) {
+        console.error('Delete error:', error)
+        setSupError(`Failed to delete: ${error.message}`)
+        setDeleteSup(false)
+        return
+      }
+      console.log('Delete successful, logging action and fetching...')
+      await logAction(profile!.id, 'delete_supplement', 'supplements', s.id)
       setConfirmDelSup(null)
       await fetchAll()
+      console.log('Fetch complete after delete')
+    } catch (err) {
+      console.error('Exception during delete:', err)
+      setSupError(err instanceof Error ? err.message : 'Delete failed')
     } finally {
       setDeleteSup(false)
     }

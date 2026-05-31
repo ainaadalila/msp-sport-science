@@ -16,7 +16,6 @@ interface SCRecord {
   attendance: 'present' | 'absent' | 'mc'
   training_program: string | null; notes: string | null
   start_time: string | null; end_time: string | null
-  athlete?: { name: string; sport?: { name: string } }
 }
 
 interface SCProgram {
@@ -192,7 +191,7 @@ export default function StrengthPage() {
   async function fetchAll() {
     setLoading(true)
     const [recRes, athRes, progRes, schedRes, coachRes] = await Promise.all([
-      supabase.from('strength_conditioning').select('id, session_date, start_time, end_time, athlete_id, attendance, training_program, notes, athlete:athletes(name, sport_id, sport:sport_id(name))').order('session_date', { ascending: false }),
+      supabase.from('strength_conditioning').select('*'),
       supabase.from('athletes').select('id, name, sport_id, sport:sport_id(name)').order('name'),
       supabase.from('sc_programs').select('id, sport, month, year, program_type, coach_id, structured_data, start_date, end_date, coach:profiles(full_name)').order('year', { ascending: false }).order('month'),
       supabase.from('coach_schedules').select('id, coach_id, sport, schedule_name, valid_from, repeats, repeat_pattern, repeat_until, slots:coach_schedule_slots(id, schedule_id, slot_date, start_time, end_time)').order('valid_from', { ascending: false }),
@@ -635,8 +634,8 @@ export default function StrengthPage() {
                       <td className="px-4 py-3 font-mono text-[12px] text-[#F56A00] whitespace-nowrap">
                         {r.start_time && r.end_time ? `${formatTimeWithAMPM(r.start_time)} - ${formatTimeWithAMPM(r.end_time)}` : '—'}
                       </td>
-                      <td className="px-4 py-3 font-medium text-[#111]">{r.athlete?.name ?? '—'}</td>
-                      <td className="px-4 py-3 text-[#888]">{r.athlete?.sport?.name ?? '—'}</td>
+                      <td className="px-4 py-3 font-medium text-[#111]">{athletes.find(a => a.id === r.athlete_id)?.name ?? '—'}</td>
+                      <td className="px-4 py-3 text-[#888]">{athletes.find(a => a.id === r.athlete_id)?.sport?.name ?? '—'}</td>
                       <td className="px-4 py-3">
                         <span className={`inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full ${attendanceStyle[r.attendance]}`}>
                           {attendanceLabel[r.attendance]}
@@ -1263,7 +1262,7 @@ export default function StrengthPage() {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 text-center">
             <p className="text-sm font-semibold text-[#111] mb-1">Padam rekod ini?</p>
             <p className="text-[13px] text-[#888] mb-6">
-              {confirmDelete.athlete?.name} — {new Date(confirmDelete.session_date).toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric' })}
+              {athletes.find(a => a.id === confirmDelete.athlete_id)?.name} — {new Date(confirmDelete.session_date).toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric' })}
             </p>
             <div className="flex gap-3 justify-center">
               <button onClick={() => setConfirmDelete(null)} className="px-4 py-2 text-sm text-[#888] border border-gray-200 rounded-lg hover:border-gray-400 transition">Batal</button>
