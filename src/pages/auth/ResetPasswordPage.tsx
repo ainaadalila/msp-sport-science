@@ -105,7 +105,7 @@ export default function ResetPasswordPage() {
                       setPassword(e.target.value)
                       setPasswordStrength(validatePassword(e.target.value))
                     }}
-                    placeholder="Min. 8 aksara, huruf besar, kecil, nombor, dan aksara khas"
+                    placeholder="Min. 12 aksara, huruf besar, kecil, nombor, dan aksara khas"
                     className="w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3.5 py-3 pr-10 text-sm text-[#111] placeholder-[#bbb] outline-none transition focus:border-[#F56A00] focus:bg-white"
                   />
                   <button

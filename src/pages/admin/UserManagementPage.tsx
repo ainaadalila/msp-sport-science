@@ -519,7 +519,7 @@ export default function UserManagementPage() {
                           setPasswordStrength(validatePassword(e.target.value))
                         }}
                         className={inputCls + ' pr-10'}
-                        placeholder="Min. 8 aksara, huruf besar, kecil, nombor, dan aksara khas"
+                        placeholder="Min. 12 aksara, huruf besar, kecil, nombor, dan aksara khas"
                       />
                       <button type="button" onClick={() => setCreateForm(f => ({ ...f, showPw: !f.showPw }))}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-[#888] hover:text-[#111] text-xs">

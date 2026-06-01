@@ -15,7 +15,6 @@ interface SCRecord {
   id: string; athlete_id: string; session_date: string
   attendance: 'present' | 'absent' | 'mc'
   training_program: string | null; notes: string | null
-  start_time: string | null; end_time: string | null
 }
 
 interface SCProgram {
@@ -55,7 +54,6 @@ interface AttendanceForm {
   athlete_id: string; session_date: string
   attendance: 'present' | 'absent' | 'mc'
   training_program: string; notes: string
-  start_time: string; end_time: string
 }
 
 interface ProgramForm {
@@ -79,18 +77,8 @@ const attendanceStyle: Record<string, string> = {
 const emptyAttendanceForm: AttendanceForm = {
   athlete_id: '', session_date: new Date().toISOString().slice(0, 10),
   attendance: 'present', training_program: '', notes: '',
-  start_time: '09:00', end_time: '10:00',
 }
 const emptyStructuredData: StructuredProgramData = { phase: '', training_goals: [''], sessions: [] }
-
-function formatTimeWithAMPM(time24: string): string {
-  if (!time24) return ''
-  const [hours, minutes] = time24.split(':')
-  const hour = parseInt(hours)
-  const ampm = hour >= 12 ? 'PM' : 'AM'
-  const hour12 = hour % 12 || 12
-  return `${hour12}:${minutes} ${ampm}`
-}
 
 function convert24To12(time24: string): { hour: string; minute: string; ampm: 'AM' | 'PM' } {
   if (!time24) return { hour: '9', minute: '00', ampm: 'AM' }
@@ -213,13 +201,13 @@ export default function StrengthPage() {
   }
   function openEditAttendance(rec: SCRecord) {
     setEditingRecord(rec)
-    setAttendanceForm({ athlete_id: rec.athlete_id, session_date: rec.session_date, attendance: rec.attendance, training_program: rec.training_program ?? '', notes: rec.notes ?? '', start_time: rec.start_time ?? '09:00', end_time: rec.end_time ?? '10:00' })
+    setAttendanceForm({ athlete_id: rec.athlete_id, session_date: rec.session_date, attendance: rec.attendance, training_program: rec.training_program ?? '', notes: rec.notes ?? '' })
     setError(null); setAttendanceModalOpen(true)
   }
   async function handleSaveAttendance() {
     if (!attendanceForm.athlete_id || !attendanceForm.session_date) { setError('Atlet dan tarikh sesi wajib dipilih.'); return }
     setSaving(true); setError(null)
-    const payload = { athlete_id: attendanceForm.athlete_id, session_date: attendanceForm.session_date, attendance: attendanceForm.attendance, training_program: attendanceForm.training_program || null, notes: attendanceForm.notes || null, start_time: attendanceForm.start_time, end_time: attendanceForm.end_time, recorded_by: profile?.id }
+    const payload = { athlete_id: attendanceForm.athlete_id, session_date: attendanceForm.session_date, attendance: attendanceForm.attendance, training_program: attendanceForm.training_program || null, notes: attendanceForm.notes || null, recorded_by: profile?.id }
     if (editingRecord) {
       const { error } = await supabase.from('strength_conditioning').update(payload).eq('id', editingRecord.id)
       if (error) { setError(error.message); setSaving(false); return }
@@ -527,6 +515,12 @@ export default function StrengthPage() {
     const matchAthlete = !filterAthlete || r.athlete_id === filterAthlete
     const matchAttendance = !filterAttendance || r.attendance === filterAttendance
     return matchSport && matchDate && matchAthlete && matchAttendance
+  }).sort((a, b) => {
+    const dateCompare = new Date(b.session_date).getTime() - new Date(a.session_date).getTime()
+    if (dateCompare !== 0) return dateCompare
+    const athleteA = athletes.find(at => at.id === a.athlete_id)?.name ?? ''
+    const athleteB = athletes.find(at => at.id === b.athlete_id)?.name ?? ''
+    return athleteA.localeCompare(athleteB)
   })
 
   const visiblePrograms = programs.filter(p =>
@@ -620,7 +614,7 @@ export default function StrengthPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-100">
-                    {['Tarikh', 'Waktu', 'Atlet', 'Sukan', 'Kehadiran', 'Program Latihan', 'Nota', ''].map(h => (
+                    {['Tarikh', 'Atlet', 'Sukan', 'Kehadiran', 'Program Latihan', 'Nota', ''].map(h => (
                       <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-wider text-[#888] px-4 py-3">{h}</th>
                     ))}
                   </tr>
@@ -630,9 +624,6 @@ export default function StrengthPage() {
                     <tr key={r.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
                       <td className="px-4 py-3 font-mono text-[12px] text-[#444] whitespace-nowrap">
                         {new Date(r.session_date).toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric' })}
-                      </td>
-                      <td className="px-4 py-3 font-mono text-[12px] text-[#F56A00] whitespace-nowrap">
-                        {r.start_time && r.end_time ? `${formatTimeWithAMPM(r.start_time)} - ${formatTimeWithAMPM(r.end_time)}` : '—'}
                       </td>
                       <td className="px-4 py-3 font-medium text-[#111]">{athletes.find(a => a.id === r.athlete_id)?.name ?? '—'}</td>
                       <td className="px-4 py-3 text-[#888]">{athletes.find(a => a.id === r.athlete_id)?.sport?.name ?? '—'}</td>
@@ -902,18 +893,6 @@ export default function StrengthPage() {
                     <option value="mc">MC</option>
                   </select>
                 </Field>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-semibold uppercase tracking-widest text-[#888] mb-2">Waktu Mula *</label>
-                  <input type="time" value={attendanceForm.start_time} onChange={e => setAttendanceForm(f => ({ ...f, start_time: e.target.value }))} className={inputCls} />
-                  <p className="text-[11px] font-bold text-[#F56A00] mt-1">{formatTimeWithAMPM(attendanceForm.start_time)}</p>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-semibold uppercase tracking-widest text-[#888] mb-2">Waktu Tamat *</label>
-                  <input type="time" value={attendanceForm.end_time} onChange={e => setAttendanceForm(f => ({ ...f, end_time: e.target.value }))} className={inputCls} />
-                  <p className="text-[11px] font-bold text-[#F56A00] mt-1">{formatTimeWithAMPM(attendanceForm.end_time)}</p>
-                </div>
               </div>
               <Field label="Program Latihan">
                 <input value={attendanceForm.training_program} onChange={e => setAttendanceForm(f => ({ ...f, training_program: e.target.value.toUpperCase() }))} className={inputCls} placeholder="cth. FASA KEKUATAN 1" />
