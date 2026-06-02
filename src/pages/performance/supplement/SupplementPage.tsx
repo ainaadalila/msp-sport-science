@@ -130,9 +130,9 @@ export default function SupplementPage() {
   async function fetchAll() {
     setLoading(true)
     const [supRes, reqRes, athRes] = await Promise.all([
-      supabase.from('supplements').select('id, name, stock, unit, created_at, expiry_date').order('name'),
+      supabase.from('supplements').select('id, name, stock, unit, expiry_date').order('name'),
       supabase.from('supplement_requests')
-        .select('*, supplement:supplement_id(name, unit)')
+        .select('id, sport, supplement_id, quantity, request_date, status, requested_by, reviewed_by, coordinator_id, coordinator_notes, supporter_id, supporter_status, supporter_notes, supporter_reviewed_at, approved_quantity, created_at, supplement:supplement_id(name, unit)')
         .order('created_at', { ascending: sortBy === 'date_asc' }),
       supabase.from('athletes').select('id, name, sport_id, sport:sport_id(name)').order('name'),
     ]) as any

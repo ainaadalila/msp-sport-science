@@ -62,7 +62,7 @@ export default function PsychologyRatingPage() {
       setError('')
       const { data, error: err } = await supabase
         .from('psychology_ratings')
-        .select('*, athlete:athletes(id, name, sport_id, sport:sport_id(name))')
+        .select('id, athlete_id, phase, assessment_date, cognitive_anxiety_score, somatic_anxiety_score, self_confidence_score, athlete:athletes(id, name, sport_id, sport:sport_id(name))')
         .order('assessment_date', { ascending: false })
 
       if (err) throw err

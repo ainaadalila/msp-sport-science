@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext'
 import { logAction } from '../../lib/audit'
 import { usePermissions } from '../../hooks/usePermissions'
 import { useSports } from '../../hooks/useSports'
+import { invalidateAthletesCache } from '../../hooks/useAthletes'
 
 interface Athlete {
   id: string
@@ -151,6 +152,7 @@ export default function AthletesPage() {
     const { data, error } = await supabase.from('athletes').select('id, name, ic_number, sport_id, status, gender, date_of_birth, weight, height, is_elite, photo_url, category, created_at, sport:sports!sport_id(name)').order('name') as any
     if (!error) setAthletes(data ?? [])
     setLoading(false)
+    invalidateAthletesCache()
   }
 
   function openAdd() {

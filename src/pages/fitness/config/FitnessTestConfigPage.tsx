@@ -63,9 +63,9 @@ export default function FitnessTestConfigPage() {
   async function fetchSportTests(sport: string) {
     const res = await supabase
       .from('sport_fitness_tests')
-      .select('*, test:fitness_test_definitions(*)')
+      .select('id, sport, test_id, is_mandatory, test:fitness_test_definitions(id, test_name, category, unit, description)')
       .eq('sport', sport)
-    setSportTests((res.data ?? []) as SportFitnessTest[])
+    setSportTests((res.data ?? []) as unknown as SportFitnessTest[])
   }
 
   async function toggleTest(testId: string, isAdded: boolean) {

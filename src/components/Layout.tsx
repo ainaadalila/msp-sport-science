@@ -237,7 +237,7 @@ export default function Layout() {
                     type={cpForm.showPw ? 'text' : 'password'}
                     value={cpForm.password}
                     onChange={e => setCpForm(f => ({ ...f, password: e.target.value }))}
-                    placeholder="Min. 8 aksara"
+                    placeholder="Min. 12 aksara"
                     className="w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2.5 pr-10 text-sm text-[#111] outline-none transition focus:border-[#F56A00] focus:bg-white"
                   />
                   <button

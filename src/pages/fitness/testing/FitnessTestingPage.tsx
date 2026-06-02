@@ -93,10 +93,10 @@ export default function FitnessTestingPage() {
     // Fetch sport tests for this athlete's sport
     const testsRes = await supabase
       .from('sport_fitness_tests')
-      .select('*, test:test_id(test_name, unit, category)')
+      .select('id, sport, test_id, is_mandatory, created_at, test:test_id(id, test_name, unit, category, created_at)')
       .eq('sport', athlete.sport?.name)
 
-    const sportTestsData = (testsRes.data ?? []) as SportFitnessTest[]
+    const sportTestsData = (testsRes.data ?? []) as unknown as SportFitnessTest[]
     setSportTests(sportTestsData)
 
     // Initialize expanded categories
