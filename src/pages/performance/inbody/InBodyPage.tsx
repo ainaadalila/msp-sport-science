@@ -455,11 +455,11 @@ export default function InBodyPage() {
                 return (
                   <tr key={r.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
                     <td className="px-4 py-3 font-mono text-[12px] text-[#444] whitespace-nowrap">{fmtDate(r.recorded_date)}</td>
-                    <td className="px-4 py-3 font-medium">
+                    <td className="px-4 py-3 font-medium text-left">
                       {r.athlete?.name ? (
                         <button
                           onClick={() => { setActiveTab('profil'); setProfilAthlete(r.athlete_id); setProfilSport(r.athlete?.sport?.name || '') }}
-                          className="text-[#F56A00] hover:underline font-medium cursor-pointer"
+                          className="text-[#F56A00] hover:underline font-medium cursor-pointer text-left"
                         >
                           {r.athlete.name}
                         </button>
