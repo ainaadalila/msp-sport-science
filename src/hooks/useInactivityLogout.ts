@@ -38,7 +38,17 @@ export function useInactivityLogout() {
       if (document.hidden) {
         if (timeoutRef.current) clearTimeout(timeoutRef.current)
       } else {
-        resetInactivityTimer()
+        // When tab becomes visible, check if session is stale
+        const timeSinceLastActivity = Date.now() - lastActivityRef.current
+        if (timeSinceLastActivity > INACTIVITY_TIMEOUT) {
+          // Session is stale, logout immediately
+          if (user) {
+            signOut()
+          }
+        } else {
+          // Session still valid, reset timer with remaining time
+          resetInactivityTimer()
+        }
       }
     }
     document.addEventListener('visibilitychange', handleVisibilityChange)

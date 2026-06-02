@@ -52,10 +52,19 @@ export function validatePassword(password: string): PasswordStrengthResult {
 
   // Determine strength level
   let strength: 'weak' | 'fair' | 'good' | 'strong'
-  if (score <= 1) strength = 'weak'
-  else if (score === 2) strength = 'fair'
-  else if (score === 3) strength = 'good'
-  else strength = 'strong'
+
+  // If there are errors, cap the strength at 'fair'
+  if (errors.length > 0) {
+    strength = 'weak'
+  } else if (score <= 1) {
+    strength = 'weak'
+  } else if (score === 2) {
+    strength = 'fair'
+  } else if (score === 3) {
+    strength = 'good'
+  } else {
+    strength = 'strong'
+  }
 
   return {
     score: Math.min(score, 4),

@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 import { logAction } from '../lib/audit'
 import { useAuth } from '../context/AuthContext'
 import { useInactivityLogout } from '../hooks/useInactivityLogout'
+import { validatePassword, isPasswordValid } from '../lib/passwordValidator'
 
 const routeMeta: Record<string, { title: string; parent?: string }> = {
   '/':                            { title: 'Dashboard' },
@@ -73,14 +74,19 @@ export default function Layout() {
 
   async function handleChangePassword() {
     setCpError(null)
-    if (cpForm.password.length < 12) {
-      setCpError('Kata laluan mestilah sekurang-kurangnya 12 aksara.')
+
+    // Validate password strength
+    if (!isPasswordValid(cpForm.password)) {
+      const strength = validatePassword(cpForm.password)
+      setCpError(strength.errors[0] || 'Kata laluan tidak memenuhi persyaratan keamanan.')
       return
     }
+
     if (cpForm.password !== cpForm.confirm) {
       setCpError('Kata laluan tidak sepadan.')
       return
     }
+
     setCpLoading(true)
     const { error } = await supabase.auth.updateUser({ password: cpForm.password })
     setCpLoading(false)
@@ -237,7 +243,7 @@ export default function Layout() {
                     type={cpForm.showPw ? 'text' : 'password'}
                     value={cpForm.password}
                     onChange={e => setCpForm(f => ({ ...f, password: e.target.value }))}
-                    placeholder="Min. 12 aksara"
+                    placeholder="Min. 12 aksara, huruf besar, kecil, nombor, dan aksara khas"
                     className="w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2.5 pr-10 text-sm text-[#111] outline-none transition focus:border-[#F56A00] focus:bg-white"
                   />
                   <button
