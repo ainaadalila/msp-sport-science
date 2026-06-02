@@ -107,8 +107,8 @@ export default function DashboardPage() {
       try {
         const [athleteRes, pendingRes, logsRes] = await Promise.all([
           supabase.from('athletes').select('id, status'),
-          supabase.from('supplement_requests').select('id', { count: 'exact' }).eq('status', 'pending'),
-          supabase.from('audit_logs').select('id, action, created_at, user_id, profile:profiles(full_name)').order('created_at', { ascending: false }).limit(5),
+          supabase.from('supplement_requests').select('count', { count: 'exact' }).eq('status', 'pending'),
+          supabase.from('audit_logs').select('id, action, created_at, profile:user_id(full_name)').order('created_at', { ascending: false }).limit(5),
         ])
 
         const all = athleteRes.data ?? []

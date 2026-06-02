@@ -106,12 +106,12 @@ export default function AuditLogPage() {
       setLoading(true)
       const { data, error } = await supabase
         .from('audit_logs')
-        .select('*, profile:profiles!user_id(full_name, role)')
+        .select('id, user_id, action, target_table, target_id, ip_address, created_at, profile:profiles!user_id(full_name, role)')
         .order('created_at', { ascending: false })
         .limit(1000)
 
       if (!error && data) {
-        setLogs(data as AuditLogWithProfile[])
+        setLogs(data as unknown as AuditLogWithProfile[])
       }
       setLoading(false)
     }
@@ -161,12 +161,12 @@ export default function AuditLogPage() {
     setLoading(true)
     const { data, error } = await supabase
       .from('audit_logs')
-      .select('*, profile:profiles!user_id(full_name, role)')
+      .select('id, user_id, action, target_table, target_id, ip_address, created_at, profile:profiles!user_id(full_name, role)')
       .order('created_at', { ascending: false })
       .limit(1000)
 
     if (!error && data) {
-      setLogs(data as AuditLogWithProfile[])
+      setLogs(data as unknown as AuditLogWithProfile[])
     }
     setLoading(false)
   }
