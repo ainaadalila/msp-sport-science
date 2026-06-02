@@ -6,7 +6,7 @@ import { useAuth } from '../../context/AuthContext'
 import { logAction } from '../../lib/audit'
 import { usePermissions } from '../../hooks/usePermissions'
 import { useSports } from '../../hooks/useSports'
-import { useAthletes, invalidateAthletesCache } from '../../hooks/useAthletes'
+import { invalidateAthletesCache } from '../../hooks/useAthletes'
 
 interface Athlete {
   id: string

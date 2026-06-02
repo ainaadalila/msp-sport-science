@@ -1,17 +1,26 @@
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
-import type { Athlete } from '../types'
 
-interface CacheEntry {
-  data: Athlete[]
-  timestamp: number
-  ttl: number
+interface CachedAthlete {
+  id: string
+  name: string
+  ic_number: string
+  sport_id: string
+  status: string
+  gender: string | null
+  date_of_birth: string | null
+  weight: number | null
+  height: number | null
+  is_elite: boolean
+  photo_url: string | null
+  category: string | null
+  sport?: { name: string }
 }
 
-const athleteCache = { data: null as Athlete[] | null, timestamp: 0, ttl: 5 * 60 * 1000 } // 5 min cache
+const athleteCache = { data: null as CachedAthlete[] | null, timestamp: 0, ttl: 5 * 60 * 1000 } // 5 min cache
 
 export function useAthletes() {
-  const [athletes, setAthletes] = useState<Athlete[]>([])
+  const [athletes, setAthletes] = useState<CachedAthlete[]>([])
   const [loading, setLoading] = useState(true)
   const isMounted = useRef(true)
 
@@ -39,12 +48,12 @@ export function useAthletes() {
         const { data, error } = await supabase
           .from('athletes')
           .select('id, name, ic_number, sport_id, status, gender, date_of_birth, weight, height, is_elite, photo_url, category, sport:sports!sport_id(name)')
-          .order('name')
+          .order('name') as any
 
-        if (!error && isMounted.current) {
-          athleteCache.data = data ?? []
+        if (!error && data && isMounted.current) {
+          athleteCache.data = data
           athleteCache.timestamp = Date.now()
-          setAthletes(athleteCache.data)
+          setAthletes(data)
         }
       } finally {
         if (isMounted.current) {
