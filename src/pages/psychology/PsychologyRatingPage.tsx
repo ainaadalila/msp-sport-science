@@ -508,10 +508,10 @@ export default function PsychologyRatingPage() {
                 <tbody>
                   {filteredRatings.map(r => (
                     <tr key={r.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
-                      <td className="px-4 py-3 font-medium">
+                      <td className="px-4 py-3 font-medium text-left">
                         <button
                           onClick={() => openComparison(r.athlete_id)}
-                          className="text-[#F56A00] hover:underline cursor-pointer"
+                          className="text-[#F56A00] hover:underline cursor-pointer text-left"
                         >
                           {r.athlete?.name ?? '—'}
                         </button>
