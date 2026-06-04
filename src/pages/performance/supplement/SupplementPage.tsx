@@ -101,12 +101,14 @@ export default function SupplementPage() {
   const [coordNotesRequest, setCoordNotesRequest] = useState<SupplementRequest | null>(null)
   const [coordNotesForm, setCoordNotesForm] = useState({ notes: '', decision: 'lulus' as 'lulus' | 'tolak' })
   const [coordNotesSaving, setCoordNotesSaving] = useState(false)
+  const [coordNotesError, setCoordNotesError] = useState<string | null>(null)
 
   // Supporter action modal
   const [supporterModal, setSupporterModal] = useState(false)
   const [supporterRequest, setSupporterRequest] = useState<SupplementRequest | null>(null)
   const [supporterForm, setSupporterForm] = useState({ notes: '', decision: 'sokong' as 'sokong' | 'tidak_sokong' })
   const [supporterSaving, setSupporterSaving] = useState(false)
+  const [supporterError, setSupporterError] = useState<string | null>(null)
 
   // Timeline view modal
   const [timelineModal, setTimelineModal] = useState(false)
@@ -117,6 +119,7 @@ export default function SupplementPage() {
   const [approvalRequest, setApprovalRequest] = useState<SupplementRequest | null>(null)
   const [approvalForm, setApprovalForm] = useState({ notes: '', decision: 'approved' as 'approved' | 'partial' })
   const [approvalSaving, setApprovalSaving] = useState(false)
+  const [approvalError, setApprovalError] = useState<string | null>(null)
 
   // Action loading state
   const [processingId, setProcessingId] = useState<string | null>(null)
@@ -258,7 +261,8 @@ export default function SupplementPage() {
   async function handleCoordinatorReview(id: string, decision: 'lulus' | 'tolak', notes?: string) {
     setProcessingId(id)
     const status = decision === 'lulus' ? 'semakan_lulus' : 'semakan_tolak'
-    await supabase.from('supplement_requests').update({ status, coordinator_id: profile?.id, coordinator_notes: notes || null }).eq('id', id)
+    const { error: updateError } = await supabase.from('supplement_requests').update({ status, coordinator_id: profile?.id, coordinator_notes: notes || null }).eq('id', id)
+    if (updateError) throw updateError
     await logAction(profile!.id, decision === 'lulus' ? 'koordinator_approve_supplement' : 'koordinator_reject_supplement', 'supplement_requests', id)
     await fetchAll()
     setProcessingId(null)
@@ -301,7 +305,8 @@ export default function SupplementPage() {
 
     const updatePayload: any = { status, reviewed_by: profile?.id, approved_quantity: approvedQuantity || null }
     if (notes) updatePayload.reviewer_notes = notes
-    await supabase.from('supplement_requests').update(updatePayload).eq('id', id)
+    const { error: updateError } = await supabase.from('supplement_requests').update(updatePayload).eq('id', id)
+    if (updateError) throw updateError
     await logAction(profile!.id, status === 'approved' ? 'approve_supplement' : 'approve_supplement_partial', 'supplement_requests', id)
     await fetchAll()
     setProcessingId(null)
@@ -309,12 +314,13 @@ export default function SupplementPage() {
 
   async function handleSupporterAction(id: string, decision: 'sokong' | 'tidak_sokong', notes?: string) {
     setProcessingId(id)
-    await supabase.from('supplement_requests').update({
+    const { error: updateError } = await supabase.from('supplement_requests').update({
       supporter_id: profile?.id,
       supporter_status: decision,
       supporter_notes: notes || null,
       supporter_reviewed_at: new Date().toISOString(),
     }).eq('id', id)
+    if (updateError) throw updateError
     await logAction(profile!.id, decision === 'sokong' ? 'supporter_approve_supplement' : 'supporter_reject_supplement', 'supplement_requests', id)
     await fetchAll()
     setProcessingId(null)
@@ -490,14 +496,14 @@ export default function SupplementPage() {
                           {r.status === 'pending' && isCoordinator && (
                             <>
                               <button
-                                onClick={() => { setCoordNotesRequest(r); setCoordNotesForm({ notes: r.coordinator_notes || '', decision: 'lulus' }); setCoordNotesModal(true) }}
+                                onClick={() => { setCoordNotesRequest(r); setCoordNotesForm({ notes: r.coordinator_notes || '', decision: 'lulus' }); setCoordNotesError(null); setCoordNotesModal(true) }}
                                 disabled={processingId === r.id}
                                 className="text-xs font-semibold text-white bg-yellow-600 hover:bg-yellow-700 disabled:bg-yellow-400 disabled:cursor-wait px-2.5 py-1 rounded-md transition"
                               >
                                 {processingId === r.id ? 'Memproses...' : 'Sahkan'}
                               </button>
                               <button
-                                onClick={() => { setCoordNotesRequest(r); setCoordNotesForm({ notes: r.coordinator_notes || '', decision: 'tolak' }); setCoordNotesModal(true) }}
+                                onClick={() => { setCoordNotesRequest(r); setCoordNotesForm({ notes: r.coordinator_notes || '', decision: 'tolak' }); setCoordNotesError(null); setCoordNotesModal(true) }}
                                 disabled={processingId === r.id}
                                 className="text-xs font-semibold text-red-600 border border-red-200 hover:bg-red-50 disabled:opacity-60 disabled:cursor-wait px-2.5 py-1 rounded-md transition"
                               >
@@ -508,14 +514,14 @@ export default function SupplementPage() {
                           {r.status === 'semakan_lulus' && !r.supporter_status && isSupporter && (
                             <>
                               <button
-                                onClick={() => { setSupporterRequest(r); setSupporterForm({ notes: '', decision: 'sokong' }); setSupporterModal(true) }}
+                                onClick={() => { setSupporterRequest(r); setSupporterForm({ notes: '', decision: 'sokong' }); setSupporterError(null); setSupporterModal(true) }}
                                 disabled={processingId === r.id}
                                 className="text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-wait px-2.5 py-1 rounded-md transition"
                               >
                                 {processingId === r.id ? 'Memproses...' : 'Sokong'}
                               </button>
                               <button
-                                onClick={() => { setSupporterRequest(r); setSupporterForm({ notes: '', decision: 'tidak_sokong' }); setSupporterModal(true) }}
+                                onClick={() => { setSupporterRequest(r); setSupporterForm({ notes: '', decision: 'tidak_sokong' }); setSupporterError(null); setSupporterModal(true) }}
                                 disabled={processingId === r.id}
                                 className="text-xs font-semibold text-red-600 border border-red-200 hover:bg-red-50 disabled:opacity-60 disabled:cursor-wait px-2.5 py-1 rounded-md transition"
                               >
@@ -526,7 +532,7 @@ export default function SupplementPage() {
                           {r.status === 'semakan_lulus' && r.supporter_status === 'sokong' && isApprover && (
                             <>
                               <button
-                                onClick={() => { setApprovalRequest(r); setApprovalForm({ notes: '', decision: 'approved' }); setApprovalModal(true) }}
+                                onClick={() => { setApprovalRequest(r); setApprovalForm({ notes: '', decision: 'approved' }); setApprovalError(null); setApprovalModal(true) }}
                                 disabled={processingId === r.id}
                                 className="text-xs font-semibold text-white bg-green-600 hover:bg-green-700 disabled:bg-green-400 disabled:cursor-wait px-2.5 py-1 rounded-md transition"
                               >
@@ -536,6 +542,7 @@ export default function SupplementPage() {
                                 onClick={() => {
                                   setApprovalRequest(r)
                                   setApprovalForm({ notes: '', decision: 'partial' })
+                                  setApprovalError(null)
                                   setApprovalModal(true)
                                 }}
                                 disabled={processingId === r.id}
@@ -689,6 +696,7 @@ export default function SupplementPage() {
               </div>
             </div>
             <div className="px-6 py-4 space-y-4">
+              {coordNotesError && <div className="px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-600">{coordNotesError}</div>}
               <div>
                 <label className="block text-[12px] font-semibold text-[#888] uppercase mb-2">Ulasan (Pilihan)</label>
                 <textarea
@@ -704,9 +712,15 @@ export default function SupplementPage() {
               <button
                 onClick={async () => {
                   setCoordNotesSaving(true)
-                  await handleCoordinatorReview(coordNotesRequest.id, coordNotesForm.decision, coordNotesForm.notes)
-                  setCoordNotesModal(false)
-                  setCoordNotesSaving(false)
+                  setCoordNotesError(null)
+                  try {
+                    await handleCoordinatorReview(coordNotesRequest.id, coordNotesForm.decision, coordNotesForm.notes)
+                    setCoordNotesModal(false)
+                  } catch (err) {
+                    setCoordNotesError(err instanceof Error ? err.message : 'Ralat semasa menyimpan')
+                  } finally {
+                    setCoordNotesSaving(false)
+                  }
                 }}
                 disabled={coordNotesSaving}
                 className={`px-5 py-2 text-white text-sm font-semibold rounded-lg transition disabled:opacity-60 ${coordNotesForm.decision === 'lulus' ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-red-600 hover:bg-red-700'}`}
@@ -731,6 +745,7 @@ export default function SupplementPage() {
               </div>
             </div>
             <div className="px-6 py-4 space-y-4">
+              {supporterError && <div className="px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-600">{supporterError}</div>}
               {supporterRequest.coordinator_notes && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                   <p className="text-[11px] font-semibold uppercase tracking-widest text-blue-600 mb-1">Ulasan Penyelaras Semak</p>
@@ -752,9 +767,15 @@ export default function SupplementPage() {
               <button
                 onClick={async () => {
                   setSupporterSaving(true)
-                  await handleSupporterAction(supporterRequest.id, supporterForm.decision, supporterForm.notes)
-                  setSupporterModal(false)
-                  setSupporterSaving(false)
+                  setSupporterError(null)
+                  try {
+                    await handleSupporterAction(supporterRequest.id, supporterForm.decision, supporterForm.notes)
+                    setSupporterModal(false)
+                  } catch (err) {
+                    setSupporterError(err instanceof Error ? err.message : 'Ralat semasa menyimpan')
+                  } finally {
+                    setSupporterSaving(false)
+                  }
                 }}
                 disabled={supporterSaving}
                 className={`px-5 py-2 text-white text-sm font-semibold rounded-lg transition disabled:opacity-60 ${supporterForm.decision === 'sokong' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-red-600 hover:bg-red-700'}`}
@@ -860,6 +881,7 @@ export default function SupplementPage() {
               </div>
             </div>
             <div className="px-6 py-4 space-y-4">
+              {approvalError && <div className="px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-600">{approvalError}</div>}
               {approvalRequest.coordinator_notes && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                   <p className="text-[11px] font-semibold uppercase tracking-widest text-blue-600 mb-1">Ulasan Penyelaras Semak</p>
@@ -900,10 +922,16 @@ export default function SupplementPage() {
               <button
                 onClick={async () => {
                   setApprovalSaving(true)
-                  const approvedQty = approvalForm.decision === 'partial' ? partialQuantity : undefined
-                  await handleApproval(approvalRequest.id, approvalForm.decision, approvedQty, approvalForm.notes)
-                  setApprovalModal(false)
-                  setApprovalSaving(false)
+                  setApprovalError(null)
+                  try {
+                    const approvedQty = approvalForm.decision === 'partial' ? partialQuantity : undefined
+                    await handleApproval(approvalRequest.id, approvalForm.decision, approvedQty, approvalForm.notes)
+                    setApprovalModal(false)
+                  } catch (err) {
+                    setApprovalError(err instanceof Error ? err.message : 'Ralat semasa menyimpan')
+                  } finally {
+                    setApprovalSaving(false)
+                  }
                 }}
                 disabled={approvalSaving}
                 className={`px-5 py-2 text-white text-sm font-semibold rounded-lg transition disabled:opacity-60 ${approvalForm.decision === 'approved' ? 'bg-green-600 hover:bg-green-700' : 'bg-orange-600 hover:bg-orange-700'}`}

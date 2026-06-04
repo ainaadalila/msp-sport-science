@@ -217,7 +217,10 @@ export default function InBodyPage() {
 
   function openAdd() {
     setEditing(null)
-    setForm(emptyForm)
+    setForm({
+      ...emptyForm,
+      recorded_date: new Date().toISOString().slice(0, 10),
+    })
     setFormSportFilter('')
     setError(null)
     setModalOpen(true)
@@ -285,7 +288,11 @@ export default function InBodyPage() {
     setDietPlanError(null)
 
     try {
-      const fileName = `inbody_diet_${viewRecord.id}_${Date.now()}_${file.name}`
+      // Sanitize filename - remove spaces and special characters
+      const sanitizedName = file.name
+        .replace(/\s+/g, '_')
+        .replace(/[^a-zA-Z0-9._-]/g, '')
+      const fileName = `inbody_diet_${viewRecord.id}_${Date.now()}_${sanitizedName}`
       const { error: uploadError } = await supabase.storage
         .from('inbody_diet_plans')
         .upload(fileName, file)
