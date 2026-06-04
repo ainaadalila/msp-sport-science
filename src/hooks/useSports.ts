@@ -6,32 +6,22 @@ export interface Sport {
   name: string
 }
 
-const sportsCache = { data: null as Sport[] | null, timestamp: 0, ttl: 10 * 60 * 1000 } // 10 min cache
+const sportsCache = { data: null as Sport[] | null, timestamp: 0, ttl: 5 * 60 * 1000 } // 5 min cache (reduced for debugging)
 
 export function useSports() {
   const [sports, setSports] = useState<Sport[]>([])
   const [loading, setLoading] = useState(true)
-  const isMounted = useRef(true)
+  const isMountedRef = useRef(true)
 
   useEffect(() => {
+    isMountedRef.current = true
     return () => {
-      isMounted.current = false
+      isMountedRef.current = false
     }
   }, [])
 
   useEffect(() => {
     async function fetchSports() {
-      const now = Date.now()
-
-      // Check if cache is still valid
-      if (sportsCache.data && now - sportsCache.timestamp < sportsCache.ttl) {
-        if (isMounted.current) {
-          setSports(sportsCache.data)
-          setLoading(false)
-        }
-        return
-      }
-
       try {
         setLoading(true)
         const { data, error } = await supabase
@@ -39,15 +29,21 @@ export function useSports() {
           .select('id, name')
           .order('name')
 
-        if (!error && isMounted.current) {
+        if (error) {
+          console.error('[useSports] Query error:', error)
+          sportsCache.data = []
+          sportsCache.timestamp = Date.now()
+          if (isMountedRef.current) setSports([])
+        } else {
           sportsCache.data = data || []
           sportsCache.timestamp = Date.now()
-          setSports(sportsCache.data)
+          if (isMountedRef.current) setSports(data || [])
         }
+      } catch (err) {
+        console.error('[useSports] Exception:', err)
+        if (isMountedRef.current) setSports([])
       } finally {
-        if (isMounted.current) {
-          setLoading(false)
-        }
+        if (isMountedRef.current) setLoading(false)
       }
     }
 

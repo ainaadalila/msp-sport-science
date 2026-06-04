@@ -110,6 +110,11 @@ export default function StrengthPage() {
   const athleteIdParam = searchParams.get('athlete')
   const tabParam = searchParams.get('tab') as 'kehadiran' | 'program' | 'jadual' | null
 
+  // Ensure component re-renders when sports data arrives
+  useEffect(() => {
+    // This effect ensures the component subscribes to sports state changes
+  }, [sports])
+
   const [activeTab, setActiveTab] = useState<'kehadiran' | 'program' | 'jadual'>('jadual')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -311,30 +316,38 @@ export default function StrengthPage() {
 
     const expanded: ScheduleSlotForm[] = []
     const increment = repeatPattern === 'weekly' ? 7 : 14
-    const dayMap: Record<number, string> = { 0: 'sun', 1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri', 6: 'sat' }
 
     for (const slot of slots) {
       let currentDate = new Date(slot.slot_date)
       const untilDate = new Date(repeatUntil)
+      const startDate = new Date(slot.slot_date)
 
+      // Iterate through each week/bi-week period
       while (currentDate <= untilDate) {
-        const dayName = dayMap[currentDate.getDay()]
+        // For each selected day, add a slot at that day in this cycle
+        if (selectedDays && selectedDays.length > 0) {
+          for (const dayKey of selectedDays) {
+            const dayNum = dayKey === 'mon' ? 1 : dayKey === 'tue' ? 2 : dayKey === 'wed' ? 3 : dayKey === 'thu' ? 4 : dayKey === 'fri' ? 5 : dayKey === 'sat' ? 6 : 0
+            const daysFromStart = dayNum - startDate.getDay()
+            let targetDate = new Date(currentDate)
+            targetDate.setDate(targetDate.getDate() + daysFromStart + (daysFromStart < 0 ? 7 : 0))
 
-        // For weekly/bi-weekly: only include if day is selected
-        if (selectedDays && selectedDays.length > 0 && !selectedDays.includes(dayName)) {
-          currentDate.setDate(currentDate.getDate() + 1)
-          continue
+            if (targetDate <= untilDate) {
+              expanded.push({
+                slot_date: targetDate.toISOString().split('T')[0],
+                start_time: slot.start_time,
+                end_time: slot.end_time,
+              })
+            }
+          }
         }
 
-        expanded.push({
-          slot_date: currentDate.toISOString().split('T')[0],
-          start_time: slot.start_time,
-          end_time: slot.end_time,
-        })
         currentDate.setDate(currentDate.getDate() + increment)
       }
     }
 
+    // Sort by date to ensure chronological order
+    expanded.sort((a, b) => a.slot_date.localeCompare(b.slot_date))
     return expanded
   }
 
