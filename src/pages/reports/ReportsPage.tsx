@@ -266,9 +266,13 @@ export default function ReportsPage() {
 
   useEffect(() => {
     async function fetchSports() {
-      const { data: rows } = await supabase.from('athletes').select('sport_id, sport:sport_id(name)').order('sport')
-      const unique = [...new Set((rows ?? []).map((a: any) => a.sport?.name))].filter(Boolean) as string[]
-      setSports(unique)
+      const { data: rows, error } = await supabase.from('athletes').select('sport_id, sport:sport_id(name)')
+      if (error) {
+        console.error('Error fetching sports:', error)
+        return
+      }
+      const unique = [...new Set((rows ?? []).map((a: any) => a.sport?.name).filter(Boolean))] as string[]
+      setSports(unique.sort())
     }
     fetchSports()
   }, [])
