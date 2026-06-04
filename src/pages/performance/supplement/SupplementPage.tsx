@@ -43,14 +43,16 @@ type Tab = 'requests' | 'inventory'
 
 const statusLabel: Record<string, string> = {
   pending: 'Menunggu Semakan',
-  semakan_lulus: 'Menunggu Kelulusan',
+  sokongan: 'Menunggu Sokongan',
+  kelulusan: 'Menunggu Kelulusan',
   semakan_tolak: 'Ditolak',
   approved: 'Diluluskan',
   partial: 'Diluluskan Sebahagian',
 }
 const statusStyle: Record<string, string> = {
   pending: 'bg-blue-50 text-blue-700 border border-blue-200',
-  semakan_lulus: 'bg-yellow-50 text-yellow-700 border border-yellow-200',
+  sokongan: 'bg-amber-50 text-amber-700 border border-amber-200',
+  kelulusan: 'bg-yellow-50 text-yellow-700 border border-yellow-200',
   semakan_tolak: 'bg-red-50 text-red-700 border border-red-200',
   approved: 'bg-green-50 text-green-700 border border-green-200',
   partial: 'bg-orange-50 text-orange-700 border border-orange-200',
@@ -326,6 +328,19 @@ export default function SupplementPage() {
     setProcessingId(null)
   }
 
+  function getStatusKey(r: SupplementRequest): string {
+    if (r.status === 'pending') return 'pending'
+    if (r.status === 'semakan_tolak') return 'semakan_tolak'
+    if (r.status === 'semakan_lulus') {
+      if (!r.supporter_status) return 'sokongan'
+      if (r.supporter_status === 'sokong') return 'kelulusan'
+      if (r.supporter_status === 'tidak_sokong') return 'semakan_tolak'
+    }
+    if (r.status === 'approved') return 'approved'
+    if (r.status === 'partial') return 'partial'
+    return r.status
+  }
+
   function getDisplayStatus(r: SupplementRequest): string {
     if (r.status === 'pending') return 'Menunggu Semakan'
     if (r.status === 'semakan_tolak') return 'Ditolak (Penyelaras)'
@@ -340,7 +355,7 @@ export default function SupplementPage() {
   }
 
   const pendingCount = requests.filter(r => r.status === 'pending').length
-  const filteredReqs = requests.filter(r => !filterStatus || r.status === filterStatus)
+  const filteredReqs = requests.filter(r => !filterStatus || getStatusKey(r) === filterStatus)
 
   return (
     <div className="space-y-4">
@@ -432,7 +447,7 @@ export default function SupplementPage() {
         // ── Requests Tab ──────────────────────────────────────
         <div className="space-y-3">
           <div className="flex gap-2 flex-wrap">
-            {(['', 'pending', 'semakan_lulus', 'semakan_tolak', 'approved', 'partial'] as const).map(s => (
+            {(['', 'pending', 'sokongan', 'kelulusan', 'semakan_tolak', 'approved', 'partial'] as const).map(s => (
               <button
                 key={s}
                 onClick={() => setFilterStatus(s)}
@@ -481,7 +496,7 @@ export default function SupplementPage() {
                       <td className="px-5 py-3 text-[#444]">{r.supplement?.name ?? '—'}</td>
                       <td className="px-5 py-3 text-[#444]">{r.quantity} {r.supplement?.unit ?? ''}</td>
                       <td className="px-5 py-3">
-                        <span className={`inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full ${statusStyle[r.status]}`}>
+                        <span className={`inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full ${statusStyle[getStatusKey(r)]}`}>
                           {getDisplayStatus(r)}
                         </span>
                       </td>
