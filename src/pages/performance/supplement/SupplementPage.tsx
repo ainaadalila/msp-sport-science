@@ -354,6 +354,7 @@ export default function SupplementPage() {
     return r.status
   }
 
+  const pendingCount = requests.filter(r => r.status === 'pending').length
   const getCountByStatusKey = (key: string) => requests.filter(r => getStatusKey(r) === key).length
   const filteredReqs = requests.filter(r => !filterStatus || getStatusKey(r) === filterStatus)
 
