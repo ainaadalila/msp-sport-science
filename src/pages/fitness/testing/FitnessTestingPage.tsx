@@ -42,7 +42,7 @@ export default function FitnessTestingPage() {
   const [sessions, setSessions] = useState<FitnessTestSession[]>([])
 
   const getAthleteGender = (icNumber: string) => {
-    const genderDigit = parseInt(icNumber.charAt(11))
+    const genderDigit = parseInt(icNumber.charAt(10))
     return genderDigit % 2 === 1 ? 'M' : 'F'
   }
 
