@@ -44,6 +44,7 @@ interface ScheduleForm {
   coach_id: string; valid_from: string
   repeats: boolean; repeat_pattern: 'weekly' | 'bi-weekly' | 'custom'
   repeat_until: string; sport: string
+  selected_days: string[] // For weekly/bi-weekly: ['mon', 'tue', 'wed', etc]
 }
 
 interface ScheduleSlotForm {
@@ -151,7 +152,7 @@ export default function StrengthPage() {
   const [editingSchedule, setEditingSchedule] = useState<CoachSchedule | null>(null)
   const [scheduleForm, setScheduleForm] = useState<ScheduleForm>({
     coach_id: '', valid_from: new Date().toISOString().slice(0, 10),
-    repeats: false, repeat_pattern: 'weekly', repeat_until: '', sport: '',
+    repeats: false, repeat_pattern: 'weekly', repeat_until: '', sport: '', selected_days: [],
   })
   const [scheduleSlots, setScheduleSlots] = useState<ScheduleSlotForm[]>([
     { slot_date: new Date().toISOString().slice(0, 10), start_time: '09:00', end_time: '11:00' },
@@ -296,20 +297,35 @@ export default function StrengthPage() {
     slots: ScheduleSlotForm[],
     repeats: boolean,
     repeatPattern: 'weekly' | 'bi-weekly' | 'custom' | null,
-    repeatUntil: string
+    repeatUntil: string,
+    selectedDays?: string[]
   ): ScheduleSlotForm[] {
     if (!repeats || !repeatPattern || slots.length === 0) {
       return slots
     }
 
+    // Custom pattern: just return slots as-is (no auto-expansion)
+    if (repeatPattern === 'custom') {
+      return slots
+    }
+
     const expanded: ScheduleSlotForm[] = []
-    const increment = repeatPattern === 'weekly' ? 7 : repeatPattern === 'bi-weekly' ? 14 : 7
+    const increment = repeatPattern === 'weekly' ? 7 : 14
+    const dayMap: Record<number, string> = { 0: 'sun', 1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri', 6: 'sat' }
 
     for (const slot of slots) {
       let currentDate = new Date(slot.slot_date)
       const untilDate = new Date(repeatUntil)
 
       while (currentDate <= untilDate) {
+        const dayName = dayMap[currentDate.getDay()]
+
+        // For weekly/bi-weekly: only include if day is selected
+        if (selectedDays && selectedDays.length > 0 && !selectedDays.includes(dayName)) {
+          currentDate.setDate(currentDate.getDate() + 1)
+          continue
+        }
+
         expanded.push({
           slot_date: currentDate.toISOString().split('T')[0],
           start_time: slot.start_time,
@@ -326,7 +342,7 @@ export default function StrengthPage() {
     setEditingSchedule(null)
     setScheduleModalMode('single')
     const today = new Date().toISOString().slice(0, 10)
-    setScheduleForm({ coach_id: '', valid_from: today, repeats: false, repeat_pattern: 'weekly', repeat_until: '', sport: '' })
+    setScheduleForm({ coach_id: '', valid_from: today, repeats: true, repeat_pattern: 'weekly', repeat_until: '', sport: '', selected_days: [] })
     setScheduleSlots([{ slot_date: today, start_time: '09:00', end_time: '11:00' }])
     setSingleSlotForm({ coach_id: '', sport: '', slot_date: today, start_time: '09:00', end_time: '11:00' })
     setError(null)
@@ -407,7 +423,8 @@ export default function StrengthPage() {
       scheduleSlots,
       scheduleForm.repeats,
       scheduleForm.repeats ? scheduleForm.repeat_pattern : null,
-      scheduleForm.repeat_until
+      scheduleForm.repeat_until,
+      scheduleForm.selected_days
     )
 
     try {
@@ -1039,16 +1056,13 @@ export default function StrengthPage() {
               ) : (
                 /* ── MULTIPLE SLOTS MODE ── */
                 <>
-                  <Field label="Jurulatih" required>
-                    <select value={scheduleForm.coach_id} onChange={e => setScheduleForm(f => ({ ...f, coach_id: e.target.value }))} className={inputCls}>
-                      <option value="">— Pilih Jurulatih —</option>
-                      {coaches.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
-                    </select>
-                  </Field>
-
+                  {/* Top Section: Jurulatih & Sukan */}
                   <div className="grid grid-cols-2 gap-4">
-                    <Field label="Tarikh Mula" required>
-                      <input type="date" value={scheduleForm.valid_from} onChange={e => setScheduleForm(f => ({ ...f, valid_from: e.target.value }))} className={inputCls} />
+                    <Field label="Jurulatih" required>
+                      <select value={scheduleForm.coach_id} onChange={e => setScheduleForm(f => ({ ...f, coach_id: e.target.value }))} className={inputCls}>
+                        <option value="">— Pilih Jurulatih —</option>
+                        {coaches.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
+                      </select>
                     </Field>
                     <Field label="Sukan" required>
                       <select value={scheduleForm.sport} onChange={e => setScheduleForm(f => ({ ...f, sport: e.target.value }))} className={inputCls}>
@@ -1058,66 +1072,116 @@ export default function StrengthPage() {
                     </Field>
                   </div>
 
-                  <Field label="Slot Tarikh/Masa">
-                    <div className="space-y-4">
-                      {scheduleSlots.map((slot, idx) => (
-                        <div key={idx} className="space-y-3 p-3 bg-gray-50 rounded-lg">
-                          <div>
-                            <label className="block text-[10px] font-semibold uppercase tracking-widest text-[#888] mb-1.5">Tarikh</label>
-                            <input type="date" value={slot.slot_date} onChange={e => updateScheduleSlot(idx, 'slot_date', e.target.value)} className="w-full bg-white border border-[#E8E8E8] rounded-lg px-3 py-2.5 text-sm text-[#111] outline-none focus:border-[#F56A00]" />
-                          </div>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <label className="block text-[10px] font-semibold uppercase tracking-widest text-[#888] mb-1.5">Masa Mula</label>
-                              <TimeInput12h value={slot.start_time} onChange={t => updateScheduleSlot(idx, 'start_time', t)} />
-                            </div>
-                            <div>
-                              <label className="block text-[10px] font-semibold uppercase tracking-widest text-[#888] mb-1.5">Masa Akhir</label>
-                              <TimeInput12h value={slot.end_time} onChange={t => updateScheduleSlot(idx, 'end_time', t)} />
-                            </div>
-                          </div>
-                          {scheduleSlots.length > 1 && (
-                            <button type="button" onClick={() => removeScheduleSlot(idx)} className="w-full px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition text-sm font-medium">
-                              ✕ Buang Slot Ini
-                            </button>
-                          )}
-                        </div>
+                  {/* Pattern Selection (Always shown) */}
+                  <Field label="Corak Pengulangan" required>
+                    <div className="flex gap-2">
+                      {(['weekly', 'bi-weekly', 'custom'] as const).map(pattern => (
+                        <label key={pattern} className={`flex-1 px-3 py-2.5 rounded-lg border text-[12px] font-semibold cursor-pointer transition text-center ${scheduleForm.repeat_pattern === pattern ? 'bg-[#F56A00] border-[#F56A00] text-white' : 'bg-white border-[#E8E8E8] text-[#888] hover:border-[#D0D0D0]'}`}>
+                          <input type="radio" name="pattern" value={pattern} checked={scheduleForm.repeat_pattern === pattern} onChange={() => setScheduleForm(f => ({ ...f, repeat_pattern: pattern, selected_days: [] }))} className="hidden" />
+                          {pattern === 'weekly' ? 'Mingguan' : pattern === 'bi-weekly' ? 'Dua Mingguan' : 'Tersuai'}
+                        </label>
                       ))}
-                      <button type="button" onClick={addScheduleSlot} className="text-[13px] text-[#F56A00] hover:text-[#D45A00] font-semibold transition">
-                        + Tambah Slot
-                      </button>
                     </div>
                   </Field>
 
-                  <div className="border-t border-gray-100 pt-4">
-                    <label className="flex items-center gap-3 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={scheduleForm.repeats}
-                        onChange={e => setScheduleForm(f => ({ ...f, repeats: e.target.checked, repeat_until: '' }))}
-                        className="w-4 h-4 rounded border-[#E8E8E8] cursor-pointer accent-[#F56A00]"
-                      />
-                      <span className="text-sm font-semibold text-[#111]">Jadual Berulang</span>
-                    </label>
-                  </div>
+                  {/* Conditional Fields Based on Pattern */}
+                  {scheduleForm.repeat_pattern === 'weekly' || scheduleForm.repeat_pattern === 'bi-weekly' ? (
+                    <>
+                      <div className="grid grid-cols-2 gap-4">
+                        <Field label="Tarikh Mula" required>
+                          <input type="date" value={scheduleForm.valid_from} onChange={e => setScheduleForm(f => ({ ...f, valid_from: e.target.value }))} className={inputCls} />
+                        </Field>
+                        <Field label="Tarikh Akhir" required>
+                          <input type="date" value={scheduleForm.repeat_until} onChange={e => setScheduleForm(f => ({ ...f, repeat_until: e.target.value }))} className={inputCls} />
+                        </Field>
+                      </div>
 
-                  {scheduleForm.repeats && (
-                    <div className="space-y-4 bg-gray-50 border border-gray-100 rounded-lg p-4">
-                      <Field label="Corak Pengulangan" required>
-                        <div className="flex gap-2">
-                          {(['weekly', 'bi-weekly', 'custom'] as const).map(pattern => (
-                            <label key={pattern} className={`flex-1 px-3 py-2.5 rounded-lg border text-[12px] font-semibold cursor-pointer transition text-center ${scheduleForm.repeat_pattern === pattern ? 'bg-[#F56A00] border-[#F56A00] text-white' : 'bg-white border-[#E8E8E8] text-[#888] hover:border-[#D0D0D0]'}`}>
-                              <input type="radio" name="pattern" value={pattern} checked={scheduleForm.repeat_pattern === pattern} onChange={() => setScheduleForm(f => ({ ...f, repeat_pattern: pattern }))} className="hidden" />
-                              {pattern === 'weekly' ? 'Mingguan' : pattern === 'bi-weekly' ? 'Dua Mingguan' : 'Tersuai'}
+                      <Field label="Waktu" required>
+                        {scheduleSlots[0] && (
+                          <div className="flex gap-2">
+                            <input
+                              type="time"
+                              value={scheduleSlots[0].start_time}
+                              onChange={e => setScheduleSlots(s => [{ ...s[0], start_time: e.target.value }, ...s.slice(1)])}
+                              className={inputCls}
+                            />
+                            <span className="text-center py-2 text-[#888]">hingga</span>
+                            <input
+                              type="time"
+                              value={scheduleSlots[0].end_time}
+                              onChange={e => setScheduleSlots(s => [{ ...s[0], end_time: e.target.value }, ...s.slice(1)])}
+                              className={inputCls}
+                            />
+                          </div>
+                        )}
+                      </Field>
+
+                      <Field label={`Hari Penulangan (${scheduleForm.repeat_pattern === 'weekly' ? 'Mingguan' : 'Dua Mingguan'})`} required>
+                        <div className="grid grid-cols-4 gap-3">
+                          {[
+                            { key: 'mon', name: 'Isnin' },
+                            { key: 'tue', name: 'Selasa' },
+                            { key: 'wed', name: 'Rabu' },
+                            { key: 'thu', name: 'Khamis' },
+                            { key: 'fri', name: 'Jumaat' },
+                            { key: 'sat', name: 'Sabtu' },
+                            { key: 'sun', name: 'Ahad' }
+                          ].map(day => (
+                            <label key={day.key} className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={scheduleForm.selected_days.includes(day.key)}
+                                onChange={e => {
+                                  if (e.target.checked) {
+                                    setScheduleForm(f => ({ ...f, selected_days: [...f.selected_days, day.key] }))
+                                  } else {
+                                    setScheduleForm(f => ({ ...f, selected_days: f.selected_days.filter(d => d !== day.key) }))
+                                  }
+                                }}
+                                className="w-4 h-4 rounded border-[#E8E8E8] cursor-pointer accent-[#F56A00]"
+                              />
+                              <span className="text-[12px] font-medium text-[#111]">
+                                {day.name}
+                              </span>
                             </label>
                           ))}
                         </div>
                       </Field>
-                      <Field label="Berakhir Pada" required>
-                        <input type="date" value={scheduleForm.repeat_until} onChange={e => setScheduleForm(f => ({ ...f, repeat_until: e.target.value }))} className={inputCls} />
+                    </>
+                  ) : scheduleForm.repeat_pattern === 'custom' ? (
+                    <>
+                      <Field label="Slot Tarikh/Masa">
+                        <div className="space-y-4">
+                          {scheduleSlots.map((slot, idx) => (
+                            <div key={idx} className="space-y-3 p-3 bg-gray-50 rounded-lg">
+                              <div>
+                                <label className="block text-[10px] font-semibold uppercase tracking-widest text-[#888] mb-1.5">Tarikh</label>
+                                <input type="date" value={slot.slot_date} onChange={e => updateScheduleSlot(idx, 'slot_date', e.target.value)} className="w-full bg-white border border-[#E8E8E8] rounded-lg px-3 py-2.5 text-sm text-[#111] outline-none focus:border-[#F56A00]" />
+                              </div>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="block text-[10px] font-semibold uppercase tracking-widest text-[#888] mb-1.5">Masa Mula</label>
+                                  <TimeInput12h value={slot.start_time} onChange={t => updateScheduleSlot(idx, 'start_time', t)} />
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-semibold uppercase tracking-widest text-[#888] mb-1.5">Masa Akhir</label>
+                                  <TimeInput12h value={slot.end_time} onChange={t => updateScheduleSlot(idx, 'end_time', t)} />
+                                </div>
+                              </div>
+                              {scheduleSlots.length > 1 && (
+                                <button type="button" onClick={() => removeScheduleSlot(idx)} className="w-full px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition text-sm font-medium">
+                                  ✕ Buang Slot Ini
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                          <button type="button" onClick={addScheduleSlot} className="text-[13px] text-[#F56A00] hover:text-[#D45A00] font-semibold transition">
+                            + Tambah Slot
+                          </button>
+                        </div>
                       </Field>
-                    </div>
-                  )}
+                    </>
+                  ) : null}
                 </>
               )}
             </div>
