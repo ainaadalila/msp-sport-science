@@ -60,6 +60,9 @@ export default function FitnessTestingPage() {
   const [viewedSession, setViewedSession] = useState<SessionWithResults | null>(null)
   const [sessionsWithResults, setSessionsWithResults] = useState<SessionWithResults[]>([])
   const [selectedTestId, setSelectedTestId] = useState<string | null>(null)
+  const [selectedAthletesGender, setSelectedAthletesGender] = useState<'M' | 'F' | null>(null)
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null)
+  const [isDraft, setIsDraft] = useState(false)
 
   useEffect(() => {
     if (!canRecord) return
@@ -89,6 +92,7 @@ export default function FitnessTestingPage() {
 
     // Extract gender from ic_number (12th digit: odd=M, even=F)
     const gender = getAthleteGender(athlete.ic_number)
+    setSelectedAthletesGender(gender)
 
     // Fetch sport tests for this athlete's sport
     const testsRes = await supabase
@@ -267,8 +271,10 @@ export default function FitnessTestingPage() {
         unit: (r.test as any)?.unit || '',
       })) as SessionResult[]
 
-      // Show results view
+      // Show results view with draft info
       setViewedSession({ session: sessionData, results: savedResults })
+      setIsDraft(asDraft)
+      setEditingSessionId(sessionData.id)
       setViewMode('view_results')
 
       // Update sessions list
@@ -889,14 +895,14 @@ export default function FitnessTestingPage() {
                                     step="0.01"
                                   />
                                 </div>
-                                {norm && (
+                                {norm && selectedAthletesGender && (
                                   <div className="text-[11px] text-[#888] bg-white rounded-lg border border-[#E8E8E8] p-2">
                                     <p className="font-semibold mb-1">Reference:</p>
                                     {(() => {
                                       const testName = (st.test as any)?.test_name
                                       const displayMap = normDisplayValues[testName]
                                       if (displayMap) {
-                                        const display = displayMap[norm.gender] || displayMap['both']
+                                        const display = displayMap[selectedAthletesGender] || displayMap['both']
                                         if (display) {
                                           return (
                                             <div>
@@ -965,8 +971,10 @@ export default function FitnessTestingPage() {
           {/* View Results */}
           {viewMode === 'view_results' && viewedSession && (
             <div className="space-y-4">
-              <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3">
-                <p className="text-sm font-semibold text-green-700">✓ Ujian telah disimpan</p>
+              <div className={`${isDraft ? 'bg-blue-50 border-blue-200' : 'bg-green-50 border-green-200'} border rounded-lg px-4 py-3`}>
+                <p className={`text-sm font-semibold ${isDraft ? 'text-blue-700' : 'text-green-700'}`}>
+                  {isDraft ? '◐ Ujian disimpan sebagai DRAF' : '✓ Ujian telah diserahkan'}
+                </p>
               </div>
 
               <div className="bg-white rounded-xl border border-gray-200 p-4">
@@ -1003,6 +1011,53 @@ export default function FitnessTestingPage() {
                 >
                   Kembali ke Paparan
                 </button>
+                {isDraft && (
+                  <>
+                    <button
+                      onClick={async () => {
+                        setSaving(true)
+                        try {
+                          const { error } = await supabase
+                            .from('fitness_test_sessions')
+                            .update({ is_draft: false })
+                            .eq('id', editingSessionId)
+                          if (error) throw error
+                          await logAction(profile!.id, 'submit_fitness_tests', 'fitness_test_sessions', editingSessionId!)
+                          setIsDraft(false)
+                          if (viewedSession) {
+                            setViewedSession({ ...viewedSession, session: { ...viewedSession.session, is_draft: false } })
+                          }
+                        } catch (err) {
+                          setError((err as any).message || 'Ralat menyimpan')
+                        } finally {
+                          setSaving(false)
+                        }
+                      }}
+                      disabled={saving}
+                      className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition disabled:opacity-60"
+                    >
+                      {saving ? 'Menyimpan...' : 'Serah Draf'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setViewMode('record_tests')
+                        if (viewedSession?.results) {
+                          setResults(viewedSession.results.map(r => ({
+                            test_id: r.test_id,
+                            result_value: r.result_value,
+                            notes: r.notes || undefined,
+                            test_name: r.test_name,
+                          })))
+                        }
+                        setSession(viewedSession!.session.session)
+                        setYear(viewedSession!.session.year)
+                      }}
+                      className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                    >
+                      Lanjutkan Edit Draf
+                    </button>
+                  </>
+                )}
                 <button
                   onClick={() => {
                     setViewMode('record_tests')
@@ -1032,10 +1087,20 @@ export default function FitnessTestingPage() {
                 ) : (
                   <div className="divide-y divide-gray-100">
                     {sessionsWithResults.map(sessionResult => (
-                      <div key={sessionResult.session.id} className="p-4 hover:bg-gray-50 transition">
+                      <div key={sessionResult.session.id} className="p-4 hover:bg-gray-50 transition cursor-pointer" onClick={() => {
+                        setViewedSession(sessionResult)
+                        setIsDraft(sessionResult.session.is_draft)
+                        setEditingSessionId(sessionResult.session.id)
+                        setViewMode('view_results')
+                      }}>
                         <div className="flex items-center justify-between mb-3">
                           <div>
-                            <p className="font-semibold text-[#111]">{sessionResult.session.session} {sessionResult.session.year}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="font-semibold text-[#111]">{sessionResult.session.session} {sessionResult.session.year}</p>
+                              {sessionResult.session.is_draft && (
+                                <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-semibold">DRAF</span>
+                              )}
+                            </div>
                             <p className="text-xs text-[#888]">{new Date(sessionResult.session.recorded_date).toLocaleDateString('ms-MY')}</p>
                           </div>
                           <span className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded">
