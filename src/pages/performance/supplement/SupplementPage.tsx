@@ -355,6 +355,7 @@ export default function SupplementPage() {
   }
 
   const pendingCount = requests.filter(r => r.status === 'pending').length
+  const getCountByStatusKey = (key: string) => requests.filter(r => getStatusKey(r) === key).length
   const filteredReqs = requests.filter(r => !filterStatus || getStatusKey(r) === filterStatus)
 
   return (
@@ -447,16 +448,19 @@ export default function SupplementPage() {
         // ── Requests Tab ──────────────────────────────────────
         <div className="space-y-3">
           <div className="flex gap-2 flex-wrap">
-            {(['', 'pending', 'sokongan', 'kelulusan', 'semakan_tolak', 'approved', 'partial'] as const).map(s => (
-              <button
-                key={s}
-                onClick={() => setFilterStatus(s)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${filterStatus === s ? 'bg-[#F56A00] text-white border-[#F56A00]' : 'bg-white text-[#888] border-gray-200 hover:border-[#F56A00] hover:text-[#F56A00]'}`}
-              >
-                {s === '' ? 'Semua' : statusLabel[s]}
-                {s === 'pending' && pendingCount > 0 && ` (${pendingCount})`}
-              </button>
-            ))}
+            {(['', 'pending', 'sokongan', 'kelulusan', 'semakan_tolak', 'approved', 'partial'] as const).map(s => {
+              const count = s === '' ? requests.length : getCountByStatusKey(s)
+              return (
+                <button
+                  key={s}
+                  onClick={() => setFilterStatus(s)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${filterStatus === s ? 'bg-[#F56A00] text-white border-[#F56A00]' : 'bg-white text-[#888] border-gray-200 hover:border-[#F56A00] hover:text-[#F56A00]'}`}
+                >
+                  {s === '' ? 'Semua' : statusLabel[s]}
+                  {count > 0 && ` (${count})`}
+                </button>
+              )
+            })}
           </div>
 
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
