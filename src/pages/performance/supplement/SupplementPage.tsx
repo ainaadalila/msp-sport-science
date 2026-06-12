@@ -80,7 +80,7 @@ export default function SupplementPage() {
   // Inventory modal
   const [invModal, setInvModal] = useState(false)
   const [editingSup, setEditingSup] = useState<Supplement | null>(null)
-  const [supForm, setSupForm] = useState({ name: '', stock: 0, unit: 'unit', expiry_date: '' })
+  const [supForm, setSupForm] = useState({ name: '', stock: 0, unit: 'UNIT', expiry_date: '' })
   const [supSaving, setSupSaving] = useState(false)
   const [supError, setSupError] = useState<string | null>(null)
   const [confirmDelSup, setConfirmDelSup] = useState<Supplement | null>(null)
@@ -88,8 +88,9 @@ export default function SupplementPage() {
 
   // Request modal
   const [reqModal, setReqModal] = useState(false)
-  const [reqForm, setReqForm] = useState<{ sport: string; lines: { supplement_id: string; quantity: number }[] }>({
+  const [reqForm, setReqForm] = useState<{ sport: string; pemohon_name: string; lines: { supplement_id: string; quantity: number }[] }>({
     sport: '',
+    pemohon_name: '',
     lines: [{ supplement_id: '', quantity: 1 }],
   })
   const [reqSaving, setReqSaving] = useState(false)
@@ -173,7 +174,7 @@ export default function SupplementPage() {
     const payload = {
       name: supForm.name.trim(),
       stock: supForm.stock,
-      unit: supForm.unit || 'unit',
+      unit: supForm.unit || 'UNIT',
       expiry_date: supForm.expiry_date || null
     }
     if (editingSup) {
@@ -218,7 +219,7 @@ export default function SupplementPage() {
   // ── Requests ──────────────────────────────────────────────
 
   function openReqModal() {
-    setReqForm({ sport: '', lines: [{ supplement_id: '', quantity: 1 }] })
+    setReqForm({ sport: '', pemohon_name: '', lines: [{ supplement_id: '', quantity: 1 }] })
     setReqError(null)
     setReqModal(true)
   }
@@ -240,6 +241,7 @@ export default function SupplementPage() {
 
   async function handleSubmitRequest() {
     if (!reqForm.sport) { setReqError('Sukan wajib dipilih.'); return }
+    if (!reqForm.pemohon_name.trim()) { setReqError('Nama pemohon wajib diisi.'); return }
     const validLines = reqForm.lines.filter(l => l.supplement_id && l.quantity >= 1)
     if (validLines.length === 0) { setReqError('Sekurang-kurangnya 1 suplemen perlu dipilih.'); return }
     setReqSaving(true)
@@ -249,6 +251,7 @@ export default function SupplementPage() {
       supplement_id: l.supplement_id,
       quantity: l.quantity,
       requested_by: profile?.id,
+      pemohon_name: reqForm.pemohon_name.trim(),
     }))
     const { data, error } = await supabase.from('supplement_requests').insert(rows).select('id')
     if (error) { setReqError(error.message); setReqSaving(false); return }
@@ -419,10 +422,10 @@ export default function SupplementPage() {
                   <tr key={s.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
                     <td className="px-5 py-3 font-medium text-[#111]">{s.name}</td>
                     <td className="px-5 py-3">
-                      <span className={`font-bold font-mono ${s.stock <= 5 ? 'text-[#D44040]' : s.stock <= 20 ? 'text-[#F56A00]' : 'text-[#3A9E6A]'}`}>
+                      <span className={`font-bold font-mono ${s.stock < 10 ? 'text-[#D44040]' : s.stock < 20 ? 'text-[#F56A00]' : 'text-[#3A9E6A]'}`}>
                         {s.stock}
                       </span>
-                      {s.stock <= 5 && <span className="ml-2 text-[10px] text-[#D44040] font-semibold">Stok rendah</span>}
+                      {s.stock < 10 && <span className="ml-2 text-[10px] text-[#D44040] font-semibold">Stok rendah</span>}
                     </td>
                     <td className="px-5 py-3 text-[#888]">{s.unit}</td>
                     <td className={`px-5 py-3 ${isExpiringSoon ? 'text-[#D44040] font-semibold' : 'text-[#888]'}`}>
@@ -599,8 +602,19 @@ export default function SupplementPage() {
                 <Field label="Stok">
                   <input type="number" value={supForm.stock} onChange={e => setSupForm(f => ({ ...f, stock: +e.target.value }))} className={inputCls} min={0} />
                 </Field>
-                <Field label="Unit">
-                  <input value={supForm.unit} onChange={e => setSupForm(f => ({ ...f, unit: e.target.value.toUpperCase() }))} className={inputCls} placeholder="cth. BEG, TABLET" />
+                <Field label="Unit" required>
+                  <select value={supForm.unit} onChange={e => setSupForm(f => ({ ...f, unit: e.target.value }))} className={inputCls}>
+                    <option value="">— Pilih unit —</option>
+                    <option value="UNIT">Unit</option>
+                    <option value="TABLET">Tablet</option>
+                    <option value="CAPSULE">Capsule</option>
+                    <option value="SACHET">Sachet</option>
+                    <option value="BOX">Box</option>
+                    <option value="KG">Kilogram</option>
+                    <option value="GRAM">Gram</option>
+                    <option value="ML">Milliliter</option>
+                    <option value="L">Liter</option>
+                  </select>
                 </Field>
               </div>
               <Field label="Tarikh Luput (Pilihan)">
@@ -634,6 +648,10 @@ export default function SupplementPage() {
                     <option key={s} value={s}>{s}</option>
                   ))}
                 </select>
+              </Field>
+
+              <Field label="Nama Pemohon" required>
+                <input value={reqForm.pemohon_name} onChange={e => setReqForm(f => ({ ...f, pemohon_name: e.target.value.toUpperCase() }))} className={inputCls} placeholder="Masukkan nama pemohon" />
               </Field>
 
               <div>

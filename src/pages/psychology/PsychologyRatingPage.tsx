@@ -437,7 +437,7 @@ export default function PsychologyRatingPage() {
                 type="text"
                 placeholder="Cari nama atlet..."
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => setSearch(e.target.value.toUpperCase())}
                 className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#F56A00]"
               />
               <select
@@ -500,7 +500,7 @@ export default function PsychologyRatingPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-100">
-                    {['Atlet', 'Sukan', 'Fasa', 'Kebimbangan Kognitif', 'Kebimbangan Somatis', 'Kepercayaan Diri', 'Tarikh'].map(h => (
+                    {['Atlet', 'Sukan', 'Fasa', 'Kebimbangan Kognitif', 'Kebimbangan Somatik', 'Kepercayaan Diri', 'Tarikh'].map(h => (
                       <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-wider text-[#888] px-4 py-3">{h}</th>
                     ))}
                   </tr>
@@ -577,23 +577,45 @@ export default function PsychologyRatingPage() {
               ) : (
                 <>
                   {/* Chart */}
-                  {comparisonData.length > 0 && (
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <h3 className="text-sm font-semibold text-[#111] mb-4">Perbandingan Skor Merentasi Fasa</h3>
-                      <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={comparisonData}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="phase" />
-                          <YAxis />
-                          <Tooltip />
-                          <Legend />
-                          <Bar dataKey="cognitive_anxiety" fill="#FF6B6B" name="Kebimbangan Kognitif" />
-                          <Bar dataKey="somatic_anxiety" fill="#FFA94D" name="Kebimbangan Somatis" />
-                          <Bar dataKey="confidence" fill="#51CF66" name="Kepercayaan Diri" />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  )}
+                  {comparisonData.length > 0 && (() => {
+                    const chartData = [
+                      {
+                        metric: 'Kebimbangan Kognitif',
+                        Persediaan: comparisonData.find(d => d.phase === 'Persediaan')?.cognitive_anxiety ?? 0,
+                        Pertandingan: comparisonData.find(d => d.phase === 'Pertandingan')?.cognitive_anxiety ?? 0,
+                        Pemulihan: comparisonData.find(d => d.phase === 'Pemulihan')?.cognitive_anxiety ?? 0,
+                      },
+                      {
+                        metric: 'Kebimbangan Somatik',
+                        Persediaan: comparisonData.find(d => d.phase === 'Persediaan')?.somatic_anxiety ?? 0,
+                        Pertandingan: comparisonData.find(d => d.phase === 'Pertandingan')?.somatic_anxiety ?? 0,
+                        Pemulihan: comparisonData.find(d => d.phase === 'Pemulihan')?.somatic_anxiety ?? 0,
+                      },
+                      {
+                        metric: 'Kepercayaan Diri',
+                        Persediaan: comparisonData.find(d => d.phase === 'Persediaan')?.confidence ?? 0,
+                        Pertandingan: comparisonData.find(d => d.phase === 'Pertandingan')?.confidence ?? 0,
+                        Pemulihan: comparisonData.find(d => d.phase === 'Pemulihan')?.confidence ?? 0,
+                      },
+                    ]
+                    return (
+                      <div className="bg-gray-50 p-4 rounded-lg">
+                        <h3 className="text-sm font-semibold text-[#111] mb-4">Perbandingan Skor Merentasi Fasa</h3>
+                        <ResponsiveContainer width="100%" height={300}>
+                          <BarChart data={chartData}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="metric" />
+                            <YAxis />
+                            <Tooltip />
+                            <Legend />
+                            <Bar dataKey="Persediaan" stackId="a" fill="#FF6B6B" name="Persediaan" />
+                            <Bar dataKey="Pertandingan" stackId="a" fill="#FFA94D" name="Pertandingan" />
+                            <Bar dataKey="Pemulihan" stackId="a" fill="#51CF66" name="Pemulihan" />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )
+                  })()}
 
                   {/* Comparison Table */}
                   <div>
@@ -603,7 +625,7 @@ export default function PsychologyRatingPage() {
                         <tr className="bg-gray-50">
                           <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase text-[#888]">Fasa</th>
                           <th className="px-4 py-3 text-center text-[10px] font-semibold uppercase text-[#888]">Kebimbangan Kognitif</th>
-                          <th className="px-4 py-3 text-center text-[10px] font-semibold uppercase text-[#888]">Kebimbangan Somatis</th>
+                          <th className="px-4 py-3 text-center text-[10px] font-semibold uppercase text-[#888]">Kebimbangan Somatik</th>
                           <th className="px-4 py-3 text-center text-[10px] font-semibold uppercase text-[#888]">Kepercayaan Diri</th>
                         </tr>
                       </thead>
@@ -634,7 +656,7 @@ export default function PsychologyRatingPage() {
                     <h3 className="text-sm font-semibold text-blue-900 mb-2">📊 Panduan Pembacaan</h3>
                     <ul className="text-sm text-blue-800 space-y-1">
                       <li>• <strong>Kebimbangan Kognitif:</strong> Kerisauan fikiran tentang prestasi (skor tinggi = lebih risau)</li>
-                      <li>• <strong>Kebimbangan Somatis:</strong> Kegelisahan fizikal seperti jantung berdegup (skor tinggi = lebih gelisah)</li>
+                      <li>• <strong>Kebimbangan Somatik:</strong> Kegelisahan fizikal seperti jantung berdegup (skor tinggi = lebih gelisah)</li>
                       <li>• <strong>Kepercayaan Diri:</strong> Keyakinan diri dan kemampuan (skor tinggi = lebih yakin)</li>
                     </ul>
                   </div>

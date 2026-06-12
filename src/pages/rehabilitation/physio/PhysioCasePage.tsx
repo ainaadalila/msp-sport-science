@@ -522,7 +522,7 @@ export default function PhysioCasePage() {
                 <input
                   type="text"
                   value={createForm.injury_type}
-                  onChange={e => setCreateForm(f => ({ ...f, injury_type: e.target.value }))}
+                  onChange={e => setCreateForm(f => ({ ...f, injury_type: e.target.value.toUpperCase() }))}
                   className="w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2.5 text-sm text-[#111] outline-none transition focus:border-[#F56A00] focus:bg-white"
                   placeholder="cth. Strain Hamstring, Sprain Lutut, Terseliuh Bahu"
                 />
@@ -719,7 +719,7 @@ export default function PhysioCasePage() {
                   <input
                     type="text"
                     value={closeForm.referred_to}
-                    onChange={e => setCloseForm(f => ({ ...f, referred_to: e.target.value }))}
+                    onChange={e => setCloseForm(f => ({ ...f, referred_to: e.target.value.toUpperCase() }))}
                     className="w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2.5 text-sm text-[#111] outline-none transition focus:border-[#F56A00] focus:bg-white"
                     placeholder="cth. Hospital Kuala Lumpur"
                   />

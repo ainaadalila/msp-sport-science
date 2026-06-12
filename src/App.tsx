@@ -7,6 +7,7 @@ import ResetPasswordPage from './pages/auth/ResetPasswordPage'
 import Layout from './components/Layout'
 
 import DashboardPage from './pages/dashboard/DashboardPage'
+import ProfilePage from './pages/ProfilePage'
 import AthletesPage from './pages/athletes/AthletesPage'
 import AthleteProfilePage from './pages/athletes/AthleteProfilePage'
 import StrengthPage from './pages/fitness/strength/StrengthPage'
@@ -37,6 +38,7 @@ export default function App() {
             }
           >
             <Route index element={<DashboardPage />} />
+            <Route path="profile" element={<ProfilePage />} />
             <Route path="athletes" element={<ProtectedRoute module="athletes"><AthletesPage /></ProtectedRoute>} />
             <Route path="athletes/:id" element={<ProtectedRoute module="athletes"><AthleteProfilePage /></ProtectedRoute>} />
             <Route path="fitness/strength" element={<ProtectedRoute module="strength"><StrengthPage /></ProtectedRoute>} />

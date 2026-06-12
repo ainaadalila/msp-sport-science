@@ -332,7 +332,7 @@ export default function AthletesPage() {
           type="text"
           placeholder="Cari nama, IC, sukan..."
           value={search}
-          onChange={e => setSearch(e.target.value)}
+          onChange={e => setSearch(e.target.value.toUpperCase())}
           className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-[#111] placeholder-[#bbb] outline-none focus:border-[#F56A00] flex-1 min-w-0 md:w-64"
         />
         <button

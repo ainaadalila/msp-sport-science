@@ -742,7 +742,7 @@ export default function InBodyPage() {
                   </Field>
                 </div>
                 <div className="col-span-2">
-                  <Field label="Tarikh Rekod" required>
+                  <Field label="Tarikh" required>
                     <input type="date" value={form.recorded_date} onChange={e => setField('recorded_date', e.target.value)} className={inputCls} />
                   </Field>
                 </div>

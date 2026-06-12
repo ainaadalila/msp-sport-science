@@ -391,7 +391,7 @@ export default function FitnessTestingPage() {
                 <input
                   type="text"
                   value={filterName}
-                  onChange={e => setFilterName(e.target.value)}
+                  onChange={e => setFilterName(e.target.value.toUpperCase())}
                   placeholder="Ketik nama atlet..."
                   className="w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2 text-sm"
                 />

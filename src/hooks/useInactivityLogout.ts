@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 
-const INACTIVITY_TIMEOUT = 30 * 60 * 1000 // 30 minutes in milliseconds
+const INACTIVITY_TIMEOUT = 10 * 60 * 1000 // 10 minutes in milliseconds
 
 export function useInactivityLogout() {
   const { signOut, user } = useAuth()
