@@ -169,7 +169,6 @@ export default function InBodyPage() {
   const [search, setSearch] = useState('')
   const [filterSport, setFilterSport] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
-  const [filterElite, setFilterElite] = useState(false)
   const [expandedAthleteId, setExpandedAthleteId] = useState<string | null>(null)
 
   const [modalOpen, setModalOpen] = useState(false)
@@ -216,7 +215,7 @@ export default function InBodyPage() {
   useEffect(() => {
     setCurrentPage(1)
     setExpandedAthleteId(null)
-  }, [search, filterSport, filterStatus, filterElite])
+  }, [search, filterSport, filterStatus])
 
   async function fetchAll() {
     setLoading(true)
@@ -412,10 +411,9 @@ export default function InBodyPage() {
       const matchSearch = !q || a.name.toLowerCase().includes(q) || (a.ic_number || '').toLowerCase().includes(q) || sportName.includes(q)
       const matchStatus = !filterStatus || a.status === filterStatus
       const matchSport = !filterSport || a.sport_id === filterSport
-      const matchElite = !filterElite || a.is_elite
-      return matchSearch && matchStatus && matchSport && matchElite
+      return matchSearch && matchStatus && matchSport
     })
-  }, [athletes, search, filterSport, filterStatus, filterElite])
+  }, [athletes, search, filterSport, filterStatus])
 
   const totalPages = Math.ceil(filteredAthletes.length / ATHLETES_PER_PAGE)
   const paginatedAthletes = filteredAthletes.slice(
@@ -482,15 +480,9 @@ export default function InBodyPage() {
               <option value="injured">Kecederaan</option>
               <option value="not_active">Tidak Aktif</option>
             </select>
-            <button
-              onClick={() => setFilterElite(v => !v)}
-              className={`px-3 py-2 text-xs font-semibold rounded-lg border transition ${filterElite ? 'bg-yellow-400 border-yellow-400 text-white' : 'bg-white border-gray-200 text-[#888] hover:border-[#F56A00]'}`}
-            >
-              Elit
-            </button>
-            {(search || filterSport || filterStatus || filterElite) && (
+            {(search || filterSport || filterStatus) && (
               <button
-                onClick={() => { setSearch(''); setFilterSport(''); setFilterStatus(''); setFilterElite(false) }}
+                onClick={() => { setSearch(''); setFilterSport(''); setFilterStatus('') }}
                 className="px-3 py-2 text-xs text-[#888] hover:text-[#F56A00] border border-gray-200 rounded-lg transition"
               >
                 Kosongkan Penapis
@@ -536,14 +528,7 @@ export default function InBodyPage() {
                                 onClick={() => setExpandedAthleteId(isExpanded ? null : a.id)}
                                 className={`border-b border-gray-50 cursor-pointer ${isExpanded ? 'bg-orange-50' : 'hover:bg-gray-50'}`}
                               >
-                                <td className="px-4 py-3 font-medium text-[#111]">
-                                  <div className="flex items-center gap-2">
-                                    <span>{a.name}</span>
-                                    {a.is_elite && (
-                                      <span className="text-[10px] font-bold px-1.5 py-0.5 bg-yellow-100 text-yellow-700 rounded">ELIT</span>
-                                    )}
-                                  </div>
-                                </td>
+                                <td className="px-4 py-3 font-medium text-[#111]">{a.name}</td>
                                 <td className="px-4 py-3 text-[#888]">{a.sport?.name ?? '—'}</td>
                                 <td className="px-4 py-3">
                                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusStyle[a.status] ?? statusStyle.not_active}`}>
