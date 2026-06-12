@@ -411,7 +411,7 @@ export default function PsychologyRatingPage() {
     return map
   }, [ratings])
 
-  // Filter athletes using AthletesPage-style filters
+  // Filter athletes using AthletesPage-style filters + phase filter
   const filteredAthletes = useMemo(() => {
     return athletes.filter(a => {
       const q = search.toLowerCase()
@@ -419,9 +419,11 @@ export default function PsychologyRatingPage() {
       const matchSearch = !q || a.name.toLowerCase().includes(q) || (a.ic_number || '').toLowerCase().includes(q) || sportName.includes(q)
       const matchStatus = !filterStatus || a.status === filterStatus
       const matchSport = !filterSport || a.sport_id === filterSport
-      return matchSearch && matchStatus && matchSport
+      // When a specific phase is selected, only show athletes who have that phase assessed
+      const matchPhase = filterPhase === 'all' || (ratingsByAthlete.get(a.id) ?? []).some(r => r.phase === filterPhase)
+      return matchSearch && matchStatus && matchSport && matchPhase
     })
-  }, [athletes, search, filterSport, filterStatus])
+  }, [athletes, search, filterSport, filterStatus, filterPhase, ratingsByAthlete])
 
   // Stats based on filtered athletes' ratings + phase filter
   const relevantRatings = useMemo(() => {
