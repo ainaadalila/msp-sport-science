@@ -586,7 +586,7 @@ export default function InBodyPage() {
                                         <table className="w-full text-xs">
                                           <thead>
                                             <tr className="border-b border-orange-100">
-                                              {['Tarikh', 'Berat (kg)', 'BMI', 'Lemak (%)', 'SMM (kg)', 'Skor InBody', ''].map(h => (
+                                              {['Tarikh', 'Berat (kg)', 'BMI', 'Lemak (%)', 'SMM (kg)', 'Skor InBody', 'Pelan Diet', ''].map(h => (
                                                 <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-wider text-[#888] px-3 py-2">{h}</th>
                                               ))}
                                             </tr>
@@ -603,6 +603,9 @@ export default function InBodyPage() {
                                                   <td className="px-3 py-2 text-[#444]">{n(r.smm, ' kg')}</td>
                                                   <td className="px-3 py-2">
                                                     <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ${rb.style}`}>{rb.label}</span>
+                                                  </td>
+                                                  <td className="px-3 py-2 text-center">
+                                                    {r.diet_plan_url ? <span className="text-green-600 font-bold">✓</span> : <span className="text-[#888]">—</span>}
                                                   </td>
                                                   <td className="px-3 py-2">
                                                     <div className="flex gap-3 justify-end">
