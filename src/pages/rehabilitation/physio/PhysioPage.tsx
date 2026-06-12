@@ -77,15 +77,6 @@ const attendanceStyle: Record<string, string> = {
   no_show: 'bg-red-50 text-[#D44040]',
 }
 
-const athleteStatusLabel: Record<string, string> = {
-  active: 'Aktif', rest: 'Rehat', injured: 'Kecederaan', not_active: 'Tidak Aktif',
-}
-const athleteStatusStyle: Record<string, string> = {
-  active: 'bg-green-50 text-[#3A9E6A] border border-green-200',
-  rest: 'bg-blue-50 text-[#3A7EC8] border border-blue-200',
-  injured: 'bg-red-50 text-[#D44040] border border-red-200',
-  not_active: 'bg-gray-100 text-[#888] border border-gray-200',
-}
 
 function fmtDate(d: string) {
   return new Date(d + 'T00:00:00').toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -127,7 +118,6 @@ export default function PhysioPage() {
   // Athlete-first filters
   const [search, setSearch] = useState('')
   const [filterSport, setFilterSport] = useState('')
-  const [filterStatus, setFilterStatus] = useState('')
   const [expandedAthleteId, setExpandedAthleteId] = useState<string | null>(null)
 
   const [bookingModalOpen, setBookingModalOpen] = useState(false)
@@ -162,7 +152,7 @@ export default function PhysioPage() {
   useEffect(() => {
     setCurrentPage(1)
     setExpandedAthleteId(null)
-  }, [search, filterSport, filterStatus])
+  }, [search, filterSport])
 
   async function fetchAll() {
     setLoading(true)
@@ -344,11 +334,10 @@ export default function PhysioPage() {
       const q = search.toLowerCase()
       const sportName = a.sport?.name?.toLowerCase() || ''
       const matchSearch = !q || a.name.toLowerCase().includes(q) || (a.ic_number || '').toLowerCase().includes(q) || sportName.includes(q)
-      const matchStatus = !filterStatus || a.status === filterStatus
       const matchSport = !filterSport || a.sport_id === filterSport
-      return matchSearch && matchStatus && matchSport
+      return matchSearch && matchSport
     })
-  }, [athletes, search, filterSport, filterStatus])
+  }, [athletes, search, filterSport])
 
   const totalPages = Math.ceil(filteredAthletes.length / ATHLETES_PER_PAGE)
   const paginatedAthletes = filteredAthletes.slice(
@@ -420,16 +409,9 @@ export default function PhysioPage() {
               <option value="">Semua Sukan</option>
               {sports.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
-            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className={filterCls}>
-              <option value="">Semua Status</option>
-              <option value="active">Aktif</option>
-              <option value="rest">Rehat</option>
-              <option value="injured">Kecederaan</option>
-              <option value="not_active">Tidak Aktif</option>
-            </select>
-            {(search || filterSport || filterStatus) && (
+            {(search || filterSport) && (
               <button
-                onClick={() => { setSearch(''); setFilterSport(''); setFilterStatus('') }}
+                onClick={() => { setSearch(''); setFilterSport('') }}
                 className="px-3 py-2 text-xs text-[#888] hover:text-[#F56A00] border border-gray-200 rounded-lg transition"
               >
                 Kosongkan Penapis
@@ -449,7 +431,7 @@ export default function PhysioPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-100">
-                      {['Atlet', 'Sukan', 'Status', 'Kes Aktif', 'Sesi Terkini', 'Jumlah Sesi', ''].map(h => (
+                      {['Atlet', 'Sukan', 'Kes Aktif', 'Sesi Terkini', 'Jumlah Sesi', ''].map(h => (
                         <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-wider text-[#888] px-4 py-3">{h}</th>
                       ))}
                     </tr>
@@ -472,11 +454,6 @@ export default function PhysioPage() {
                             <td className="px-4 py-3 font-medium text-[#111]">{a.name}</td>
                             <td className="px-4 py-3 text-[#888]">{a.sport?.name ?? '—'}</td>
                             <td className="px-4 py-3">
-                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${athleteStatusStyle[a.status] ?? athleteStatusStyle.not_active}`}>
-                                {athleteStatusLabel[a.status] ?? a.status}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3">
                               {hasActiveCase
                                 ? <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-50 text-[#D44040] border border-red-200">Aktif</span>
                                 : <span className="text-[#888] text-xs">—</span>}
@@ -494,7 +471,7 @@ export default function PhysioPage() {
 
                           {isExpanded && (
                             <tr key={`${a.id}-detail`}>
-                              <td colSpan={7} className="px-4 pb-4 pt-0 bg-orange-50/40">
+                              <td colSpan={6} className="px-4 pb-4 pt-0 bg-orange-50/40">
                                 <div className="border border-orange-100 rounded-xl overflow-hidden">
                                   <div className="flex items-center justify-between px-4 py-2 bg-orange-50 border-b border-orange-100">
                                     <span className="text-xs font-semibold text-[#F56A00]">
