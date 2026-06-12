@@ -204,13 +204,6 @@ export default function StrengthPage() {
   function openAddAttendance() {
     setEditingRecord(null); setAttendanceForm(emptyAttendanceForm); setModalFilterSport(''); setError(null); setAttendanceModalOpen(true)
   }
-  function openAddAttendanceForAthlete(a: Athlete) {
-    setEditingRecord(null)
-    setAttendanceForm({ ...emptyAttendanceForm, athlete_id: a.id })
-    setModalFilterSport(a.sport?.name ?? '')
-    setError(null)
-    setAttendanceModalOpen(true)
-  }
   function openEditAttendance(rec: SCRecord) {
     setEditingRecord(rec)
     setAttendanceForm({ athlete_id: rec.athlete_id, session_date: rec.session_date, attendance: rec.attendance, training_program: rec.training_program ?? '', notes: rec.notes ?? '' })
@@ -681,15 +674,7 @@ export default function StrengthPage() {
                             ) : <span className="text-[#bbb]">—</span>}
                           </td>
                           <td className="px-4 py-3">
-                            <div className="flex items-center justify-end gap-2">
-                              {can('strength', 'create') && (
-                                <button
-                                  onClick={e => { e.stopPropagation(); openAddAttendanceForAthlete(a) }}
-                                  className="text-xs text-[#F56A00] font-semibold border border-[#F56A00] hover:bg-orange-50 px-2 py-1 rounded-md transition"
-                                >
-                                  + Rekod
-                                </button>
-                              )}
+                            <div className="flex items-center justify-end">
                               <svg className={`w-4 h-4 text-[#888] transition-transform ${isExpanded ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                                 <polyline points="6 9 12 15 18 9" />
                               </svg>
