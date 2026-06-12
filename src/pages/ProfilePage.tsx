@@ -9,10 +9,16 @@ interface ProfileData {
   unit: string | null
 }
 
+interface ProfileForm {
+  full_name: string
+  ic_number: string
+  unit: string
+}
+
 export default function ProfilePage() {
   const { profile, user } = useAuth()
   const [data, setData] = useState<ProfileData>({ full_name: '', ic_number: null, unit: null })
-  const [form, setForm] = useState<ProfileData>({ full_name: '', ic_number: '', unit: '' })
+  const [form, setForm] = useState<ProfileForm>({ full_name: '', ic_number: '', unit: '' })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -57,7 +63,11 @@ export default function ProfilePage() {
 
   function handleCancel() {
     setEditing(false)
-    setForm(data)
+    setForm({
+      full_name: data.full_name,
+      ic_number: data.ic_number || '',
+      unit: data.unit || '',
+    })
     setError(null)
   }
 
@@ -87,7 +97,11 @@ export default function ProfilePage() {
     }
 
     await logAction(user!.id, 'update_own_profile', 'profiles', user!.id)
-    setData(form)
+    setData({
+      full_name: form.full_name,
+      ic_number: form.ic_number || null,
+      unit: form.unit || null,
+    })
     setSuccess(true)
     setEditing(false)
     setSaving(false)
