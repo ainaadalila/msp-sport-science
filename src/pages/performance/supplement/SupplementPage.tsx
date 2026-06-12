@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
 import { usePermissions } from '../../../hooks/usePermissions'
+import { useSports } from '../../../hooks/useSports'
 import { logAction } from '../../../lib/audit'
 
 interface Supplement {
@@ -127,6 +128,9 @@ export default function SupplementPage() {
   const [processingId, setProcessingId] = useState<string | null>(null)
 
   // Filters & Sorting
+  const { sports } = useSports()
+  const [search, setSearch] = useState('')
+  const [filterSport, setFilterSport] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [sortBy, setSortBy] = useState<'date_desc' | 'date_asc'>('date_desc')
 
@@ -356,7 +360,15 @@ export default function SupplementPage() {
 
   const pendingCount = requests.filter(r => r.status === 'pending').length
   const getCountByStatusKey = (key: string) => requests.filter(r => getStatusKey(r) === key).length
-  const filteredReqs = requests.filter(r => !filterStatus || getStatusKey(r) === filterStatus)
+  const filteredReqs = requests.filter(r => {
+    if (filterStatus && getStatusKey(r) !== filterStatus) return false
+    if (filterSport && r.sport !== filterSport) return false
+    if (search) {
+      const q = search.toLowerCase()
+      if (!r.sport?.toLowerCase().includes(q) && !r.supplement?.name?.toLowerCase().includes(q)) return false
+    }
+    return true
+  })
 
   return (
     <div className="space-y-4">
@@ -447,6 +459,23 @@ export default function SupplementPage() {
 
         // ── Requests Tab ──────────────────────────────────────
         <div className="space-y-3">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <input
+              type="text"
+              placeholder="Cari sukan atau suplemen..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="flex-1 bg-white border border-gray-200 rounded-lg px-4 py-2 text-sm text-[#111] outline-none transition focus:border-[#F56A00]"
+            />
+            <select
+              value={filterSport}
+              onChange={e => setFilterSport(e.target.value)}
+              className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-[#111] outline-none transition focus:border-[#F56A00] min-w-[180px]"
+            >
+              <option value="">Semua Sukan</option>
+              {sports.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+            </select>
+          </div>
           <div className="flex gap-2 flex-wrap">
             {(['', 'pending', 'sokongan', 'kelulusan', 'semakan_tolak', 'approved', 'partial'] as const).map(s => {
               const count = s === '' ? requests.length : getCountByStatusKey(s)
