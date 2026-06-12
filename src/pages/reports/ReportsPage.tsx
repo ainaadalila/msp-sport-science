@@ -827,7 +827,7 @@ export default function ReportsPage() {
                         type="text"
                         placeholder="Cari di dalam jadual..."
                         value={previewSearch}
-                        onChange={e => setPreviewSearch(e.target.value)}
+                        onChange={e => setPreviewSearch(e.target.value.toUpperCase())}
                         className="w-56 bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2 text-sm text-[#111] outline-none focus:border-[#F56A00] focus:bg-white placeholder-[#bbb]"
                       />
                       <span className="text-[11px] text-[#888]">

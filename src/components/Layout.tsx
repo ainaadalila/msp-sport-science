@@ -9,6 +9,7 @@ import { validatePassword, isPasswordValid } from '../lib/passwordValidator'
 
 const routeMeta: Record<string, { title: string; parent?: string }> = {
   '/':                            { title: 'Dashboard' },
+  '/profile':                     { title: 'Edit Profil', parent: 'Dashboard' },
   '/athletes':                    { title: 'Profil Atlet', parent: 'Dashboard' },
   '/fitness/strength':            { title: 'Latihan Suaian Fizikal', parent: 'Sains Sukan' },
   '/fitness/testing':             { title: 'Ujian Kecergasan', parent: 'Sains Sukan' },
@@ -93,6 +94,9 @@ export default function Layout() {
     if (error) {
       setCpError(error.message)
       return
+    }
+    if (profile) {
+      await logAction(profile.id, 'change_password')
     }
     setCpSuccess(true)
   }
@@ -201,6 +205,12 @@ export default function Layout() {
                     <p className="text-[12px] font-semibold text-[#111] truncate">{profile?.full_name}</p>
                     <p className="text-[11px] text-[#888] capitalize mt-0.5">{profile?.role}</p>
                   </div>
+                  <button
+                    onClick={() => { setUserOpen(false); navigate('/profile') }}
+                    className="w-full text-left px-4 py-3 text-[13px] text-[#888] hover:text-[#111] hover:bg-gray-50 transition border-b border-gray-50"
+                  >
+                    Profil Pengguna
+                  </button>
                   <button
                     onClick={() => { setUserOpen(false); setChangePasswordOpen(true) }}
                     className="w-full text-left px-4 py-3 text-[13px] text-[#888] hover:text-[#111] hover:bg-gray-50 transition border-b border-gray-50"
