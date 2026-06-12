@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
@@ -8,7 +8,7 @@ import { logAction } from '../../../lib/audit'
 import StructuredProgramBuilder from './StructuredProgramBuilder'
 import type { StructuredProgramData } from '../../../types'
 
-interface Athlete { id: string; name: string; sport_id: string; sport?: { name: string } }
+interface Athlete { id: string; name: string; ic_number?: string; sport_id: string; sport?: { name: string } }
 interface Coach { id: string; full_name: string }
 
 interface SCRecord {
@@ -126,9 +126,8 @@ export default function StrengthPage() {
   // Tab 1 — Kehadiran
   const [records, setRecords] = useState<SCRecord[]>([])
   const [filterSport, setFilterSport] = useState('')
-  const [filterDate, setFilterDate] = useState('')
-  const [filterAthlete, setFilterAthlete] = useState('')
-  const [filterAttendance, setFilterAttendance] = useState('')
+  const [search, setSearch] = useState('')
+  const [expandedAthleteId, setExpandedAthleteId] = useState<string | null>(null)
   const [attendanceModalOpen, setAttendanceModalOpen] = useState(false)
   const [editingRecord, setEditingRecord] = useState<SCRecord | null>(null)
   const [attendanceForm, setAttendanceForm] = useState<AttendanceForm>(emptyAttendanceForm)
@@ -173,7 +172,7 @@ export default function StrengthPage() {
 
   useEffect(() => {
     if (athleteIdParam) {
-      setFilterAthlete(athleteIdParam)
+      setExpandedAthleteId(athleteIdParam)
     }
     if (tabParam) {
       setActiveTab(tabParam)
@@ -184,7 +183,7 @@ export default function StrengthPage() {
     setLoading(true)
     const [recRes, athRes, progRes, schedRes, coachRes] = await Promise.all([
       supabase.from('strength_conditioning').select('id, athlete_id, session_date, attendance, training_program, notes'),
-      supabase.from('athletes').select('id, name, sport_id, sport:sport_id(name)').order('name'),
+      supabase.from('athletes').select('id, name, ic_number, sport_id, sport:sport_id(name)').order('name'),
       supabase.from('sc_programs').select('id, sport, month, year, program_type, coach_id, structured_data, start_date, end_date, coach:profiles(full_name)').order('year', { ascending: false }).order('month'),
       supabase.from('coach_schedules').select('id, coach_id, sport, schedule_name, valid_from, repeats, repeat_pattern, repeat_until, slots:coach_schedule_slots(id, schedule_id, slot_date, start_time, end_time)').order('valid_from', { ascending: false }),
       supabase.from('profiles').select('id, full_name').eq('role', 'coach').order('full_name'),
@@ -483,22 +482,24 @@ async function handleSaveSchedule() {
   }
 
   // --- DERIVED ---
-  const filteredAthletes = filterSport ? athletes.filter(a => a.sport?.name === filterSport) : athletes
-  const filteredAthleteIds = new Set(filteredAthletes.map(a => a.id))
+  const recordsByAthlete = useMemo(() => {
+    const m = new Map<string, SCRecord[]>()
+    athletes.forEach(a => m.set(a.id, []))
+    records.forEach(r => { const list = m.get(r.athlete_id); if (list) list.push(r) })
+    m.forEach(list => list.sort((a, b) => b.session_date.localeCompare(a.session_date)))
+    return m
+  }, [athletes, records])
 
-  const filteredAttendance = records.filter(r => {
-    const matchSport = !filterSport || filteredAthleteIds.has(r.athlete_id)
-    const matchDate = !filterDate || r.session_date === filterDate
-    const matchAthlete = !filterAthlete || r.athlete_id === filterAthlete
-    const matchAttendance = !filterAttendance || r.attendance === filterAttendance
-    return matchSport && matchDate && matchAthlete && matchAttendance
-  }).sort((a, b) => {
-    const dateCompare = new Date(b.session_date).getTime() - new Date(a.session_date).getTime()
-    if (dateCompare !== 0) return dateCompare
-    const athleteA = athletes.find(at => at.id === a.athlete_id)?.name ?? ''
-    const athleteB = athletes.find(at => at.id === b.athlete_id)?.name ?? ''
-    return athleteA.localeCompare(athleteB)
-  })
+  const filteredAthletes = useMemo(() => {
+    const q = search.toLowerCase()
+    return athletes.filter(a => {
+      if (filterSport && a.sport?.name !== filterSport) return false
+      if (search && !a.name.toLowerCase().includes(q) && !a.ic_number?.toLowerCase().includes(q) && !a.sport?.name?.toLowerCase().includes(q)) return false
+      return true
+    })
+  }, [athletes, filterSport, search])
+
+  const filteredAthleteIds = useMemo(() => new Set(filteredAthletes.map(a => a.id)), [filteredAthletes])
 
   const visiblePrograms = programs.filter(p =>
     (!filterProgramSport || p.sport === filterProgramSport) &&
@@ -506,11 +507,14 @@ async function handleSaveSchedule() {
   )
 
   const programYears = [...new Set(programs.map(p => p.year))].sort((a, b) => b - a)
-  const summary = {
-    present: records.filter(r => r.attendance === 'present').length,
-    absent: records.filter(r => r.attendance === 'absent').length,
-    mc: records.filter(r => r.attendance === 'mc').length,
-  }
+  const summary = useMemo(() => {
+    const vis = records.filter(r => filteredAthleteIds.has(r.athlete_id))
+    return {
+      present: vis.filter(r => r.attendance === 'present').length,
+      absent: vis.filter(r => r.attendance === 'absent').length,
+      mc: vis.filter(r => r.attendance === 'mc').length,
+    }
+  }, [records, filteredAthleteIds])
 
   return (
     <div className="space-y-4">
@@ -536,7 +540,7 @@ async function handleSaveSchedule() {
       {activeTab === 'kehadiran' && (
         <>
           <div className="flex items-center justify-between">
-            <p className="text-[12px] text-[#888]">{records.length} rekod sesi</p>
+            <p className="text-[12px] text-[#888]">{records.length} rekod sesi · {athletes.length} atlet</p>
             {can('strength', 'create') && (
               <button onClick={openAddAttendance} className="bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
                 + Rekod Sesi
@@ -557,68 +561,117 @@ async function handleSaveSchedule() {
             ))}
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            <select value={filterSport} onChange={e => { setFilterSport(e.target.value); setFilterAthlete('') }} className={filterCls}>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <input
+              type="text"
+              placeholder="Cari nama, No. IC atau sukan..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="flex-1 bg-white border border-gray-200 rounded-lg px-4 py-2 text-sm text-[#111] outline-none transition focus:border-[#F56A00]"
+            />
+            <select
+              value={filterSport}
+              onChange={e => setFilterSport(e.target.value)}
+              className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-[#444] outline-none focus:border-[#F56A00] min-w-[180px]"
+            >
               <option value="">Semua Sukan</option>
               {allSports.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
-            <select value={filterAthlete} onChange={e => setFilterAthlete(e.target.value)} className={filterCls}>
-              <option value="">Semua Atlet</option>
-              {filteredAthletes.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
-            <select value={filterAttendance} onChange={e => setFilterAttendance(e.target.value)} className={filterCls}>
-              <option value="">Semua Kehadiran</option>
-              <option value="present">Hadir</option>
-              <option value="absent">Tidak Hadir</option>
-              <option value="mc">MC</option>
-            </select>
-            <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)} className={filterCls} />
-            {(filterSport || filterDate || filterAthlete || filterAttendance) && (
-              <button onClick={() => { setFilterSport(''); setFilterDate(''); setFilterAthlete(''); setFilterAttendance('') }} className="px-3 py-2 text-xs text-[#888] hover:text-[#F56A00] border border-gray-200 rounded-lg transition">
-                Kosongkan Penapis
-              </button>
-            )}
           </div>
 
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             {loading ? (
               <div className="py-16 text-center text-[#888] text-sm">Memuatkan...</div>
-            ) : filteredAttendance.length === 0 ? (
-              <div className="py-16 text-center text-[#888] text-sm">
-                {records.length === 0 ? 'Tiada rekod sesi lagi.' : 'Tiada rekod sepadan penapis.'}
-              </div>
+            ) : filteredAthletes.length === 0 ? (
+              <div className="py-16 text-center text-[#888] text-sm">Tiada atlet sepadan penapis.</div>
             ) : (
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-100">
-                    {['Tarikh', 'Atlet', 'Sukan', 'Kehadiran', 'Program Latihan', 'Nota', ''].map(h => (
+                    {['Atlet', 'Sukan', 'Sesi Terkini', 'Jumlah Sesi', 'Hadir', ''].map(h => (
                       <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-wider text-[#888] px-4 py-3">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredAttendance.map(r => (
-                    <tr key={r.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
-                      <td className="px-4 py-3 font-mono text-[12px] text-[#444] whitespace-nowrap">
-                        {new Date(r.session_date).toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric' })}
-                      </td>
-                      <td className="px-4 py-3 font-medium text-[#111]">{athletes.find(a => a.id === r.athlete_id)?.name ?? '—'}</td>
-                      <td className="px-4 py-3 text-[#888]">{athletes.find(a => a.id === r.athlete_id)?.sport?.name ?? '—'}</td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full ${attendanceStyle[r.attendance]}`}>
-                          {attendanceLabel[r.attendance]}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-[#444] max-w-[160px] truncate">{r.training_program ?? '—'}</td>
-                      <td className="px-4 py-3 text-[#888] max-w-[160px] truncate">{r.notes ?? '—'}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex gap-3 justify-end">
-                          {can('strength', 'update') && <button onClick={() => openEditAttendance(r)} className="text-xs text-[#F56A00] hover:underline font-medium">Edit</button>}
-                          {can('strength', 'delete') && <button onClick={() => setConfirmDelete(r)} className="text-xs text-[#D44040] hover:underline font-medium">Padam</button>}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                  {filteredAthletes.map(a => {
+                    const athRecords = recordsByAthlete.get(a.id) ?? []
+                    const latestRecord = athRecords[0]
+                    const presentCount = athRecords.filter(r => r.attendance === 'present').length
+                    const isExpanded = expandedAthleteId === a.id
+                    return (
+                      <>
+                        <tr
+                          key={a.id}
+                          onClick={() => setExpandedAthleteId(id => id === a.id ? null : a.id)}
+                          className={`border-b border-gray-50 cursor-pointer transition hover:bg-gray-50 ${isExpanded ? 'bg-orange-50' : ''}`}
+                        >
+                          <td className="px-4 py-3 font-medium text-[#111]">{a.name}</td>
+                          <td className="px-4 py-3 text-[#888]">{a.sport?.name ?? '—'}</td>
+                          <td className="px-4 py-3 font-mono text-[12px] text-[#888]">
+                            {latestRecord ? new Date(latestRecord.session_date).toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="font-bold text-[#111] font-mono">{athRecords.length}</span>
+                            {athRecords.length > 0 && <span className="text-[#888] text-[11px] ml-1">sesi</span>}
+                          </td>
+                          <td className="px-4 py-3">
+                            {athRecords.length > 0 ? (
+                              <span className="text-[#3A9E6A] font-semibold">{presentCount}/{athRecords.length}</span>
+                            ) : <span className="text-[#bbb]">—</span>}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center justify-end">
+                              <svg className={`w-4 h-4 text-[#888] transition-transform ${isExpanded ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                <polyline points="6 9 12 15 18 9" />
+                              </svg>
+                            </div>
+                          </td>
+                        </tr>
+                        {isExpanded && (
+                          <tr key={`exp-${a.id}`} className="bg-orange-50">
+                            <td colSpan={6} className="px-0 py-0">
+                              {athRecords.length === 0 ? (
+                                <div className="px-8 py-6 text-center text-[#888] text-sm">Tiada rekod sesi untuk atlet ini.</div>
+                              ) : (
+                                <table className="w-full text-sm border-t-2 border-[#F56A00]/20">
+                                  <thead>
+                                    <tr className="bg-[rgba(245,106,0,0.06)]">
+                                      {['Tarikh', 'Kehadiran', 'Program Latihan', 'Nota', ''].map(h => (
+                                        <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-wider text-[#888] px-4 py-2">{h}</th>
+                                      ))}
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {athRecords.map(r => (
+                                      <tr key={r.id} className="border-t border-[rgba(245,106,0,0.1)] hover:bg-[rgba(245,106,0,0.04)]">
+                                        <td className="px-4 py-2.5 font-mono text-[12px] text-[#444] whitespace-nowrap">
+                                          {new Date(r.session_date).toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                        </td>
+                                        <td className="px-4 py-2.5">
+                                          <span className={`inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full ${attendanceStyle[r.attendance]}`}>
+                                            {attendanceLabel[r.attendance]}
+                                          </span>
+                                        </td>
+                                        <td className="px-4 py-2.5 text-[#444] max-w-[180px] truncate">{r.training_program ?? '—'}</td>
+                                        <td className="px-4 py-2.5 text-[#888] max-w-[180px] truncate">{r.notes ?? '—'}</td>
+                                        <td className="px-4 py-2.5">
+                                          <div className="flex gap-3 justify-end">
+                                            {can('strength', 'update') && <button onClick={e => { e.stopPropagation(); openEditAttendance(r) }} className="text-xs text-[#F56A00] hover:underline font-medium">Edit</button>}
+                                            {can('strength', 'delete') && <button onClick={e => { e.stopPropagation(); setConfirmDelete(r) }} className="text-xs text-[#D44040] hover:underline font-medium">Padam</button>}
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              )}
+                            </td>
+                          </tr>
+                        )}
+                      </>
+                    )
+                  })}
                 </tbody>
               </table>
             )}
