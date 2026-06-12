@@ -259,7 +259,7 @@ export default function UserManagementPage() {
           type="text"
           placeholder="Cari nama pengguna..."
           value={search}
-          onChange={e => setSearch(e.target.value)}
+          onChange={e => setSearch(e.target.value.toUpperCase())}
           className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-[#111] placeholder-[#bbb] outline-none focus:border-[#F56A00] w-56"
         />
         <select value={filterRole} onChange={e => setFilterRole(e.target.value)} className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-[#444] outline-none focus:border-[#F56A00]">

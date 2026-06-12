@@ -162,8 +162,6 @@ export default function StrengthPage() {
   const [scheduleSlots, setScheduleSlots] = useState<ScheduleSlotForm[]>([
     { slot_date: new Date().toISOString().slice(0, 10), start_time: '09:00', end_time: '11:00' },
   ])
-  const [scheduleModalMode, setScheduleModalMode] = useState<'single' | 'multiple'>('single')
-  const [singleSlotForm, setSingleSlotForm] = useState({ coach_id: '', sport: '', slot_date: new Date().toISOString().slice(0, 10), start_time: '09:00', end_time: '11:00' })
   const [confirmDeleteSchedule, setConfirmDeleteSchedule] = useState<CoachSchedule | null>(null)
   const [confirmDeleteSlot, setConfirmDeleteSlot] = useState<{ schedule: CoachSchedule; slot: CoachScheduleSlot } | null>(null)
   const [deletingAttendance, setDeletingAttendance] = useState(false)
@@ -353,64 +351,13 @@ export default function StrengthPage() {
 
   function openAddSchedule() {
     setEditingSchedule(null)
-    setScheduleModalMode('single')
     const today = new Date().toISOString().slice(0, 10)
     setScheduleForm({ coach_id: '', valid_from: today, repeats: true, repeat_pattern: 'weekly', repeat_until: '', sport: '', selected_days: [] })
     setScheduleSlots([{ slot_date: today, start_time: '09:00', end_time: '11:00' }])
-    setSingleSlotForm({ coach_id: '', sport: '', slot_date: today, start_time: '09:00', end_time: '11:00' })
     setError(null)
     setScheduleModalOpen(true)
   }
-  async function handleSaveSingleSlot() {
-    if (!singleSlotForm.coach_id || !singleSlotForm.sport) {
-      setError('Jurulatih dan sukan wajib dipilih.')
-      return
-    }
-    setSaving(true); setError(null)
-
-    try {
-      const coach = coaches.find(c => c.id === singleSlotForm.coach_id)
-      const scheduleName = coach ? coach.full_name : 'Schedule'
-
-      const schedulePayload = {
-        coach_id: singleSlotForm.coach_id,
-        sport: singleSlotForm.sport,
-        schedule_name: scheduleName,
-        valid_from: new Date().toISOString().slice(0, 10),
-        repeats: false,
-        repeat_pattern: null,
-        repeat_until: null,
-      }
-
-      const { data: schedule, error: schedError } = await supabase
-        .from('coach_schedules')
-        .insert([schedulePayload])
-        .select('id')
-
-      if (schedError) throw new Error(`Insert schedule failed: ${schedError.message}`)
-      if (!schedule || schedule.length === 0) throw new Error('No schedule returned from insert')
-
-      const scheduleId = schedule[0].id
-      const slotPayload = {
-        schedule_id: scheduleId,
-        slot_date: singleSlotForm.slot_date,
-        start_time: singleSlotForm.start_time,
-        end_time: singleSlotForm.end_time,
-      }
-
-      const { error: slotError } = await supabase.from('coach_schedule_slots').insert([slotPayload])
-      if (slotError) throw new Error(`Insert slot failed: ${slotError.message}`)
-
-      await logAction(profile!.id, 'create_coach_schedule', 'coach_schedules', scheduleId)
-      setSaving(false); setScheduleModalOpen(false); fetchAll()
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err)
-      setError(`Error: ${errorMsg}`)
-      setSaving(false)
-    }
-  }
-
-  async function handleSaveSchedule() {
+async function handleSaveSchedule() {
     if (!scheduleForm.coach_id || !scheduleForm.valid_from || !scheduleForm.sport) {
       setError('Jurulatih, tarikh mula, dan sukan wajib dipilih.')
       return
@@ -1015,61 +962,10 @@ export default function StrengthPage() {
               <button onClick={() => setScheduleModalOpen(false)} className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
             </div>
 
-            {!editingSchedule && (
-              <div className="flex gap-1 border-b border-gray-200 px-6 pt-4 bg-gray-50">
-                {(['single', 'multiple'] as const).map(mode => (
-                  <button
-                    key={mode}
-                    onClick={() => setScheduleModalMode(mode)}
-                    className={`px-4 py-2 text-sm font-semibold border-b-2 transition ${
-                      scheduleModalMode === mode
-                        ? 'border-[#F56A00] text-[#F56A00]'
-                        : 'border-transparent text-[#888] hover:text-[#111]'
-                    }`}
-                  >
-                    {mode === 'single' ? 'Tambah Slot Tunggal' : 'Tambah Slot Berbilang'}
-                  </button>
-                ))}
-              </div>
-            )}
-
             <div className="px-6 py-5 space-y-4">
               {error && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-600">{error}</div>}
 
-              {scheduleModalMode === 'single' ? (
-                /* ── SINGLE SLOT MODE ── */
-                <>
-                  <Field label="Jurulatih" required>
-                    <select value={singleSlotForm.coach_id} onChange={e => setSingleSlotForm(f => ({ ...f, coach_id: e.target.value }))} className={inputCls}>
-                      <option value="">— Pilih Jurulatih —</option>
-                      {coaches.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
-                    </select>
-                  </Field>
-
-                  <Field label="Sukan" required>
-                    <select value={singleSlotForm.sport} onChange={e => setSingleSlotForm(f => ({ ...f, sport: e.target.value }))} className={inputCls}>
-                      <option value="">— Pilih Sukan —</option>
-                      {allSports.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                  </Field>
-
-                  <Field label="Tarikh" required>
-                    <input type="date" value={singleSlotForm.slot_date} onChange={e => setSingleSlotForm(f => ({ ...f, slot_date: e.target.value }))} className={inputCls} />
-                  </Field>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <Field label="Masa Mula *">
-                      <TimeInput12h value={singleSlotForm.start_time} onChange={t => setSingleSlotForm(f => ({ ...f, start_time: t }))} />
-                    </Field>
-                    <Field label="Masa Akhir *">
-                      <TimeInput12h value={singleSlotForm.end_time} onChange={t => setSingleSlotForm(f => ({ ...f, end_time: t }))} />
-                    </Field>
-                  </div>
-                </>
-              ) : (
-                /* ── MULTIPLE SLOTS MODE ── */
-                <>
-                  {/* Top Section: Jurulatih & Sukan */}
+              {/* Top Section: Jurulatih & Sukan */}
                   <div className="grid grid-cols-2 gap-4">
                     <Field label="Jurulatih" required>
                       <select value={scheduleForm.coach_id} onChange={e => setScheduleForm(f => ({ ...f, coach_id: e.target.value }))} className={inputCls}>
@@ -1195,13 +1091,11 @@ export default function StrengthPage() {
                       </Field>
                     </>
                   ) : null}
-                </>
-              )}
             </div>
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 sticky bottom-0 bg-white">
               <button onClick={() => setScheduleModalOpen(false)} className="px-4 py-2 text-sm text-[#888] hover:text-[#111] transition">Batal</button>
-              <button onClick={scheduleModalMode === 'single' ? handleSaveSingleSlot : handleSaveSchedule} disabled={saving} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
-                {saving ? 'Menyimpan...' : scheduleModalMode === 'single' ? 'Tambah Slot' : 'Simpan'}
+              <button onClick={handleSaveSchedule} disabled={saving} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
+                {saving ? 'Menyimpan...' : 'Simpan'}
               </button>
             </div>
           </div>

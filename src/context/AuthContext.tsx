@@ -61,6 +61,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function signOut() {
+    if (user) {
+      logAction(user.id, 'logout').catch(err => {
+        console.warn('Failed to log logout action:', err)
+      })
+    }
     await supabase.auth.signOut()
   }
 
