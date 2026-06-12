@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
 import { usePermissions } from '../../../hooks/usePermissions'
+import { useSports } from '../../../hooks/useSports'
 import { logAction } from '../../../lib/audit'
 import type { Athlete, FitnessTestSession, SportFitnessTest, FitnessTestNorm } from '../../../types'
 
@@ -31,6 +32,7 @@ interface SessionWithResults {
 export default function FitnessTestingPage() {
   const { profile } = useAuth()
   const { can } = usePermissions()
+  const { sports } = useSports()
   const canRecord = can('fitness', 'create')
   const [searchParams] = useSearchParams()
   const athleteIdParam = searchParams.get('athlete')
@@ -53,7 +55,7 @@ export default function FitnessTestingPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filterSport, setFilterSport] = useState('')
-  const [filterName, setFilterName] = useState('')
+  const [search, setSearch] = useState('')
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({})
 
   const [viewMode, setViewMode] = useState<'select_athlete' | 'view_dashboard' | 'record_tests' | 'view_results' | 'view_history'>('select_athlete')
@@ -371,31 +373,23 @@ export default function FitnessTestingPage() {
           </div>
 
           {/* Filters */}
-          <div className="px-4 py-3 border-b border-gray-100 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-widest text-[#888] mb-1">Sukan</label>
-                <select
-                  value={filterSport}
-                  onChange={e => setFilterSport(e.target.value)}
-                  className="w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2 text-sm"
-                >
-                  <option value="">Semua Sukan</option>
-                  {[...new Set(athletes.map(a => a.sport?.name))].filter(Boolean).sort().map(sport => (
-                    <option key={sport} value={sport}>{sport}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-widest text-[#888] mb-1">Cari Nama</label>
-                <input
-                  type="text"
-                  value={filterName}
-                  onChange={e => setFilterName(e.target.value)}
-                  placeholder="Ketik nama atlet..."
-                  className="w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2 text-sm"
-                />
-              </div>
+          <div className="px-4 py-3 border-b border-gray-100">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <input
+                type="text"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Cari nama, No. IC atau sukan..."
+                className="flex-1 bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2 text-sm outline-none transition focus:border-[#F56A00] focus:bg-white"
+              />
+              <select
+                value={filterSport}
+                onChange={e => setFilterSport(e.target.value)}
+                className="bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2 text-sm outline-none transition focus:border-[#F56A00] focus:bg-white min-w-[180px]"
+              >
+                <option value="">Semua Sukan</option>
+                {sports.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+              </select>
             </div>
           </div>
 
@@ -411,9 +405,10 @@ export default function FitnessTestingPage() {
               </thead>
               <tbody>
                 {(() => {
+                  const q = search.toLowerCase()
                   const filtered = athletes
                     .filter(a => !filterSport || a.sport?.name === filterSport)
-                    .filter(a => !filterName || a.name.toLowerCase().includes(filterName.toLowerCase()))
+                    .filter(a => !search || a.name.toLowerCase().includes(q) || a.ic_number?.toLowerCase().includes(q) || a.sport?.name?.toLowerCase().includes(q))
                   return filtered.length === 0 ? (
                     <tr>
                       <td colSpan={4} className="px-4 py-8 text-center text-[#888] text-sm">
