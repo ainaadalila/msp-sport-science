@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { usePermissions } from '../../hooks/usePermissions'
+import { useSports } from '../../hooks/useSports'
 import type { PhysioRating } from '../../types'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
@@ -20,6 +21,15 @@ interface ParsedAssessment {
   self_confidence_score: number
 }
 
+interface AthleteBasic {
+  id: string
+  name: string
+  ic_number: string
+  sport_id: string
+  status: string
+  sport?: { name: string }
+}
+
 const QUESTION_MAPPING = {
   cognitive_anxiety: [1, 6, 8, 11, 15],
   somatic_anxiety: [2, 5, 7, 10, 12, 14, 17],
@@ -32,43 +42,81 @@ const PHASE_LABEL: Record<string, string> = {
   pemulihan: 'Pemulihan',
 }
 
+const PHASE_COLOR: Record<string, string> = {
+  persediaan: 'bg-blue-100 text-blue-700',
+  pertandingan: 'bg-orange-100 text-orange-700',
+  pemulihan: 'bg-green-100 text-green-700',
+}
+
+const statusLabel: Record<string, string> = {
+  active: 'Aktif',
+  rest: 'Rehat',
+  injured: 'Kecederaan',
+  not_active: 'Tidak Aktif',
+}
+
+const statusStyle: Record<string, string> = {
+  active: 'bg-green-50 text-[#3A9E6A] border border-green-200',
+  rest: 'bg-blue-50 text-[#3A7EC8] border border-blue-200',
+  injured: 'bg-red-50 text-[#D44040] border border-red-200',
+  not_active: 'bg-gray-100 text-[#888] border border-gray-200',
+}
+
 export default function PsychologyRatingPage() {
   const { can } = usePermissions()
+  const { sports } = useSports()
 
   const [ratings, setRatings] = useState<PhysioRating[]>([])
+  const [athletes, setAthletes] = useState<AthleteBasic[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
   const [filterPhase, setFilterPhase] = useState<'all' | 'persediaan' | 'pertandingan' | 'pemulihan'>('all')
-  const [filterAthlete, setFilterAthlete] = useState('')
   const [filterSport, setFilterSport] = useState('')
+  const [filterStatus, setFilterStatus] = useState('')
   const [search, setSearch] = useState('')
+  const [expandedAthleteId, setExpandedAthleteId] = useState<string | null>(null)
+
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [uploadSuccess, setUploadSuccess] = useState('')
   const [uploadWarning, setUploadWarning] = useState('')
+
   const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(null)
   const [comparisonData, setComparisonData] = useState<any[]>([])
   const [selectedAthleteName, setSelectedAthleteName] = useState('')
   const [selectedAthleteSport, setSelectedAthleteSport] = useState('')
+
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    fetchRatings()
+    fetchAll()
   }, [])
 
-  const fetchRatings = async () => {
+  // Reset expanded row when filters change
+  useEffect(() => {
+    setExpandedAthleteId(null)
+  }, [search, filterSport, filterStatus, filterPhase])
+
+  const fetchAll = async () => {
     try {
       setLoading(true)
       setError('')
-      const { data, error: err } = await supabase
-        .from('psychology_ratings')
-        .select('id, athlete_id, phase, assessment_date, cognitive_anxiety_score, somatic_anxiety_score, self_confidence_score, athlete:athletes(id, name, sport_id, sport:sport_id(name))')
-        .order('assessment_date', { ascending: false })
-
-      if (err) throw err
-      setRatings((data as any) || [])
+      const [ratingsRes, athletesRes] = await Promise.all([
+        supabase
+          .from('psychology_ratings')
+          .select('id, athlete_id, phase, assessment_date, cognitive_anxiety_score, somatic_anxiety_score, self_confidence_score, athlete:athletes(id, name, sport_id, sport:sport_id(name))')
+          .order('assessment_date', { ascending: false }),
+        supabase
+          .from('athletes')
+          .select('id, name, ic_number, sport_id, status, sport:sport_id(name)')
+          .order('name'),
+      ])
+      if (ratingsRes.error) throw ratingsRes.error
+      setRatings((ratingsRes.data as any) || [])
+      setAthletes((athletesRes.data as any) || [])
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load ratings')
+      setError(err instanceof Error ? err.message : 'Failed to load data')
     } finally {
       setLoading(false)
     }
@@ -82,7 +130,6 @@ export default function PsychologyRatingPage() {
     setSelectedAthleteName(athlete?.name ?? 'Unknown')
     setSelectedAthleteSport(athlete?.sport?.name ?? 'Unknown')
 
-    // Group ratings by phase
     const phaseData: Record<string, any> = {
       Persediaan: null,
       Pertandingan: null,
@@ -90,10 +137,10 @@ export default function PsychologyRatingPage() {
     }
 
     athleteRatings.forEach(r => {
-      const phaseLabel = PHASE_LABEL[r.phase]
-      if (!phaseData[phaseLabel] || new Date(r.assessment_date) > new Date(phaseData[phaseLabel].date)) {
-        phaseData[phaseLabel] = {
-          phase: phaseLabel,
+      const phaseKey = PHASE_LABEL[r.phase]
+      if (!phaseData[phaseKey] || new Date(r.assessment_date) > new Date(phaseData[phaseKey].date)) {
+        phaseData[phaseKey] = {
+          phase: phaseKey,
           cognitive_anxiety: r.cognitive_anxiety_score,
           somatic_anxiety: r.somatic_anxiety_score,
           confidence: r.self_confidence_score,
@@ -102,8 +149,7 @@ export default function PsychologyRatingPage() {
       }
     })
 
-    const chartData = Object.values(phaseData).filter(Boolean)
-    setComparisonData(chartData)
+    setComparisonData(Object.values(phaseData).filter(Boolean))
     setSelectedAthleteId(athleteId)
   }
 
@@ -261,13 +307,8 @@ export default function PsychologyRatingPage() {
         }
       }
 
-      if (missing.length > 0) {
-        onMissing(missing)
-      }
-
-      if (duplicates.length > 0) {
-        console.warn(`Skipped ${duplicates.length} duplicate entries: ${duplicates.join(', ')}`)
-      }
+      if (missing.length > 0) onMissing(missing)
+      if (duplicates.length > 0) console.warn(`Skipped ${duplicates.length} duplicate entries: ${duplicates.join(', ')}`)
 
       resolve(parsed)
     } catch (err) {
@@ -313,10 +354,9 @@ export default function PsychologyRatingPage() {
       }
 
       const { error: insertErr } = await supabase.from('psychology_ratings').insert(insertData)
-
       if (insertErr) throw insertErr
 
-      await fetchRatings()
+      await fetchAll()
       if (fileInputRef.current) fileInputRef.current.value = ''
       setUploadError('')
       setUploadSuccess(`✓ ${insertData.length} rekod telah disimpan`)
@@ -329,14 +369,6 @@ export default function PsychologyRatingPage() {
       setUploading(false)
     }
   }
-
-  const filteredRatings = ratings.filter((r) => {
-    const matchPhase = filterPhase === 'all' || r.phase === filterPhase
-    const matchAthlete = !filterAthlete || r.athlete_id === filterAthlete
-    const matchSport = !filterSport || r.athlete?.sport?.name === filterSport
-    const matchSearch = !search || (r.athlete?.name ?? '').toLowerCase().includes(search.toLowerCase())
-    return matchPhase && matchAthlete && matchSport && matchSearch
-  })
 
   const getScoreInsight = (type: 'cognitive' | 'somatic' | 'confidence', score: number | null) => {
     if (score === null) return { label: '-', color: '' }
@@ -369,32 +401,63 @@ export default function PsychologyRatingPage() {
     return range ? { label: range.label, color: range.color } : { label: '-', color: '' }
   }
 
+  // Group ratings by athlete
+  const ratingsByAthlete = useMemo(() => {
+    const map = new Map<string, PhysioRating[]>()
+    for (const r of ratings) {
+      if (!map.has(r.athlete_id)) map.set(r.athlete_id, [])
+      map.get(r.athlete_id)!.push(r)
+    }
+    return map
+  }, [ratings])
+
+  // Filter athletes using AthletesPage-style filters
+  const filteredAthletes = useMemo(() => {
+    return athletes.filter(a => {
+      const q = search.toLowerCase()
+      const sportName = a.sport?.name?.toLowerCase() || ''
+      const matchSearch = !q || a.name.toLowerCase().includes(q) || (a.ic_number || '').toLowerCase().includes(q) || sportName.includes(q)
+      const matchStatus = !filterStatus || a.status === filterStatus
+      const matchSport = !filterSport || a.sport_id === filterSport
+      return matchSearch && matchStatus && matchSport
+    })
+  }, [athletes, search, filterSport, filterStatus])
+
+  // Stats based on filtered athletes' ratings + phase filter
+  const relevantRatings = useMemo(() => {
+    const filteredIds = new Set(filteredAthletes.map(a => a.id))
+    return ratings.filter(r =>
+      filteredIds.has(r.athlete_id) &&
+      (filterPhase === 'all' || r.phase === filterPhase)
+    )
+  }, [ratings, filteredAthletes, filterPhase])
+
   return (
     <div className="space-y-4">
 
       {/* Header */}
-      <p className="text-[12px] text-[#888]">{filteredRatings.length} rekod</p>
+      <p className="text-[12px] text-[#888]">{athletes.length} atlet • {ratings.length} rekod penilaian</p>
 
       {/* Stats Section */}
       {!loading && (
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-white rounded-xl border border-gray-200 p-5">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-[#888] mb-2">Jumlah Penilaian</p>
-            <p className="text-3xl font-bold text-[#111]">{filteredRatings.length}</p>
+            <p className="text-3xl font-bold text-[#111]">{relevantRatings.length}</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-5">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-[#888] mb-2">Purata Kebimbangan Kognitif</p>
             <p className="text-3xl font-bold text-[#111]">
-              {filteredRatings.length > 0
-                ? (filteredRatings.reduce((sum, r) => sum + (r.cognitive_anxiety_score ?? 0), 0) / filteredRatings.length).toFixed(1)
+              {relevantRatings.length > 0
+                ? (relevantRatings.reduce((sum, r) => sum + (r.cognitive_anxiety_score ?? 0), 0) / relevantRatings.length).toFixed(1)
                 : '—'}
             </p>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-5">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-[#888] mb-2">Purata Kepercayaan Diri</p>
             <p className="text-3xl font-bold text-[#111]">
-              {filteredRatings.length > 0
-                ? (filteredRatings.reduce((sum, r) => sum + (r.self_confidence_score ?? 0), 0) / filteredRatings.length).toFixed(1)
+              {relevantRatings.length > 0
+                ? (relevantRatings.reduce((sum, r) => sum + (r.self_confidence_score ?? 0), 0) / relevantRatings.length).toFixed(1)
                 : '—'}
             </p>
           </div>
@@ -405,6 +468,7 @@ export default function PsychologyRatingPage() {
         <div className="py-16 text-center text-[#888] text-sm">Memuatkan...</div>
       ) : (
         <div className="space-y-3">
+
           {/* Upload Section */}
           {can('psychology', 'create') && (
             <div className="flex gap-2 items-center">
@@ -429,120 +493,191 @@ export default function PsychologyRatingPage() {
           {uploadWarning && <p className="text-amber-600 text-sm whitespace-pre-wrap">{uploadWarning}</p>}
           {uploadSuccess && <p className="text-green-600 text-sm">{uploadSuccess}</p>}
 
-          {/* Filters */}
-          <div className="space-y-3">
-            {/* Search, Sport & Athlete Filters */}
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="Cari nama atlet..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#F56A00]"
-              />
-              <select
-                value={filterSport}
-                onChange={(e) => setFilterSport(e.target.value)}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#F56A00]"
+          {/* Filters — AthletesPage style */}
+          <div className="flex flex-wrap gap-2">
+            <input
+              type="text"
+              placeholder="Cari nama, IC, sukan..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className={`${filterCls} min-w-[200px]`}
+            />
+            <select value={filterSport} onChange={e => setFilterSport(e.target.value)} className={filterCls}>
+              <option value="">Semua Sukan</option>
+              {sports.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className={filterCls}>
+              <option value="">Semua Status</option>
+              <option value="active">Aktif</option>
+              <option value="rest">Rehat</option>
+              <option value="injured">Kecederaan</option>
+              <option value="not_active">Tidak Aktif</option>
+            </select>
+            {(search || filterSport || filterStatus) && (
+              <button
+                onClick={() => { setSearch(''); setFilterSport(''); setFilterStatus('') }}
+                className="px-3 py-2 text-xs text-[#888] hover:text-[#F56A00] border border-gray-200 rounded-lg transition"
               >
-                <option value="">Semua Sukan</option>
-                {[...new Set(ratings.map(r => r.athlete?.sport?.name))].filter(Boolean).map((sport) => (
-                  <option key={sport} value={sport}>
-                    {sport}
-                  </option>
-                ))}
-              </select>
+                Kosongkan Penapis
+              </button>
+            )}
+          </div>
 
-              <select
-                value={filterAthlete}
-                onChange={(e) => setFilterAthlete(e.target.value)}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#F56A00]"
+          {/* Phase Filter Tabs */}
+          <div className="flex flex-wrap gap-2">
+            {(['all', 'persediaan', 'pertandingan', 'pemulihan'] as const).map((phase) => (
+              <button
+                key={phase}
+                onClick={() => setFilterPhase(phase)}
+                className={`px-4 py-2 rounded-lg font-semibold text-sm transition ${
+                  filterPhase === phase
+                    ? 'bg-[#F56A00] text-white'
+                    : 'bg-gray-100 text-[#666] hover:bg-gray-200'
+                }`}
               >
-                <option value="">Semua Atlet</option>
-                {[...new Set(ratings.map(r => r.athlete_id))].map((athleteId) => {
-                  const athlete = ratings.find(r => r.athlete_id === athleteId)?.athlete
-                  return (
-                    <option key={athleteId} value={athleteId}>
-                      {athlete?.name}
-                    </option>
-                  )
-                })}
-              </select>
-            </div>
-
-            {/* Phase Filter */}
-            <div className="flex flex-wrap gap-2">
-              {(['all', 'persediaan', 'pertandingan', 'pemulihan'] as const).map((phase) => (
-                <button
-                  key={phase}
-                  onClick={() => setFilterPhase(phase)}
-                  className={`px-4 py-2 rounded-lg font-semibold text-sm transition ${
-                    filterPhase === phase
-                      ? 'bg-[#F56A00] text-white'
-                      : 'bg-gray-100 text-[#666] hover:bg-gray-200'
-                  }`}
-                >
-                  {phase === 'all' ? 'Semua Fasa' : PHASE_LABEL[phase]}
-                </button>
-              ))}
-            </div>
+                {phase === 'all' ? 'Semua Fasa' : PHASE_LABEL[phase]}
+              </button>
+            ))}
           </div>
 
           {error && <p className="text-red-600 text-sm">{error}</p>}
 
-          {/* Data Table */}
+          {/* Athlete-first table */}
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            {filteredRatings.length === 0 ? (
-              <div className="py-16 text-center text-[#888] text-sm">
-                {ratings.length === 0 ? 'Tiada rekod penilaian lagi.' : 'Tiada rekod sepadan penapis.'}
-              </div>
+            <div className="flex justify-between items-center px-4 py-3 bg-gray-50 border-b border-gray-100 text-sm text-[#888]">
+              <span>{filteredAthletes.length} atlet</span>
+            </div>
+            {filteredAthletes.length === 0 ? (
+              <div className="py-16 text-center text-[#888] text-sm">Tiada atlet sepadan penapis.</div>
             ) : (
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-100">
-                    {['Atlet', 'Sukan', 'Fasa', 'Kebimbangan Kognitif', 'Kebimbangan Somatis', 'Kepercayaan Diri', 'Tarikh'].map(h => (
+                    {['Atlet', 'Sukan', 'Status', 'Fasa Dinilai', 'Tarikh Terkini', ''].map(h => (
                       <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-wider text-[#888] px-4 py-3">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredRatings.map(r => (
-                    <tr key={r.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
-                      <td className="px-4 py-3 font-medium text-left">
-                        <button
-                          onClick={() => openComparison(r.athlete_id)}
-                          className="text-[#F56A00] hover:underline cursor-pointer text-left"
+                  {filteredAthletes.map(a => {
+                    const athleteRatings = ratingsByAthlete.get(a.id) ?? []
+                    const visibleRatings = filterPhase === 'all'
+                      ? athleteRatings
+                      : athleteRatings.filter(r => r.phase === filterPhase)
+                    const assessedPhases = new Set(athleteRatings.map(r => r.phase))
+                    const latestDate = athleteRatings.length > 0
+                      ? athleteRatings.sort((x, y) => y.assessment_date.localeCompare(x.assessment_date))[0].assessment_date
+                      : null
+                    const isExpanded = expandedAthleteId === a.id
+
+                    return (
+                      <>
+                        <tr
+                          key={a.id}
+                          onClick={() => setExpandedAthleteId(isExpanded ? null : a.id)}
+                          className={`border-b border-gray-50 cursor-pointer ${isExpanded ? 'bg-orange-50' : 'hover:bg-gray-50'}`}
                         >
-                          {r.athlete?.name ?? '—'}
-                        </button>
-                      </td>
-                      <td className="px-4 py-3 text-[#888]">{r.athlete?.sport?.name ?? '—'}</td>
-                      <td className="px-4 py-3">
-                        <span className="inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
-                          {PHASE_LABEL[r.phase]}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <div className="font-semibold text-[#111]">{r.cognitive_anxiety_score}</div>
-                        <div className={`text-[11px] font-medium ${getScoreInsight('cognitive', r.cognitive_anxiety_score).color}`}>
-                          {getScoreInsight('cognitive', r.cognitive_anxiety_score).label}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <div className="font-semibold text-[#111]">{r.somatic_anxiety_score}</div>
-                        <div className={`text-[11px] font-medium ${getScoreInsight('somatic', r.somatic_anxiety_score).color}`}>
-                          {getScoreInsight('somatic', r.somatic_anxiety_score).label}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <div className="font-semibold text-[#111]">{r.self_confidence_score}</div>
-                        <div className={`text-[11px] font-medium ${getScoreInsight('confidence', r.self_confidence_score).color}`}>
-                          {getScoreInsight('confidence', r.self_confidence_score).label}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 font-mono text-[12px] text-[#444] whitespace-nowrap">{r.assessment_date}</td>
-                    </tr>
-                  ))}
+                          <td className="px-4 py-3 font-medium text-[#111]">{a.name}</td>
+                          <td className="px-4 py-3 text-[#888]">{a.sport?.name ?? '—'}</td>
+                          <td className="px-4 py-3">
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusStyle[a.status] ?? statusStyle.not_active}`}>
+                              {statusLabel[a.status] ?? a.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            {assessedPhases.size === 0 ? (
+                              <span className="text-[#888] text-xs">Tiada penilaian</span>
+                            ) : (
+                              <div className="flex gap-1 flex-wrap">
+                                {(['persediaan', 'pertandingan', 'pemulihan'] as const).map(ph => (
+                                  assessedPhases.has(ph) && (
+                                    <span key={ph} className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${PHASE_COLOR[ph]}`}>
+                                      {PHASE_LABEL[ph]}
+                                    </span>
+                                  )
+                                ))}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 font-mono text-[12px] text-[#444]">
+                            {latestDate ?? '—'}
+                          </td>
+                          <td className="px-4 py-3 text-right text-[#888] text-xs select-none">
+                            {isExpanded ? '▲' : '▼'}
+                          </td>
+                        </tr>
+
+                        {isExpanded && (
+                          <tr key={`${a.id}-detail`}>
+                            <td colSpan={6} className="px-4 pb-4 pt-0 bg-orange-50/40">
+                              <div className="border border-orange-100 rounded-xl overflow-hidden">
+                                <div className="flex items-center justify-between px-4 py-2 bg-orange-50 border-b border-orange-100">
+                                  <span className="text-xs font-semibold text-[#F56A00]">
+                                    Penilaian Psikologi — {a.name}
+                                  </span>
+                                  {athleteRatings.length > 0 && (
+                                    <button
+                                      onClick={e => { e.stopPropagation(); openComparison(a.id) }}
+                                      className="text-xs font-semibold text-[#3A7EC8] border border-[#3A7EC8] hover:bg-blue-50 px-3 py-1 rounded-lg transition"
+                                    >
+                                      Lihat Graf
+                                    </button>
+                                  )}
+                                </div>
+                                {visibleRatings.length === 0 ? (
+                                  <div className="px-4 py-6 text-center text-[#888] text-xs">
+                                    {athleteRatings.length === 0
+                                      ? 'Tiada penilaian psikologi untuk atlet ini.'
+                                      : `Tiada penilaian untuk fasa ${PHASE_LABEL[filterPhase]}.`}
+                                  </div>
+                                ) : (
+                                  <table className="w-full text-xs">
+                                    <thead>
+                                      <tr className="border-b border-orange-100">
+                                        {['Fasa', 'Tarikh', 'Keb. Kognitif', 'Keb. Somatik', 'Keyakinan Diri'].map(h => (
+                                          <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-wider text-[#888] px-3 py-2">{h}</th>
+                                        ))}
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {visibleRatings.map(r => (
+                                        <tr key={r.id} className="border-b border-orange-50 last:border-0 hover:bg-orange-50">
+                                          <td className="px-3 py-2">
+                                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${PHASE_COLOR[r.phase]}`}>
+                                              {PHASE_LABEL[r.phase]}
+                                            </span>
+                                          </td>
+                                          <td className="px-3 py-2 font-mono text-[#444]">{r.assessment_date}</td>
+                                          <td className="px-3 py-2">
+                                            <div className="font-semibold text-[#111]">{r.cognitive_anxiety_score}</div>
+                                            <div className={`text-[10px] ${getScoreInsight('cognitive', r.cognitive_anxiety_score).color}`}>
+                                              {getScoreInsight('cognitive', r.cognitive_anxiety_score).label}
+                                            </div>
+                                          </td>
+                                          <td className="px-3 py-2">
+                                            <div className="font-semibold text-[#111]">{r.somatic_anxiety_score}</div>
+                                            <div className={`text-[10px] ${getScoreInsight('somatic', r.somatic_anxiety_score).color}`}>
+                                              {getScoreInsight('somatic', r.somatic_anxiety_score).label}
+                                            </div>
+                                          </td>
+                                          <td className="px-3 py-2">
+                                            <div className="font-semibold text-[#111]">{r.self_confidence_score}</div>
+                                            <div className={`text-[10px] ${getScoreInsight('confidence', r.self_confidence_score).color}`}>
+                                              {getScoreInsight('confidence', r.self_confidence_score).label}
+                                            </div>
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </>
+                    )
+                  })}
                 </tbody>
               </table>
             )}
@@ -554,48 +689,35 @@ export default function PsychologyRatingPage() {
       {selectedAthleteId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-lg max-w-3xl w-full mx-4 max-h-[80vh] overflow-y-auto">
-            {/* Header */}
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <div>
                 <h2 className="text-xl font-bold text-[#111]">{selectedAthleteName}</h2>
                 <p className="text-sm text-[#888] mt-1">{selectedAthleteSport}</p>
               </div>
-              <button
-                onClick={() => setSelectedAthleteId(null)}
-                className="text-[#888] hover:text-[#111] text-2xl leading-none"
-              >
-                ×
-              </button>
+              <button onClick={() => setSelectedAthleteId(null)} className="text-[#888] hover:text-[#111] text-2xl leading-none">×</button>
             </div>
 
-            {/* Content */}
             <div className="p-6 space-y-6">
               {comparisonData.length === 0 ? (
-                <div className="text-center text-[#888] py-8">
-                  Tiada data untuk dibandingkan
-                </div>
+                <div className="text-center text-[#888] py-8">Tiada data untuk dibandingkan</div>
               ) : (
                 <>
-                  {/* Chart */}
-                  {comparisonData.length > 0 && (
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <h3 className="text-sm font-semibold text-[#111] mb-4">Perbandingan Skor Merentasi Fasa</h3>
-                      <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={comparisonData}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="phase" />
-                          <YAxis />
-                          <Tooltip />
-                          <Legend />
-                          <Bar dataKey="cognitive_anxiety" fill="#FF6B6B" name="Kebimbangan Kognitif" />
-                          <Bar dataKey="somatic_anxiety" fill="#FFA94D" name="Kebimbangan Somatis" />
-                          <Bar dataKey="confidence" fill="#51CF66" name="Kepercayaan Diri" />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  )}
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h3 className="text-sm font-semibold text-[#111] mb-4">Perbandingan Skor Merentasi Fasa</h3>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={comparisonData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="phase" />
+                        <YAxis />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="cognitive_anxiety" fill="#FF6B6B" name="Kebimbangan Kognitif" />
+                        <Bar dataKey="somatic_anxiety" fill="#FFA94D" name="Kebimbangan Somatik" />
+                        <Bar dataKey="confidence" fill="#51CF66" name="Kepercayaan Diri" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
 
-                  {/* Comparison Table */}
                   <div>
                     <h3 className="text-sm font-semibold text-[#111] mb-3">Jadual Perbandingan</h3>
                     <table className="w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
@@ -603,7 +725,7 @@ export default function PsychologyRatingPage() {
                         <tr className="bg-gray-50">
                           <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase text-[#888]">Fasa</th>
                           <th className="px-4 py-3 text-center text-[10px] font-semibold uppercase text-[#888]">Kebimbangan Kognitif</th>
-                          <th className="px-4 py-3 text-center text-[10px] font-semibold uppercase text-[#888]">Kebimbangan Somatis</th>
+                          <th className="px-4 py-3 text-center text-[10px] font-semibold uppercase text-[#888]">Kebimbangan Somatik</th>
                           <th className="px-4 py-3 text-center text-[10px] font-semibold uppercase text-[#888]">Kepercayaan Diri</th>
                         </tr>
                       </thead>
@@ -612,15 +734,15 @@ export default function PsychologyRatingPage() {
                           <tr key={idx} className="border-t border-gray-100 hover:bg-gray-50">
                             <td className="px-4 py-3 font-medium text-[#111]">{data.phase}</td>
                             <td className="px-4 py-3 text-center">
-                              <span className="inline-block font-semibold text-[#111]">{data.cognitive_anxiety}</span>
+                              <span className="font-semibold text-[#111]">{data.cognitive_anxiety}</span>
                               <span className="text-[11px] text-[#888] ml-1">{data.cognitive_anxiety > 15 ? '(Tinggi)' : data.cognitive_anxiety > 10 ? '(Sederhana)' : '(Rendah)'}</span>
                             </td>
                             <td className="px-4 py-3 text-center">
-                              <span className="inline-block font-semibold text-[#111]">{data.somatic_anxiety}</span>
+                              <span className="font-semibold text-[#111]">{data.somatic_anxiety}</span>
                               <span className="text-[11px] text-[#888] ml-1">{data.somatic_anxiety > 17 ? '(Tinggi)' : data.somatic_anxiety > 10 ? '(Sederhana)' : '(Rendah)'}</span>
                             </td>
                             <td className="px-4 py-3 text-center">
-                              <span className="inline-block font-semibold text-[#111]">{data.confidence}</span>
+                              <span className="font-semibold text-[#111]">{data.confidence}</span>
                               <span className="text-[11px] text-[#888] ml-1">{data.confidence >= 15 ? '(Tinggi)' : data.confidence >= 10 ? '(Sederhana)' : '(Rendah)'}</span>
                             </td>
                           </tr>
@@ -629,12 +751,11 @@ export default function PsychologyRatingPage() {
                     </table>
                   </div>
 
-                  {/* Key Insights */}
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <h3 className="text-sm font-semibold text-blue-900 mb-2">📊 Panduan Pembacaan</h3>
+                    <h3 className="text-sm font-semibold text-blue-900 mb-2">Panduan Pembacaan</h3>
                     <ul className="text-sm text-blue-800 space-y-1">
                       <li>• <strong>Kebimbangan Kognitif:</strong> Kerisauan fikiran tentang prestasi (skor tinggi = lebih risau)</li>
-                      <li>• <strong>Kebimbangan Somatis:</strong> Kegelisahan fizikal seperti jantung berdegup (skor tinggi = lebih gelisah)</li>
+                      <li>• <strong>Kebimbangan Somatik:</strong> Kegelisahan fizikal seperti jantung berdegup (skor tinggi = lebih gelisah)</li>
                       <li>• <strong>Kepercayaan Diri:</strong> Keyakinan diri dan kemampuan (skor tinggi = lebih yakin)</li>
                     </ul>
                   </div>
@@ -647,3 +768,5 @@ export default function PsychologyRatingPage() {
     </div>
   )
 }
+
+const filterCls = 'bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-[#444] outline-none focus:border-[#F56A00]'
