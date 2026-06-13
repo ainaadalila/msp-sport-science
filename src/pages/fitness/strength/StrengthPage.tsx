@@ -811,8 +811,6 @@ async function handleSaveSchedule() {
                               const slotHeight = (endHour - startHour) * 60
                               const topOffset = startHour === hour ? 0 : -(hour - startHour) * 60
                               const hasMultiple = slots.length > 1
-                              const uniqueSports = [...new Set(slots.map(s => s.schedule.sport))].slice(0, 2)
-                              const sportsText = uniqueSports.join(', ') + (slots.length > 2 ? '...' : '')
                               const opacityValue = Math.max(0.4, 1 - timeSlotIndex * 0.25)
 
                               return (
