@@ -259,6 +259,7 @@ export interface PhysioRating {
   self_confidence_score: number | null
   raw_responses: Record<string, number> | null
   assessment_date: string
+  catatan?: string | null
   recorded_by?: string
   created_at: string
   updated_at: string
