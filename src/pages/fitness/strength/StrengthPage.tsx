@@ -168,6 +168,7 @@ export default function StrengthPage() {
   const [deletingProgram, setDeletingProgram] = useState(false)
   const [deletingSchedule, setDeletingSchedule] = useState(false)
   const [deletingSlot, setDeletingSlot] = useState(false)
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState<{ dateStr: string; startTime: string; endTime: string; slots: Array<{ schedule: CoachSchedule; slot: CoachScheduleSlot }> } | null>(null)
 
   useEffect(() => { fetchAll() }, [])
 
@@ -789,39 +790,62 @@ async function handleSaveSchedule() {
                           return startHour <= hour && endHour > hour
                         })
 
+                        // Group slots by time
+                        const slotsByTime: { [key: string]: typeof slotsInHour } = {}
+                        slotsInHour.forEach(item => {
+                          const key = `${item.slot.start_time}-${item.slot.end_time}`
+                          if (!slotsByTime[key]) slotsByTime[key] = []
+                          slotsByTime[key].push(item)
+                        })
+
                         return (
                           <td
                             key={dayIdx}
                             style={{ height: '60px', padding: '4px 0', position: 'relative' }}
                             className="border-r border-gray-100 last:border-0"
                           >
-                            {slotsInHour.map(({ schedule: s, slot }) => {
-                              const [startHour] = slot.start_time.split(':').map(Number)
-                              const [endHour] = slot.end_time.split(':').map(Number)
+                            {Object.entries(slotsByTime).map(([timeKey, slots], timeSlotIndex) => {
+                              const [startTime, endTime] = timeKey.split('-')
+                              const [startHour] = startTime.split(':').map(Number)
+                              const [endHour] = endTime.split(':').map(Number)
                               const slotHeight = (endHour - startHour) * 60
                               const topOffset = startHour === hour ? 0 : -(hour - startHour) * 60
+                              const hasMultiple = slots.length > 1
+                              const uniqueSports = [...new Set(slots.map(s => s.schedule.sport))].slice(0, 2)
+                              const sportsText = uniqueSports.join(', ') + (slots.length > 2 ? '...' : '')
+                              const opacityValue = Math.max(0.4, 1 - timeSlotIndex * 0.25)
 
                               return (
                                 <div
-                                  key={slot.id}
+                                  key={timeKey}
+                                  onClick={() => hasMultiple && setSelectedTimeSlot({ dateStr, startTime, endTime, slots })}
                                   style={{
                                     position: 'absolute',
                                     top: `${topOffset}px`,
                                     left: '4px',
                                     right: '4px',
                                     height: `${slotHeight}px`,
-                                    zIndex: 10
+                                    zIndex: 10,
+                                    opacity: opacityValue
                                   }}
-                                  className="bg-[rgba(245,106,0,0.1)] border border-[rgba(245,106,0,0.3)] rounded px-1.5 py-0.5 text-[11px] cursor-pointer hover:bg-[rgba(245,106,0,0.15)] transition group overflow-hidden"
+                                  className={`border border-[rgba(245,106,0,0.3)] rounded px-1.5 py-0.5 text-[11px] transition overflow-hidden ${hasMultiple ? 'bg-[#F56A00] text-white cursor-pointer hover:bg-[#D45A00]' : 'bg-[rgba(245,106,0,0.1)] cursor-pointer hover:bg-[rgba(245,106,0,0.15)] group'}`}
                                 >
-                                  <p className="font-semibold text-[#F56A00] truncate leading-tight text-xs">{s.schedule_name}</p>
-                                  <p className="text-[10px] text-[#666] leading-tight">{s.sport}</p>
-                                  <p className="text-[9px] text-[#888] font-mono leading-tight">{slot.start_time}–{slot.end_time}</p>
-                                  <div className="hidden group-hover:flex gap-1 mt-0.5 pt-0.5 border-t border-[rgba(245,106,0,0.2)]">
-                                    {can('strength', 'delete') && (
-                                      <button onClick={() => setConfirmDeleteSlot({ schedule: s, slot })} className="flex-1 px-1 py-0.5 text-[8px] font-semibold text-[#D44040] hover:underline">Padam</button>
-                                    )}
-                                  </div>
+                                  {hasMultiple ? (
+                                    <div className="flex items-center justify-center h-full">
+                                      <span className="font-bold text-base">{slots.length} slots</span>
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <p className="font-semibold text-[#F56A00] truncate leading-tight text-xs">{slots[0].schedule.schedule_name}</p>
+                                      <p className="text-[10px] text-[#666] leading-tight">{slots[0].schedule.sport}</p>
+                                      <p className="text-[9px] text-[#888] font-mono leading-tight">{startTime}–{endTime}</p>
+                                      <div className="hidden group-hover:flex gap-1 mt-0.5 pt-0.5 border-t border-[rgba(245,106,0,0.2)]">
+                                        {can('strength', 'delete') && (
+                                          <button onClick={(e) => { e.stopPropagation(); setConfirmDeleteSlot({ schedule: slots[0].schedule, slot: slots[0].slot }) }} className="flex-1 px-1 py-0.5 text-[8px] font-semibold text-[#D44040] hover:underline">Padam</button>
+                                        )}
+                                      </div>
+                                    </>
+                                  )}
                                 </div>
                               )
                             })}
@@ -835,6 +859,35 @@ async function handleSaveSchedule() {
             </table>
           </div>
         </>
+      )}
+
+      {/* ── MODAL: TIME SLOT DETAILS ── */}
+      {selectedTimeSlot && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
+            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="font-bold text-[#111]">Jadual pada {selectedTimeSlot.startTime}–{selectedTimeSlot.endTime}</h3>
+              <button onClick={() => setSelectedTimeSlot(null)} className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
+            </div>
+            <div className="px-6 py-4 space-y-3 max-h-[60vh] overflow-y-auto">
+              {selectedTimeSlot.slots.map(({ schedule: s, slot }, idx) => (
+                <div key={idx} className="p-3 bg-[rgba(245,106,0,0.05)] border border-[rgba(245,106,0,0.2)] rounded-lg">
+                  <p className="font-semibold text-[#F56A00]">{s.schedule_name}</p>
+                  <p className="text-sm text-[#666] mt-1">{s.sport}</p>
+                  <p className="text-[12px] text-[#888] font-mono mt-1">{slot.start_time}–{slot.end_time}</p>
+                  {can('strength', 'delete') && (
+                    <button
+                      onClick={() => { setConfirmDeleteSlot({ schedule: s, slot }); setSelectedTimeSlot(null) }}
+                      className="mt-2 w-full px-3 py-1.5 text-xs font-semibold text-[#D44040] hover:bg-red-50 rounded transition"
+                    >
+                      Padam
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── MODAL: ATTENDANCE ── */}
