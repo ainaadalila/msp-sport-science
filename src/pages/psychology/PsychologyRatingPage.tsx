@@ -630,7 +630,7 @@ export default function PsychologyRatingPage() {
                                   <table className="w-full text-xs">
                                     <thead>
                                       <tr className="border-b border-orange-100">
-                                        {['Fasa', 'Tarikh', 'Keb. Kognitif', 'Keb. Somatik', 'Keyakinan Diri'].map(h => (
+                                        {['Fasa', 'Tarikh', 'Keb. Kognitif', 'Keb. Somatik', 'Keyakinan Diri', 'Catatan'].map(h => (
                                           <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-wider text-[#888] px-3 py-2">{h}</th>
                                         ))}
                                       </tr>
@@ -660,6 +660,19 @@ export default function PsychologyRatingPage() {
                                             <div className="font-semibold text-[#111]">{r.self_confidence_score}</div>
                                             <div className={`text-[10px] ${getScoreInsight('confidence', r.self_confidence_score).color}`}>
                                               {getScoreInsight('confidence', r.self_confidence_score).label}
+                                            </div>
+                                          </td>
+                                          <td className="px-3 py-2">
+                                            <div className="flex items-center justify-between gap-2">
+                                              <span className="text-[#666] max-w-xs truncate text-[10px]">{r.catatan || '—'}</span>
+                                              {can('psychology', 'update') && (
+                                                <button
+                                                  onClick={() => setEditingCatatan({ id: r.id, text: r.catatan || '' })}
+                                                  className="text-[#F56A00] hover:underline text-[10px] font-semibold whitespace-nowrap"
+                                                >
+                                                  Edit
+                                                </button>
+                                              )}
                                             </div>
                                           </td>
                                         </tr>
@@ -757,6 +770,42 @@ export default function PsychologyRatingPage() {
                   </div>
                 </>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Catatan Edit Modal */}
+      {editingCatatan && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-sm mx-4">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-lg font-bold text-[#111]">Edit Catatan</h2>
+              <button onClick={() => setEditingCatatan(null)} className="text-[#888] hover:text-[#111] text-2xl leading-none">×</button>
+            </div>
+            <div className="p-6 space-y-4">
+              <textarea
+                value={editingCatatan.text}
+                onChange={(e) => setEditingCatatan({ ...editingCatatan, text: e.target.value })}
+                placeholder="Masukkan catatan..."
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#F56A00] resize-none"
+                rows={5}
+              />
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => setEditingCatatan(null)}
+                  className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-semibold rounded-lg transition"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={saveCatatan}
+                  disabled={savingCatatan}
+                  className="px-4 py-2 bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold rounded-lg transition disabled:opacity-50"
+                >
+                  {savingCatatan ? 'Menyimpan...' : 'Simpan'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
