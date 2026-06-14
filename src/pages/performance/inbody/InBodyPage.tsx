@@ -6,6 +6,7 @@ import { usePermissions } from '../../../hooks/usePermissions'
 import { logAction } from '../../../lib/audit'
 import { useSports } from '../../../hooks/useSports'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import html2canvas from 'html2canvas'
 
 interface Athlete {
   id: string
@@ -147,6 +148,7 @@ export default function InBodyPage() {
   const { sports } = useSports()
   const [searchParams] = useSearchParams()
   const athleteIdParam = searchParams.get('athlete')
+  const chartRef = useRef<HTMLDivElement>(null)
 
   const [records, setRecords] = useState<InBodyRecord[]>([])
   const [athletes, setAthletes] = useState<Athlete[]>([])
@@ -179,6 +181,36 @@ export default function InBodyPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploadingDietPlan, setUploadingDietPlan] = useState(false)
   const [dietPlanError, setDietPlanError] = useState<string | null>(null)
+
+  async function handlePrint() {
+    if (!chartRef.current) return
+    try {
+      const canvas = await html2canvas(chartRef.current, { scale: 2, useCORS: true })
+      const image = canvas.toDataURL('image/png')
+      const printWindow = window.open('', '', 'width=900,height=700')
+      if (printWindow) {
+        printWindow.document.write(`
+          <html><head><title>Cetak - Penilaian InBody</title>
+          <style>
+            body { margin: 20px; font-family: Arial, sans-serif; }
+            img { max-width: 100%; height: auto; }
+            .header { margin-bottom: 20px; }
+          </style>
+          </head><body>
+          <div class="header">
+            <h2>Penilaian InBody</h2>
+            <p>Laporan ${new Date().toLocaleDateString('ms-MY')}</p>
+          </div>
+          <img src="${image}" />
+          </body></html>
+        `)
+        printWindow.document.close()
+        printWindow.print()
+      }
+    } catch (error) {
+      console.error('Print failed:', error)
+    }
+  }
 
   useEffect(() => {
     fetchAll()
@@ -419,16 +451,27 @@ export default function InBodyPage() {
   }))
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" ref={chartRef}>
 
       {/* Header */}
       <div className="flex items-center justify-between">
-        <p className="text-[12px] text-[#888]">{athletes.length} atlet • {records.length} rekod penilaian</p>
-        {can('inbody', 'create') && (
-          <button onClick={openAdd} className="bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
-            + Rekod InBody
+        <p className="text-[12px] text-[#888]">{records.length} rekod penilaian</p>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handlePrint}
+            className="flex items-center gap-2 px-4 py-2 bg-[#F56A00] text-white text-sm font-semibold rounded-lg hover:bg-[#D45A00] transition"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <path d="M9 12h6m-6 4h6M9 8h.01M15 8h.01M7 5h10a2 2 0 012 2v10a2 2 0 01-2 2H7a2 2 0 01-2-2V7a2 2 0 012-2z"/>
+            </svg>
+            Cetak
           </button>
-        )}
+          {can('inbody', 'create') && (
+            <button onClick={openAdd} className="bg-gray-200 hover:bg-gray-300 text-[#111] text-sm font-semibold px-4 py-2 rounded-lg transition">
+              + Rekod InBody
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Tab Switcher */}

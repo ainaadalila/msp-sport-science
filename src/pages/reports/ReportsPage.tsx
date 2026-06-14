@@ -1,9 +1,10 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { ReportSkeleton } from '../../components/Skeleton'
 
-type ReportType = 'fitness' | 'inbody' | 'attendance' | 'supplement' | 'physio'
+type ReportType = 'fitness' | 'inbody' | 'attendance' | 'supplement' | 'physio' | 'psychology'
 type PhysioMode = 'ringkasan' | 'terperinci'
+type LatihkanMode = 'jadual' | 'program' | 'kehadiran'
 
 interface ReportConfig {
   key: ReportType
@@ -43,9 +44,13 @@ const REPORTS: ReportConfig[] = [
     sub: 'Sesi dan kehadiran fisioterapi bulanan',
     icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm5-9h-1v2h1V4zm0 15h-1v2h1v-2z"/></svg>,
   },
+  {
+    key: 'psychology',
+    label: 'Laporan Psikologi',
+    sub: 'Penilaian psikologi atlet merentasi fasa',
+    icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z"/></svg>,
+  },
 ]
-
-const MONTHS_MY = ['Januari', 'Februari', 'Mac', 'April', 'Mei', 'Jun', 'Julai', 'Ogos', 'September', 'Oktober', 'November', 'Disember']
 
 function downloadCSV(filename: string, rows: Record<string, unknown>[]) {
   if (!rows.length) return
@@ -67,27 +72,6 @@ function downloadCSV(filename: string, rows: Record<string, unknown>[]) {
   a.download = filename
   a.click()
   URL.revokeObjectURL(url)
-}
-
-interface StatCard {
-  label: string
-  value: number | string
-  color?: 'default' | 'green' | 'red' | 'orange'
-}
-
-function StatCard({ label, value, color = 'default' }: StatCard) {
-  const colorClass = {
-    default: 'text-[#111]',
-    green: 'text-[#3A9E6A]',
-    red: 'text-[#D44040]',
-    orange: 'text-[#F56A00]',
-  }[color]
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 border-t-4 border-t-[#F56A00] px-5 py-4">
-      <p className="text-[11px] font-semibold uppercase tracking-widest text-[#888] mb-2">{label}</p>
-      <p className={`text-3xl font-bold font-mono ${colorClass} mb-1`}>{value}</p>
-    </div>
-  )
 }
 
 function getCellStyle(reportType: ReportType, col: string, value: unknown): string {
@@ -137,10 +121,25 @@ function getCellStyle(reportType: ReportType, col: string, value: unknown): stri
     }
   }
 
+  if (reportType === 'psychology') {
+    if (col === 'Kebimbangan Kognitif' || col === 'Kebimbangan Somatik') {
+      const num = parseFloat(strVal)
+      if (num <= 10) return 'bg-green-50 text-[#3A9E6A]'
+      if (num <= 15) return 'bg-orange-50 text-[#F56A00]'
+      return 'bg-red-50 text-[#D44040]'
+    }
+    if (col === 'Kepercayaan Diri') {
+      const num = parseFloat(strVal)
+      if (num >= 16) return 'bg-green-50 text-[#3A9E6A]'
+      if (num >= 12) return 'bg-orange-50 text-[#F56A00]'
+      return 'bg-red-50 text-[#D44040]'
+    }
+  }
+
   return ''
 }
 
-function computeSummaryRow(reportType: ReportType, data: Record<string, unknown>[]): string {
+function computeSummaryRow(reportType: ReportType, data: Record<string, unknown>[], latihkanMode?: LatihkanMode): string {
   if (!data.length) return ''
 
   if (reportType === 'fitness') {
@@ -157,11 +156,17 @@ function computeSummaryRow(reportType: ReportType, data: Record<string, unknown>
   }
 
   if (reportType === 'attendance') {
-    const hadir = data.filter(r => r['Kehadiran'] === 'Hadir').length
-    const tidakHadir = data.filter(r => r['Kehadiran'] === 'Tidak Hadir').length
-    const mc = data.filter(r => r['Kehadiran'] === 'MC').length
-    const hadirPct = Math.round((hadir / data.length) * 100)
-    return `Hadir: ${hadir} (${hadirPct}%) · Tidak Hadir: ${tidakHadir} · MC: ${mc}`
+    if (latihkanMode === 'kehadiran') {
+      const hadir = data.filter(r => r['Kehadiran'] === 'Hadir').length
+      const tidakHadir = data.filter(r => r['Kehadiran'] === 'Tidak Hadir').length
+      const mc = data.filter(r => r['Kehadiran'] === 'MC').length
+      const hadirPct = Math.round((hadir / data.length) * 100)
+      return `Hadir: ${hadir} (${hadirPct}%) · Tidak Hadir: ${tidakHadir} · MC: ${mc}`
+    } else if (latihkanMode === 'jadual') {
+      return `Jumlah ${data.length} jadual latihan`
+    } else if (latihkanMode === 'program') {
+      return `Jumlah ${data.length} program latihan`
+    }
   }
 
   if (reportType === 'supplement') {
@@ -177,66 +182,15 @@ function computeSummaryRow(reportType: ReportType, data: Record<string, unknown>
     return `Jumlah ${totalSessions} sesi · ${athletes.size} atlet unik`
   }
 
-  return ''
-}
-
-function computeStats(
-  reportType: ReportType,
-  data: Record<string, unknown>[]
-): StatCard[] {
-  if (!data.length) return []
-
-  if (reportType === 'fitness') {
-    const athletes = new Set(data.map(r => r['Nama Atlet']))
-    return [
-      { label: 'Total Rekod', value: data.length },
-      { label: 'Jumlah Atlet Unik', value: athletes.size },
-    ]
-  } else if (reportType === 'inbody') {
-    const athletes = new Set(data.map(r => r['Nama Atlet']))
-    const baik = data.filter(r => {
-      const skor = r['Skor SUKMA']
-      if (typeof skor === 'string') {
-        const score = parseFloat(skor.split('/')[0])
-        return score >= 80
-      }
-      return false
-    }).length
-    return [
-      { label: 'Total Rekod', value: data.length },
-      { label: 'Jumlah Atlet Unik', value: athletes.size },
-      { label: 'Skor BAIK', value: baik, color: 'green' },
-    ]
-  } else if (reportType === 'attendance') {
-    const hadir = data.filter(r => r['Kehadiran'] === 'Hadir').length
-    const tidakHadir = data.filter(r => r['Kehadiran'] === 'Tidak Hadir').length
-    const mc = data.filter(r => r['Kehadiran'] === 'MC').length
-    return [
-      { label: 'Total Rekod', value: data.length },
-      { label: 'Hadir', value: hadir, color: 'green' },
-      { label: 'Tidak Hadir + MC', value: tidakHadir + mc, color: 'red' },
-    ]
-  } else if (reportType === 'supplement') {
-    const approved = data.filter(r => r['Status'] === 'Diluluskan' || r['Status'] === 'Diluluskan Sebahagian').length
-    const rejected = data.filter(r => r['Status'] === 'Ditolak' || r['Status'] === 'Ditolak (Penyelaras)').length
-    const pending = data.filter(r => r['Status'] === 'Menunggu Semakan' || r['Status'] === 'Menunggu Sokongan').length
-    return [
-      { label: 'Total Permohonan', value: data.length },
-      { label: 'Diluluskan', value: approved, color: 'green' },
-      { label: 'Ditolak', value: rejected, color: 'red' },
-      { label: 'Menunggu Proses', value: pending, color: 'orange' },
-    ]
-  } else if (reportType === 'physio') {
-    const athletes = new Set(data.map(r => r['Nama Atlet']))
-    const totalSessions = (data as any[]).reduce((sum, r) => sum + ((r['Bilangan Sesi'] as number) || 0), 0)
-    const referred = data.filter(r => r['Dirujuk Doktor'] === 'Ya').length
-    return [
-      { label: 'Jumlah Sesi', value: totalSessions },
-      { label: 'Jumlah Atlet Unik', value: athletes.size },
-      { label: 'Dirujuk Doktor', value: referred, color: 'orange' },
-    ]
+  if (reportType === 'psychology') {
+    const athletes = new Set(data.map(r => r['Atlet']))
+    const avgCog = (data as any[]).reduce((sum, r) => sum + (parseFloat(String(r['Kebimbangan Kognitif'] ?? 0)) || 0), 0) / data.length
+    const avgSom = (data as any[]).reduce((sum, r) => sum + (parseFloat(String(r['Kebimbangan Somatik'] ?? 0)) || 0), 0) / data.length
+    const avgConf = (data as any[]).reduce((sum, r) => sum + (parseFloat(String(r['Kepercayaan Diri'] ?? 0)) || 0), 0) / data.length
+    return `Jumlah ${data.length} rekod · ${athletes.size} atlet · Kognitif: ${avgCog.toFixed(1)} · Somatik: ${avgSom.toFixed(1)} · Keyakinan: ${avgConf.toFixed(1)}`
   }
-  return []
+
+  return ''
 }
 
 export default function ReportsPage() {
@@ -244,7 +198,6 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(false)
   const [data, setData] = useState<Record<string, unknown>[]>([])
   const [generated, setGenerated] = useState(false)
-  const [sports, setSports] = useState<string[]>([])
 
   const [filterFrom, setFilterFrom] = useState('')
   const [filterTo, setFilterTo] = useState('')
@@ -263,19 +216,244 @@ export default function ReportsPage() {
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({})
   const [showColumnPicker, setShowColumnPicker] = useState(false)
   const [physioMode, setPhysioMode] = useState<PhysioMode>('ringkasan')
+  const [latihkanMode, setLatihkanMode] = useState<LatihkanMode>('kehadiran')
+  const [columnFilters, setColumnFilters] = useState<Record<string, string | string[]>>({})
+  const [openDropdowns, setOpenDropdowns] = useState<Record<string, boolean>>({})
+  const [dropdownSearches, setDropdownSearches] = useState<Record<string, string>>({})
 
-  useEffect(() => {
-    async function fetchSports() {
-      const { data: rows, error } = await supabase.from('athletes').select('sport_id, sport:sport_id(name)')
-      if (error) {
-        console.error('Error fetching sports:', error)
-        return
+  // Auto-generate report when active report type changes
+  useMemo(() => {
+    const autoGenerate = async () => {
+      setLoading(true)
+      setData([])
+      try {
+        // Call the appropriate query based on active report type
+        if (active === 'fitness') {
+          let q = supabase
+            .from('fitness_test_sessions')
+            .select('*, athlete:athletes(name, ic_number, category, sport_id, sport:sport_id(name))')
+            .order('recorded_date', { ascending: false })
+          if (filterSession) {
+            q = q.eq('session', filterSession)
+          }
+          const { data: sessions, error: sessError } = await q
+          if (sessError) throw sessError
+
+          const sessionIds = (sessions ?? []).map((s: any) => s.id)
+          const resultMap = new Map<string, Map<string, string>>()
+
+          if (sessionIds.length > 0) {
+            const { data: results } = await supabase
+              .from('fitness_test_results')
+              .select('session_id, test_id, result_value, test:test_id(test_name)')
+              .in('session_id', sessionIds)
+
+            ;(results ?? []).forEach((res: any) => {
+              if (!resultMap.has(res.session_id)) {
+                resultMap.set(res.session_id, new Map())
+              }
+              const testName = res.test?.test_name ?? `Test ${res.test_id}`
+              resultMap.get(res.session_id)!.set(testName, res.result_value ?? '')
+            })
+          }
+
+          setData((sessions ?? [])
+            .filter(r => !filterSport || r.athlete?.sport?.name === filterSport)
+            .map(r => {
+              const rowResults = resultMap.get(r.id) || new Map()
+              return {
+                'Nama Atlet': r.athlete?.name ?? '—',
+                'NO. IC': r.athlete?.ic_number ?? '—',
+                'Sukan': r.athlete?.sport?.name ?? '—',
+                'Kategori': r.athlete?.category ?? '—',
+                'Fasa': r.session,
+                'Tahun': r.year,
+                'Tarikh': r.recorded_date,
+                ...Object.fromEntries(rowResults),
+              }
+            })
+          )
+        } else if (active === 'inbody') {
+          let q = supabase.from('inbody_records').select('recorded_date, weight, smm, bmi, fat_pct, inbody_score, diet_plan_url, athlete:athletes(name, sport_id, sport:sport_id(name))').order('recorded_date', { ascending: false }) as any
+          if (filterFrom) q = q.gte('recorded_date', filterFrom)
+          if (filterTo) q = q.lte('recorded_date', filterTo)
+          const { data: rows } = await q
+          setData((rows ?? [])
+            .filter((r: any) => !filterSport || r.athlete?.sport?.name === filterSport)
+            .map((r: any) => ({
+              'Tarikh': r.recorded_date,
+              'Atlet': r.athlete?.name ?? '—',
+              'Sukan': r.athlete?.sport?.name ?? '—',
+              'Berat (kg)': r.weight ?? '',
+              'BMI': r.bmi ?? '',
+              'Lemak (%)': r.fat_pct ?? '',
+              'SMM (kg)': r.smm ?? '',
+              'Skor InBody': r.inbody_score ?? '',
+              'Diet Plan': r.diet_plan_url ? 'Ya' : 'Tidak',
+            }))
+          )
+        } else if (active === 'attendance') {
+          if (latihkanMode === 'kehadiran') {
+            let q = supabase.from('strength_conditioning').select('session_date, attendance, athlete:athletes(name, sport_id, sport:sport_id(name))').order('session_date', { ascending: false }) as any
+            if (filterFrom) q = q.gte('session_date', filterFrom)
+            if (filterTo) q = q.lte('session_date', filterTo)
+            if (filterStatus) q = q.eq('attendance', filterStatus)
+            const { data: rows } = await q
+            const attendanceMap: Record<string, string> = { present: 'Hadir', absent: 'Tidak Hadir', mc: 'MC' }
+            setData((rows ?? [])
+              .filter((r: any) => !filterSport || r.athlete?.sport?.name === filterSport)
+              .map((r: any) => ({
+                'Tarikh': r.session_date,
+                'Nama Atlet': r.athlete?.name ?? '—',
+                'Sukan': r.athlete?.sport?.name ?? '—',
+                'Kehadiran': attendanceMap[r.attendance] ?? r.attendance,
+              }))
+            )
+          } else if (latihkanMode === 'jadual') {
+            const { data: schedules, error } = await supabase
+              .from('coach_schedules')
+              .select('id, coach_id, sport, schedule_name, valid_from, coach:profiles(full_name), slots:coach_schedule_slots(id)')
+              .order('valid_from', { ascending: false }) as any
+            if (error) throw error
+            setData((schedules ?? [])
+              .filter((s: any) => !filterSport || s.sport === filterSport)
+              .map((s: any) => ({
+                'Jadual': s.schedule_name,
+                'Sukan': s.sport ?? '—',
+                'Jurulatih': (s.coach as any)?.full_name ?? '—',
+                'Bermula': s.valid_from,
+                'Bilangan Slot': (s.slots?.length ?? 0),
+              }))
+            )
+          } else if (latihkanMode === 'program') {
+            const { data: programs, error } = await supabase
+              .from('strength_conditioning_programs')
+              .select('id, sport, month, year, start_date, end_date, structured_data, coach_id, coach:profiles(full_name)')
+              .order('year', { ascending: false })
+              .order('month', { ascending: false }) as any
+            if (error) throw error
+            const monthNames = ['Januari', 'Februari', 'Mac', 'April', 'Mei', 'Jun', 'Julai', 'Ogos', 'September', 'Oktober', 'November', 'Disember']
+            setData((programs ?? [])
+              .filter((p: any) => !filterSport || p.sport === filterSport)
+              .map((p: any) => {
+                const structured = p.structured_data as any
+                return {
+                  'Sukan': p.sport ?? '—',
+                  'Bulan': monthNames[p.month - 1] ?? '—',
+                  'Tahun': p.year,
+                  'Fasa': structured?.phase ?? '—',
+                  'Bilangan Sesi': structured?.sessions?.length ?? 0,
+                  'Jurulatih': (p.coach as any)?.full_name ?? '—',
+                  'Tarikh Mula': p.start_date ?? '—',
+                  'Tarikh Tamat': p.end_date ?? '—',
+                }
+              })
+            )
+          }
+        } else if (active === 'supplement') {
+          let q = supabase.from('supplement_requests')
+            .select('*, supplement:supplements(name, unit)')
+            .order('created_at', { ascending: false })
+          if (filterStatus) q = q.eq('status', filterStatus)
+          if (filterFrom) q = q.gte('request_date', filterFrom)
+          if (filterTo) q = q.lte('request_date', filterTo)
+          const { data: rows, error } = await q
+          if (error) throw error
+          const statusMap: Record<string, string> = {
+            pending: 'Menunggu Semakan',
+            semakan_lulus: 'Menunggu Sokongan',
+            semakan_tolak: 'Ditolak (Penyelaras)',
+            approved: 'Diluluskan',
+            partial: 'Diluluskan Sebahagian',
+            rejected: 'Ditolak',
+          }
+          setData((rows ?? []).map(r => ({
+            'Tarikh Permohonan': r.request_date,
+            'Sukan': r.sport ?? '—',
+            'Suplemen': (r.supplement as any)?.name ?? '—',
+            'Kuantiti': r.quantity,
+            'Unit': (r.supplement as any)?.unit ?? '',
+            'Status': statusMap[r.status] ?? r.status,
+          })))
+        } else if (active === 'physio') {
+          const startDate = `${filterYear}-${String(filterMonth).padStart(2, '0')}-01`
+          const endDate = new Date(filterYear, filterMonth, 0).toISOString().slice(0, 10)
+          const { data: rows } = await (supabase
+            .from('physio_slots')
+            .select('athlete_id, slot_date, pain_scale, case_id, athlete:athletes(name, sport_id, sport:sport_id(name)), physio_case:physio_cases(referred_to_doctor)')
+            .gte('slot_date', startDate)
+            .lte('slot_date', endDate)
+            .not('athlete_id', 'is', null)
+            .order('slot_date', { ascending: true }) as any)
+
+          const grouped = new Map<string, Record<string, unknown>>()
+          ;(rows ?? []).forEach((s: any) => {
+            const athleteName = Array.isArray(s.athlete) ? s.athlete[0]?.name : s.athlete?.name
+            const athleteSport = Array.isArray(s.athlete) ? s.athlete[0]?.sport?.name : s.athlete?.sport?.name
+            const isReferred = Array.isArray(s.physio_case) ? s.physio_case[0]?.referred_to_doctor : s.physio_case?.referred_to_doctor
+            if (filterSport && athleteSport !== filterSport) return
+            if (!grouped.has(s.athlete_id)) {
+              grouped.set(s.athlete_id, {
+                'Nama Atlet': athleteName ?? '—',
+                'Sukan': athleteSport ?? '—',
+                'Bilangan Sesi': 0,
+                'Tarikh Sesi': '',
+                'Skala Kesakitan Terkini': '—',
+                'Dirujuk Doktor': isReferred ? 'Ya' : 'Tidak',
+              })
+            }
+            const row = grouped.get(s.athlete_id)!
+            const count = (row['Bilangan Sesi'] as number) + 1
+            const dates = (row['Tarikh Sesi'] as string).split(', ').filter(Boolean)
+            if (!dates.includes(s.slot_date)) dates.push(s.slot_date)
+            row['Bilangan Sesi'] = count
+            row['Tarikh Sesi'] = dates.map(d => new Date(d + 'T00:00:00').toLocaleDateString('ms-MY', { day: '2-digit', month: 'short' })).join(', ')
+            if (s.pain_scale !== null) row['Skala Kesakitan Terkini'] = `${s.pain_scale} / 10`
+          })
+          setData([...grouped.values()].sort((a, b) => (a['Sukan'] as string).localeCompare(b['Sukan'] as string) || (a['Nama Atlet'] as string).localeCompare(b['Nama Atlet'] as string)))
+        } else if (active === 'psychology') {
+          let q = supabase
+            .from('psychology_ratings')
+            .select('id, athlete_id, phase, assessment_date, cognitive_anxiety_score, somatic_anxiety_score, self_confidence_score, catatan, athlete:athletes(name, sport_id, sport:sport_id(name))')
+            .order('assessment_date', { ascending: false }) as any
+          if (filterFrom) q = q.gte('assessment_date', filterFrom)
+          if (filterTo) q = q.lte('assessment_date', filterTo)
+          const { data: rows, error } = await q
+          if (error) throw error
+          const phaseMap: Record<string, string> = {
+            persediaan: 'Persediaan',
+            pertandingan: 'Pertandingan',
+            pemulihan: 'Pemulihan',
+          }
+          setData((rows ?? [])
+            .filter((r: any) => !filterSport || r.athlete?.sport?.name === filterSport)
+            .map((r: any) => ({
+              'Atlet': r.athlete?.name ?? '—',
+              'Sukan': r.athlete?.sport?.name ?? '—',
+              'Fasa': phaseMap[r.phase] ?? r.phase,
+              'Tarikh': r.assessment_date,
+              'Kebimbangan Kognitif': r.cognitive_anxiety_score ?? '',
+              'Kebimbangan Somatik': r.somatic_anxiety_score ?? '',
+              'Kepercayaan Diri': r.self_confidence_score ?? '',
+              'Catatan': r.catatan ?? '',
+            }))
+          )
+        }
+      } finally {
+        setLoading(false)
+        setGenerated(true)
+        setSortCol(null)
+        setSortDir('asc')
+        if (data.length > 0) {
+          const cols = Object.keys(data[0])
+          const initialCols: Record<string, boolean> = {}
+          cols.forEach(col => { initialCols[col] = true })
+          setVisibleColumns(initialCols)
+        }
       }
-      const unique = [...new Set((rows ?? []).map((a: any) => a.sport?.name).filter(Boolean))] as string[]
-      setSports(unique.sort())
     }
-    fetchSports()
-  }, [])
+    autoGenerate()
+  }, [active, latihkanMode])
 
   function resetFilters() {
     setFilterFrom('')
@@ -293,6 +471,10 @@ export default function ReportsPage() {
     setVisibleColumns({})
     setShowColumnPicker(false)
     setPhysioMode('ringkasan')
+    setLatihkanMode('kehadiran')
+    setColumnFilters({})
+    setOpenDropdowns({})
+    setDropdownSearches({})
   }
 
   async function generate() {
@@ -302,7 +484,7 @@ export default function ReportsPage() {
       if (active === 'fitness') {
         let q = supabase
           .from('fitness_test_sessions')
-          .select('*, athlete:athletes(name, sport_id, sport:sport_id(name))')
+          .select('*, athlete:athletes(name, ic_number, category, sport_id, sport:sport_id(name))')
           .order('recorded_date', { ascending: false })
         if (filterSession) {
           q = q.eq('session', filterSession)
@@ -341,7 +523,9 @@ export default function ReportsPage() {
             const rowResults = resultMap.get(r.id) || new Map()
             return {
               'Nama Atlet': r.athlete?.name ?? '—',
+              'NO. IC': r.athlete?.ic_number ?? '—',
               'Sukan': r.athlete?.sport?.name ?? '—',
+              'Kategori': r.athlete?.category ?? '—',
               'Fasa': r.session,
               'Tahun': r.year,
               'Tarikh': r.recorded_date,
@@ -350,7 +534,7 @@ export default function ReportsPage() {
           })
         )
       } else if (active === 'inbody') {
-        let q = supabase.from('inbody_records').select('recorded_date, weight, smm, body_fat_mass, bmi, fat_pct, bmr, inbody_score, skor, ulasan, athlete:athletes(name, sport_id, sport:sport_id(name))').order('recorded_date', { ascending: false }) as any
+        let q = supabase.from('inbody_records').select('recorded_date, weight, smm, bmi, fat_pct, inbody_score, ulasan, athlete:athletes(name, sport_id, sport:sport_id(name))').order('recorded_date', { ascending: false }) as any
         if (filterFrom) q = q.gte('recorded_date', filterFrom)
         if (filterTo) q = q.lte('recorded_date', filterTo)
         const { data: rows } = await q
@@ -358,37 +542,83 @@ export default function ReportsPage() {
           .filter((r: any) => !filterSport || r.athlete?.sport?.name === filterSport)
           .map((r: any) => ({
             'Tarikh': r.recorded_date,
-            'Nama Atlet': r.athlete?.name ?? '—',
+            'Atlet': r.athlete?.name ?? '—',
             'Sukan': r.athlete?.sport?.name ?? '—',
             'Berat (kg)': r.weight ?? '',
-            'SMM (kg)': r.smm ?? '',
-            'Lemak Badan (kg)': r.body_fat_mass ?? '',
             'BMI': r.bmi ?? '',
             'Lemak (%)': r.fat_pct ?? '',
-            'BMR (kcal)': r.bmr ?? '',
+            'SMM (kg)': r.smm ?? '',
             'Skor InBody': r.inbody_score ?? '',
-            'Skor SUKMA': r.skor != null ? `${r.skor}/5` : '',
-            'Ulasan': r.ulasan ?? '',
+            'Diet Plan': r.ulasan ?? '',
           }))
         )
       } else if (active === 'attendance') {
-        let q = supabase.from('strength_conditioning').select('session_date, attendance, training_program, notes, athlete:athletes(name, sport_id, sport:sport_id(name))').order('session_date', { ascending: false }) as any
-        if (filterFrom) q = q.gte('session_date', filterFrom)
-        if (filterTo) q = q.lte('session_date', filterTo)
-        if (filterStatus) q = q.eq('attendance', filterStatus)
-        const { data: rows } = await q
-        const attendanceMap: Record<string, string> = { present: 'Hadir', absent: 'Tidak Hadir', mc: 'MC' }
-        setData((rows ?? [])
-          .filter((r: any) => !filterSport || r.athlete?.sport?.name === filterSport)
-          .map((r: any) => ({
-            'Tarikh': r.session_date,
-            'Nama Atlet': r.athlete?.name ?? '—',
-            'Sukan': r.athlete?.sport?.name ?? '—',
-            'Kehadiran': attendanceMap[r.attendance] ?? r.attendance,
-            'Program Latihan': r.training_program ?? '',
-            'Nota': r.notes ?? '',
-          }))
-        )
+        if (latihkanMode === 'kehadiran') {
+          // Attendance records
+          let q = supabase.from('strength_conditioning').select('session_date, attendance, athlete:athletes(name, sport_id, sport:sport_id(name))').order('session_date', { ascending: false }) as any
+          if (filterFrom) q = q.gte('session_date', filterFrom)
+          if (filterTo) q = q.lte('session_date', filterTo)
+          if (filterStatus) q = q.eq('attendance', filterStatus)
+          const { data: rows } = await q
+          const attendanceMap: Record<string, string> = { present: 'Hadir', absent: 'Tidak Hadir', mc: 'MC' }
+          setData((rows ?? [])
+            .filter((r: any) => !filterSport || r.athlete?.sport?.name === filterSport)
+            .map((r: any) => ({
+              'Tarikh': r.session_date,
+              'Nama Atlet': r.athlete?.name ?? '—',
+              'Sukan': r.athlete?.sport?.name ?? '—',
+              'Kehadiran': attendanceMap[r.attendance] ?? r.attendance,
+            }))
+          )
+        } else if (latihkanMode === 'jadual') {
+          // Coach schedules
+          const { data: schedules, error } = await supabase
+            .from('coach_schedules')
+            .select('id, coach_id, sport, schedule_name, valid_from, coach:profiles(full_name), slots:coach_schedule_slots(id)')
+            .order('valid_from', { ascending: false }) as any
+          if (error) {
+            console.error('Coach schedules error:', error)
+            throw error
+          }
+          setData((schedules ?? [])
+            .filter((s: any) => !filterSport || s.sport === filterSport)
+            .map((s: any) => ({
+              'Jadual': s.schedule_name,
+              'Sukan': s.sport ?? '—',
+              'Jurulatih': (s.coach as any)?.full_name ?? '—',
+              'Bermula': s.valid_from,
+              'Bilangan Slot': (s.slots?.length ?? 0),
+            }))
+          )
+        } else if (latihkanMode === 'program') {
+          // Training programs
+          const { data: programs, error } = await supabase
+            .from('strength_conditioning_programs')
+            .select('id, sport, month, year, start_date, end_date, structured_data, coach_id, coach:profiles(full_name)')
+            .order('year', { ascending: false })
+            .order('month', { ascending: false }) as any
+          if (error) {
+            console.error('Training programs error:', error)
+            throw error
+          }
+          const monthNames = ['Januari', 'Februari', 'Mac', 'April', 'Mei', 'Jun', 'Julai', 'Ogos', 'September', 'Oktober', 'November', 'Disember']
+          setData((programs ?? [])
+            .filter((p: any) => !filterSport || p.sport === filterSport)
+            .map((p: any) => {
+              const structured = p.structured_data as any
+              return {
+                'Sukan': p.sport ?? '—',
+                'Bulan': monthNames[p.month - 1] ?? '—',
+                'Tahun': p.year,
+                'Fasa': structured?.phase ?? '—',
+                'Bilangan Sesi': structured?.sessions?.length ?? 0,
+                'Jurulatih': (p.coach as any)?.full_name ?? '—',
+                'Tarikh Mula': p.start_date ?? '—',
+                'Tarikh Tamat': p.end_date ?? '—',
+              }
+            })
+          )
+        }
       } else if (active === 'supplement') {
         let q = supabase.from('supplement_requests')
           .select('*, supplement:supplements(name, unit)')
@@ -494,6 +724,37 @@ export default function ReportsPage() {
           })
           setData([...grouped.values()].sort((a, b) => (a['Sukan'] as string).localeCompare(b['Sukan'] as string) || (a['Nama Atlet'] as string).localeCompare(b['Nama Atlet'] as string)))
         }
+      } else if (active === 'psychology') {
+        let q = supabase
+          .from('psychology_ratings')
+          .select('id, athlete_id, phase, assessment_date, cognitive_anxiety_score, somatic_anxiety_score, self_confidence_score, catatan, athlete:athletes(name, sport_id, sport:sport_id(name))')
+          .order('assessment_date', { ascending: false }) as any
+        if (filterFrom) q = q.gte('assessment_date', filterFrom)
+        if (filterTo) q = q.lte('assessment_date', filterTo)
+        const { data: rows, error } = await q
+        if (error) {
+          console.error('Psychology report error:', error)
+          throw error
+        }
+        console.log('Psychology ratings fetched:', rows?.length ?? 0, 'records')
+        const phaseMap: Record<string, string> = {
+          persediaan: 'Persediaan',
+          pertandingan: 'Pertandingan',
+          pemulihan: 'Pemulihan',
+        }
+        setData((rows ?? [])
+          .filter((r: any) => !filterSport || r.athlete?.sport?.name === filterSport)
+          .map((r: any) => ({
+            'Atlet': r.athlete?.name ?? '—',
+            'Sukan': r.athlete?.sport?.name ?? '—',
+            'Fasa': phaseMap[r.phase] ?? r.phase,
+            'Tarikh': r.assessment_date,
+            'Kebimbangan Kognitif': r.cognitive_anxiety_score ?? '',
+            'Kebimbangan Somatik': r.somatic_anxiety_score ?? '',
+            'Kepercayaan Diri': r.self_confidence_score ?? '',
+            'Catatan': r.catatan ?? '',
+          }))
+        )
       }
     } finally {
       setLoading(false)
@@ -510,6 +771,25 @@ export default function ReportsPage() {
 
   const displayData = useMemo(() => {
     let d = data
+
+    // Apply column filters
+    if (Object.keys(columnFilters).length > 0) {
+      d = d.filter(row => {
+        return Object.entries(columnFilters).every(([col, filterVal]) => {
+          if (!filterVal || filterVal === '' || (Array.isArray(filterVal) && filterVal.length === 0)) return true
+          const val = String(row[col] ?? '').toLowerCase()
+
+          if (Array.isArray(filterVal)) {
+            // Multi-value filter (e.g., multiple status values)
+            return filterVal.some(f => val.includes(f.toLowerCase()))
+          } else {
+            // Single value filter
+            return val.includes(String(filterVal).toLowerCase())
+          }
+        })
+      })
+    }
+
     if (previewSearch) {
       const q = previewSearch.toLowerCase()
       d = d.filter(row =>
@@ -527,7 +807,7 @@ export default function ReportsPage() {
       })
     }
     return d
-  }, [data, previewSearch, sortCol, sortDir])
+  }, [data, previewSearch, sortCol, sortDir, columnFilters])
 
   const config = REPORTS.find(r => r.key === active)!
   const columns = useMemo(() => {
@@ -543,22 +823,9 @@ export default function ReportsPage() {
     const testCols = Array.from(allCols).filter(c => !standardFields.includes(c)).sort()
     return [...standardCols, ...testCols]
   }, [data])
-  const stats = computeStats(active, data)
 
   return (
     <>
-      <style>{`
-        @media print {
-          .no-print { display: none !important; }
-          body { background: white !important; }
-          table { font-size: 11px; border-collapse: collapse; }
-          th, td { border: 1px solid #ddd; }
-          .print-header { display: block !important; page-break-after: avoid; }
-        }
-        @media screen {
-          .print-header { display: none; }
-        }
-      `}</style>
       <div className="space-y-4">
         <p className="text-[12px] text-[#888]">Jana dan eksport laporan mengikut modul</p>
 
@@ -586,7 +853,7 @@ export default function ReportsPage() {
           ))}
         </div>
 
-        {/* Filters + preview */}
+        {/* Buttons + preview */}
         <div className="space-y-4">
           <div className="bg-white rounded-xl border border-gray-200 border-t-4 border-t-[#F56A00] px-5 py-4 space-y-4 no-print">
             <div className="flex items-center justify-between">
@@ -594,111 +861,8 @@ export default function ReportsPage() {
               {generated && <span className="text-[11px] text-[#888]">{data.length} rekod dijana</span>}
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {active === 'fitness' && (
-                <div>
-                  <label className={labelCls}>Fasa</label>
-                  <select value={filterSession} onChange={e => setFilterSession(e.target.value)} className={inputCls}>
-                    <option value="">Semua Fasa</option>
-                    <option value="Fasa 1">Fasa 1</option>
-                    <option value="Fasa 2">Fasa 2</option>
-                    <option value="Fasa 3">Fasa 3</option>
-                    <option value="Fasa 4">Fasa 4</option>
-                  </select>
-                </div>
-              )}
-              {active === 'physio' && (
-                <>
-                  {physioMode === 'ringkasan' ? (
-                    <>
-                      <div>
-                        <label className={labelCls}>Tahun</label>
-                        <select value={filterYear} onChange={e => setFilterYear(parseInt(e.target.value))} className={inputCls}>
-                          {Array.from({ length: 4 }, (_, i) => currentDate.getFullYear() - i).map(year => (
-                            <option key={year} value={year}>{year}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className={labelCls}>Bulan</label>
-                        <select value={filterMonth} onChange={e => setFilterMonth(parseInt(e.target.value))} className={inputCls}>
-                          {MONTHS_MY.map((month, idx) => (
-                            <option key={idx} value={idx + 1}>{month}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div>
-                        <label className={labelCls}>Dari Tarikh</label>
-                        <input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)} className={inputCls} />
-                      </div>
-                      <div>
-                        <label className={labelCls}>Hingga Tarikh</label>
-                        <input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)} className={inputCls} />
-                      </div>
-                    </>
-                  )}
-                  <div>
-                    <label className={labelCls}>Sukan</label>
-                    <select value={filterSport} onChange={e => setFilterSport(e.target.value)} className={inputCls}>
-                      <option value="">Semua Sukan</option>
-                      {sports.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                  </div>
-                </>
-              )}
-              {(active === 'attendance' || active === 'inbody' || active === 'supplement') && (
-                <>
-                  <div>
-                    <label className={labelCls}>Dari Tarikh</label>
-                    <input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)} className={inputCls} />
-                  </div>
-                  <div>
-                    <label className={labelCls}>Hingga Tarikh</label>
-                    <input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)} className={inputCls} />
-                  </div>
-                </>
-              )}
-              {(active === 'fitness' || active === 'inbody' || active === 'attendance') && (
-                <div>
-                  <label className={labelCls}>Sukan</label>
-                  <select value={filterSport} onChange={e => setFilterSport(e.target.value)} className={inputCls}>
-                    <option value="">Semua Sukan</option>
-                    {sports.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
-              )}
-              {active === 'attendance' && (
-                <div>
-                  <label className={labelCls}>Kehadiran</label>
-                  <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className={inputCls}>
-                    <option value="">Semua</option>
-                    <option value="present">Hadir</option>
-                    <option value="absent">Tidak Hadir</option>
-                    <option value="mc">MC</option>
-                  </select>
-                </div>
-              )}
-              {active === 'supplement' && (
-                <div>
-                  <label className={labelCls}>Status</label>
-                  <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className={inputCls}>
-                    <option value="">Semua</option>
-                    <option value="pending">Menunggu Semakan</option>
-                    <option value="semakan_lulus">Menunggu Sokongan</option>
-                    <option value="semakan_tolak">Ditolak (Penyelaras)</option>
-                    <option value="approved">Diluluskan</option>
-                    <option value="partial">Diluluskan Sebahagian</option>
-                    <option value="rejected">Ditolak</option>
-                  </select>
-                </div>
-              )}
-            </div>
-
             {active === 'physio' && (
-              <div className="flex gap-2 pt-2 border-t border-gray-100">
+              <div className="flex gap-2">
                 <button
                   onClick={() => setPhysioMode('ringkasan')}
                   className={`px-4 py-2 text-sm font-semibold rounded-lg transition ${
@@ -722,7 +886,17 @@ export default function ReportsPage() {
               </div>
             )}
 
-            <div className="flex gap-3 pt-2 flex-wrap">
+            {active === 'attendance' && (
+              <div>
+                <select value={latihkanMode} onChange={e => { setLatihkanMode(e.target.value as LatihkanMode); setData([]); setGenerated(false) }} className={inputCls}>
+                  <option value="kehadiran">Kehadiran Latihan</option>
+                  <option value="jadual">Jadual Latihan</option>
+                  <option value="program">Program Latihan</option>
+                </select>
+              </div>
+            )}
+
+            <div className="flex gap-3 flex-wrap">
               <button onClick={generate} disabled={loading} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
                 {loading ? 'Menjana...' : 'Jana Laporan'}
               </button>
@@ -735,40 +909,121 @@ export default function ReportsPage() {
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                     Eksport CSV
                   </button>
-                  <button
-                    onClick={() => window.print()}
-                    className="px-5 py-2 border border-gray-200 hover:border-[#F56A00] hover:text-[#F56A00] text-[#444] text-sm font-semibold rounded-lg transition flex items-center gap-2"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/></svg>
-                    Cetak
-                  </button>
-                  <button
-                    onClick={() => setShowColumnPicker(!showColumnPicker)}
-                    className="px-5 py-2 border border-gray-200 hover:border-[#F56A00] hover:text-[#F56A00] text-[#444] text-sm font-semibold rounded-lg transition flex items-center gap-2"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 11H3v2h6v-2zm0-4H3v2h6V7zm6 0v2h6V7h-6zm0 4v2h6v-2h-6zM9 3H3v2h6V3zm6 0v2h6V3h-6z"/></svg>
-                    Pilih Lajur {showColumnPicker ? '▲' : '▾'}
-                  </button>
                 </>
               )}
             </div>
 
-            {data.length > 0 && showColumnPicker && (
-              <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-3">
-                <p className="text-sm font-semibold text-[#111]">Pilih lajur untuk papar dan eksport</p>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {columns.map(col => (
-                    <label key={col} className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={visibleColumns[col] !== false}
-                        onChange={e => setVisibleColumns({ ...visibleColumns, [col]: e.target.checked })}
-                        className="w-4 h-4 rounded border-gray-300 text-[#F56A00]"
-                      />
-                      <span className="text-sm text-[#444]">{col}</span>
-                    </label>
-                  ))}
+            {data.length > 0 && (
+              <div className="p-4 bg-white rounded-lg border border-gray-200 space-y-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-[#111]">Penapis & Lajur</p>
+                  <button
+                    onClick={() => setShowColumnPicker(!showColumnPicker)}
+                    className="text-xs text-[#F56A00] hover:underline font-semibold"
+                  >
+                    {showColumnPicker ? '▲ Tutup Pilih Lajur' : '▾ Buka Pilih Lajur'}
+                  </button>
                 </div>
+
+                {showColumnPicker && (
+                  <div className="p-3 bg-gray-50 rounded-lg border border-gray-200 space-y-3">
+                    <p className="text-sm font-semibold text-[#111]">Pilih lajur untuk papar dan eksport</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      {columns.map(col => (
+                        <label key={col} className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={visibleColumns[col] !== false}
+                            onChange={e => setVisibleColumns({ ...visibleColumns, [col]: e.target.checked })}
+                            className="w-4 h-4 rounded border-gray-300 text-[#F56A00]"
+                          />
+                          <span className="text-sm text-[#444]">{col}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {columns.filter(col => visibleColumns[col] !== false).map(col => {
+                    const filterValue = columnFilters[col] || ''
+                    const uniqueValues = [...new Set(data.map(r => String(r[col] ?? '').trim()).filter(Boolean))].sort()
+                    const isOpen = openDropdowns[col] || false
+                    const searchInput = dropdownSearches[col] || ''
+                    const filteredOptions = uniqueValues.filter(val => val.toLowerCase().includes(searchInput.toLowerCase()))
+
+                    return (
+                      <div key={col} className="relative">
+                        <label className="block text-[10px] font-bold uppercase tracking-widest text-[#888] mb-1">{col}</label>
+                        <button
+                          onClick={() => setOpenDropdowns({ ...openDropdowns, [col]: !isOpen })}
+                          className={`w-full px-3 py-2 text-sm rounded-lg border transition text-left flex items-center justify-between ${
+                            isOpen
+                              ? 'border-[#F56A00] bg-orange-50'
+                              : 'border-gray-300 bg-white hover:border-gray-400'
+                          }`}
+                        >
+                          <span className={filterValue ? 'text-[#111] font-medium' : 'text-[#999]'}>
+                            {filterValue || 'Semua'}
+                          </span>
+                          <span className="text-xs">▼</span>
+                        </button>
+
+                        {isOpen && (
+                          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#F56A00] rounded-lg shadow-lg z-50">
+                            <input
+                              autoFocus
+                              type="text"
+                              placeholder="Cari..."
+                              value={searchInput}
+                              onChange={e => setDropdownSearches({ ...dropdownSearches, [col]: e.target.value })}
+                              className="w-full px-3 py-2 border-b border-gray-200 text-sm focus:outline-none"
+                            />
+                            <div className="max-h-48 overflow-y-auto">
+                              <button
+                                onClick={() => {
+                                  setColumnFilters({ ...columnFilters, [col]: '' })
+                                  setOpenDropdowns({ ...openDropdowns, [col]: false })
+                                  setDropdownSearches({ ...dropdownSearches, [col]: '' })
+                                }}
+                                className="w-full text-left px-3 py-2 text-sm hover:bg-orange-50 text-[#666]"
+                              >
+                                Semua
+                              </button>
+                              {filteredOptions.map(val => (
+                                <button
+                                  key={val}
+                                  onClick={() => {
+                                    setColumnFilters({ ...columnFilters, [col]: val })
+                                    setOpenDropdowns({ ...openDropdowns, [col]: false })
+                                    setDropdownSearches({ ...dropdownSearches, [col]: '' })
+                                  }}
+                                  className={`w-full text-left px-3 py-2 text-sm transition ${
+                                    filterValue === val
+                                      ? 'bg-[#F56A00] text-white font-medium'
+                                      : 'hover:bg-gray-50 text-[#444]'
+                                  }`}
+                                >
+                                  {val}
+                                </button>
+                              ))}
+                              {filteredOptions.length === 0 && (
+                                <div className="px-3 py-3 text-[12px] text-[#999] text-center">Tiada padanan</div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+                {Object.values(columnFilters).some(v => v !== '' && v.length > 0) && (
+                  <button
+                    onClick={() => setColumnFilters({})}
+                    className="text-xs text-[#F56A00] hover:underline font-semibold"
+                  >
+                    Kosongkan Penapis Lajur
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -777,32 +1032,6 @@ export default function ReportsPage() {
 
           {generated && (
             <>
-              {data.length > 0 && (
-                <div className="print-header p-5 bg-white rounded-xl border border-gray-200 mb-4">
-                  <div className="text-center space-y-2">
-                    <p className="text-sm font-semibold text-[#111]">MAJLIS SUKAN PAHANG — BAHAGIAN SAINS SUKAN</p>
-                    <p className="text-lg font-bold text-[#F56A00]">{config.label}{physioMode === 'terperinci' ? ' (Terperinci)' : ''}</p>
-                    <p className="text-[12px] text-[#888]">
-                      Periode: {filterFrom || `${filterMonth}/${filterYear}`} – {filterTo || `${filterMonth}/${filterYear}`}
-                      {filterSport && ` | Sukan: ${filterSport}`}
-                    </p>
-                    <p className="text-[11px] text-[#666]">Dijana: {new Date().toLocaleDateString('ms-MY', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-
-          {generated && (
-            <>
-              {stats.length > 0 && (
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 no-print">
-                  {stats.map((stat, i) => (
-                    <StatCard key={i} {...stat} />
-                  ))}
-                </div>
-              )}
-
               <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                 {data.length === 0 ? (
                   <div className="py-12 flex flex-col items-center gap-4">
@@ -885,7 +1114,7 @@ export default function ReportsPage() {
                           {data.length > 0 && (
                             <tr className="border-t-2 border-gray-200 bg-gray-50 font-semibold">
                               <td colSpan={columns.filter(c => visibleColumns[c] !== false).length} className="px-4 py-3 text-[#111]">
-                                {computeSummaryRow(active, data)}
+                                {computeSummaryRow(active, data, active === 'attendance' ? latihkanMode : undefined)}
                               </td>
                             </tr>
                           )}
@@ -909,5 +1138,4 @@ export default function ReportsPage() {
   )
 }
 
-const labelCls = 'block text-[10px] font-semibold uppercase tracking-widest text-[#888] mb-1.5'
 const inputCls = 'w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2 text-sm text-[#111] outline-none transition focus:border-[#F56A00] focus:bg-white'

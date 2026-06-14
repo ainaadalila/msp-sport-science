@@ -6,6 +6,7 @@ import type { PhysioRating } from '../../types'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import html2canvas from 'html2canvas'
 
 interface CSVRow {
   [key: string]: string
@@ -72,8 +73,41 @@ export default function PsychologyRatingPage() {
   const [comparisonData, setComparisonData] = useState<any[]>([])
   const [selectedAthleteName, setSelectedAthleteName] = useState('')
   const [selectedAthleteSport, setSelectedAthleteSport] = useState('')
+  const [editingCatatan, setEditingCatatan] = useState<{ id: string; text: string } | null>(null)
+  const [savingCatatan, setSavingCatatan] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const chartRef = useRef<HTMLDivElement>(null)
+
+  async function handlePrint() {
+    if (!chartRef.current) return
+    try {
+      const canvas = await html2canvas(chartRef.current, { scale: 2, useCORS: true })
+      const image = canvas.toDataURL('image/png')
+      const printWindow = window.open('', '', 'width=900,height=700')
+      if (printWindow) {
+        printWindow.document.write(`
+          <html><head><title>Cetak - Penilaian Psikologi</title>
+          <style>
+            body { margin: 20px; font-family: Arial, sans-serif; }
+            img { max-width: 100%; height: auto; }
+            .header { margin-bottom: 20px; }
+          </style>
+          </head><body>
+          <div class="header">
+            <h2>Penilaian Psikologi</h2>
+            <p>Laporan ${new Date().toLocaleDateString('ms-MY')}</p>
+          </div>
+          <img src="${image}" />
+          </body></html>
+        `)
+        printWindow.document.close()
+        printWindow.print()
+      }
+    } catch (error) {
+      console.error('Print failed:', error)
+    }
+  }
 
   useEffect(() => {
     fetchAll()
@@ -91,7 +125,7 @@ export default function PsychologyRatingPage() {
       const [ratingsRes, athletesRes] = await Promise.all([
         supabase
           .from('psychology_ratings')
-          .select('id, athlete_id, phase, assessment_date, cognitive_anxiety_score, somatic_anxiety_score, self_confidence_score, athlete:athletes(id, name, sport_id, sport:sport_id(name))')
+          .select('id, athlete_id, phase, assessment_date, cognitive_anxiety_score, somatic_anxiety_score, self_confidence_score, catatan, athlete:athletes(id, name, sport_id, sport:sport_id(name))')
           .order('assessment_date', { ascending: false }),
         supabase
           .from('athletes')
@@ -137,6 +171,25 @@ export default function PsychologyRatingPage() {
 
     setComparisonData(Object.values(phaseData).filter(Boolean))
     setSelectedAthleteId(athleteId)
+  }
+
+  const saveCatatan = async () => {
+    if (!editingCatatan) return
+    try {
+      setSavingCatatan(true)
+      const { error } = await supabase
+        .from('psychology_ratings')
+        .update({ catatan: editingCatatan.text || null })
+        .eq('id', editingCatatan.id)
+
+      if (error) throw error
+      setEditingCatatan(null)
+      fetchAll()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save catatan')
+    } finally {
+      setSavingCatatan(false)
+    }
   }
 
   const calculateScores = (responses: Record<string, number>) => {
@@ -420,10 +473,21 @@ export default function PsychologyRatingPage() {
   }, [ratings, filteredAthletes, filterPhase])
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" ref={chartRef}>
 
       {/* Header */}
-      <p className="text-[12px] text-[#888]">{athletes.length} atlet • {ratings.length} rekod penilaian</p>
+      <div className="flex items-center justify-between">
+        <p className="text-[12px] text-[#888]">{athletes.length} atlet • {ratings.length} rekod penilaian</p>
+        <button
+          onClick={handlePrint}
+          className="flex items-center gap-2 px-4 py-2 bg-[#F56A00] text-white text-sm font-semibold rounded-lg hover:bg-[#D45A00] transition"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+            <path d="M9 12h6m-6 4h6M9 8h.01M15 8h.01M7 5h10a2 2 0 012 2v10a2 2 0 01-2 2H7a2 2 0 01-2-2V7a2 2 0 012-2z"/>
+          </svg>
+          Cetak
+        </button>
+      </div>
 
       {/* Stats Section */}
       {!loading && (
@@ -609,7 +673,7 @@ export default function PsychologyRatingPage() {
                                   <table className="w-full text-xs">
                                     <thead>
                                       <tr className="border-b border-orange-100">
-                                        {['Fasa', 'Tarikh', 'Keb. Kognitif', 'Keb. Somatik', 'Keyakinan Diri'].map(h => (
+                                        {['Fasa', 'Tarikh', 'Keb. Kognitif', 'Keb. Somatik', 'Keyakinan Diri', 'Catatan'].map(h => (
                                           <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-wider text-[#888] px-3 py-2">{h}</th>
                                         ))}
                                       </tr>
@@ -639,6 +703,19 @@ export default function PsychologyRatingPage() {
                                             <div className="font-semibold text-[#111]">{r.self_confidence_score}</div>
                                             <div className={`text-[10px] ${getScoreInsight('confidence', r.self_confidence_score).color}`}>
                                               {getScoreInsight('confidence', r.self_confidence_score).label}
+                                            </div>
+                                          </td>
+                                          <td className="px-3 py-2">
+                                            <div className="flex items-center justify-between gap-2">
+                                              <span className="text-[#666] max-w-xs truncate text-[10px]">{r.catatan || '—'}</span>
+                                              {can('psychology', 'update') && (
+                                                <button
+                                                  onClick={() => setEditingCatatan({ id: r.id, text: r.catatan || '' })}
+                                                  className="text-[#F56A00] hover:underline text-[10px] font-semibold whitespace-nowrap"
+                                                >
+                                                  Edit
+                                                </button>
+                                              )}
                                             </div>
                                           </td>
                                         </tr>
@@ -736,6 +813,42 @@ export default function PsychologyRatingPage() {
                   </div>
                 </>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Catatan Edit Modal */}
+      {editingCatatan && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-sm mx-4">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-lg font-bold text-[#111]">Edit Catatan</h2>
+              <button onClick={() => setEditingCatatan(null)} className="text-[#888] hover:text-[#111] text-2xl leading-none">×</button>
+            </div>
+            <div className="p-6 space-y-4">
+              <textarea
+                value={editingCatatan.text}
+                onChange={(e) => setEditingCatatan({ ...editingCatatan, text: e.target.value })}
+                placeholder="Masukkan catatan..."
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#F56A00] resize-none"
+                rows={5}
+              />
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => setEditingCatatan(null)}
+                  className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-semibold rounded-lg transition"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={saveCatatan}
+                  disabled={savingCatatan}
+                  className="px-4 py-2 bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold rounded-lg transition disabled:opacity-50"
+                >
+                  {savingCatatan ? 'Menyimpan...' : 'Simpan'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

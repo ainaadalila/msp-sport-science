@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
 import { usePermissions } from '../../../hooks/usePermissions'
 import { useSports } from '../../../hooks/useSports'
 import { logAction } from '../../../lib/audit'
+import html2canvas from 'html2canvas'
 import type { Athlete, FitnessTestSession, SportFitnessTest, FitnessTestNorm } from '../../../types'
 
 interface TestResultInput {
@@ -36,6 +37,7 @@ export default function FitnessTestingPage() {
   const canRecord = can('fitness', 'create')
   const [searchParams] = useSearchParams()
   const athleteIdParam = searchParams.get('athlete')
+  const chartRef = useRef<HTMLDivElement>(null)
 
   const [athletes, setAthletes] = useState<Athlete[]>([])
   const [selectedAthlete, setSelectedAthlete] = useState<Athlete | null>(null)
@@ -65,6 +67,36 @@ export default function FitnessTestingPage() {
   const [selectedAthletesGender, setSelectedAthletesGender] = useState<'M' | 'F' | null>(null)
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null)
   const [isDraft, setIsDraft] = useState(false)
+
+  async function handlePrint() {
+    if (!chartRef.current) return
+    try {
+      const canvas = await html2canvas(chartRef.current, { scale: 2, useCORS: true })
+      const image = canvas.toDataURL('image/png')
+      const printWindow = window.open('', '', 'width=900,height=700')
+      if (printWindow) {
+        printWindow.document.write(`
+          <html><head><title>Cetak - ${selectedAthlete?.name}</title>
+          <style>
+            body { margin: 20px; font-family: Arial, sans-serif; }
+            img { max-width: 100%; height: auto; }
+            .header { margin-bottom: 20px; }
+          </style>
+          </head><body>
+          <div class="header">
+            <h2>${selectedAthlete?.name}</h2>
+            <p>${selectedAthlete?.sport?.name}</p>
+          </div>
+          <img src="${image}" />
+          </body></html>
+        `)
+        printWindow.document.close()
+        printWindow.print()
+      }
+    } catch (error) {
+      console.error('Print failed:', error)
+    }
+  }
 
   useEffect(() => {
     if (!canRecord) return
@@ -364,6 +396,17 @@ export default function FitnessTestingPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold text-[#111]">Pencatatan Ujian Kecergasan</h2>
+        {selectedAthlete && (
+          <button
+            onClick={handlePrint}
+            className="flex items-center gap-2 px-4 py-2 bg-[#F56A00] text-white text-sm font-semibold rounded-lg hover:bg-[#D45A00] transition"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <path d="M9 12h6m-6 4h6M9 8h.01M15 8h.01M7 5h10a2 2 0 012 2v10a2 2 0 01-2 2H7a2 2 0 01-2-2V7a2 2 0 012-2z"/>
+            </svg>
+            Cetak
+          </button>
+        )}
       </div>
 
       {!selectedAthlete ? (
@@ -612,18 +655,13 @@ export default function FitnessTestingPage() {
                     {currentTest && testHistory.length > 0 && (
                       <>
                         {/* Detailed Test View with Tahap Pencapaian */}
-                        <div className="grid grid-cols-3 gap-4">
+                        <div className="grid grid-cols-3 gap-4" ref={chartRef}>
                           {/* Chart Section */}
                           <div className="col-span-2 bg-white rounded-xl border border-gray-200 overflow-hidden">
                             <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
-                              <div className="flex items-center justify-between">
-                                <p className="text-sm font-semibold text-[#111]">
-                                  {currentTest.test_name} — {testHistory.length} Sesi
-                                </p>
-                                <a href="#" className="text-xs text-[#F56A00] hover:underline">
-                                  Eksport →
-                                </a>
-                              </div>
+                              <p className="text-sm font-semibold text-[#111]">
+                                {currentTest.test_name} — {testHistory.length} Sesi
+                              </p>
                             </div>
 
                             <div className="p-4 space-y-4">
@@ -638,7 +676,7 @@ export default function FitnessTestingPage() {
                                         <span className="text-xs font-semibold text-[#111]">{h.result.result_value}</span>
                                       </div>
                                       <div
-                                        className="w-full bg-gradient-to-t from-orange-400 to-orange-300 rounded-t"
+                                        className="w-full bg-gradient-to-t from-orange-400 to-orange-300 rounded-t fitness-chart-bar"
                                         style={{ height: `${heightPx}px` }}
                                       />
                                     </div>
@@ -1007,51 +1045,51 @@ export default function FitnessTestingPage() {
                   Kembali ke Paparan
                 </button>
                 {isDraft && (
-                  <>
-                    <button
-                      onClick={async () => {
-                        setSaving(true)
-                        try {
-                          const { error } = await supabase
-                            .from('fitness_test_sessions')
-                            .update({ is_draft: false })
-                            .eq('id', editingSessionId)
-                          if (error) throw error
-                          await logAction(profile!.id, 'submit_fitness_tests', 'fitness_test_sessions', editingSessionId!)
-                          setIsDraft(false)
-                          if (viewedSession) {
-                            setViewedSession({ ...viewedSession, session: { ...viewedSession.session, is_draft: false } })
-                          }
-                        } catch (err) {
-                          setError((err as any).message || 'Ralat menyimpan')
-                        } finally {
-                          setSaving(false)
+                  <button
+                    onClick={async () => {
+                      setSaving(true)
+                      try {
+                        const { error } = await supabase
+                          .from('fitness_test_sessions')
+                          .update({ is_draft: false })
+                          .eq('id', editingSessionId)
+                        if (error) throw error
+                        await logAction(profile!.id, 'submit_fitness_tests', 'fitness_test_sessions', editingSessionId!)
+                        setIsDraft(false)
+                        if (viewedSession) {
+                          setViewedSession({ ...viewedSession, session: { ...viewedSession.session, is_draft: false } })
                         }
-                      }}
-                      disabled={saving}
-                      className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition disabled:opacity-60"
-                    >
-                      {saving ? 'Menyimpan...' : 'Serah Draf'}
-                    </button>
-                    <button
-                      onClick={() => {
-                        setViewMode('record_tests')
-                        if (viewedSession?.results) {
-                          setResults(viewedSession.results.map(r => ({
-                            test_id: r.test_id,
-                            result_value: r.result_value,
-                            notes: r.notes || undefined,
-                            test_name: r.test_name,
-                          })))
-                        }
-                        setSession(viewedSession!.session.session)
-                        setYear(viewedSession!.session.year)
-                      }}
-                      className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-                    >
-                      Lanjutkan Edit Draf
-                    </button>
-                  </>
+                      } catch (err) {
+                        setError((err as any).message || 'Ralat menyimpan')
+                      } finally {
+                        setSaving(false)
+                      }
+                    }}
+                    disabled={saving}
+                    className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition disabled:opacity-60"
+                  >
+                    {saving ? 'Menyimpan...' : 'Serah Draf'}
+                  </button>
+                )}
+                {can('fitness', 'update') && (
+                  <button
+                    onClick={() => {
+                      setViewMode('record_tests')
+                      if (viewedSession?.results) {
+                        setResults(viewedSession.results.map(r => ({
+                          test_id: r.test_id,
+                          result_value: r.result_value,
+                          notes: r.notes || undefined,
+                          test_name: r.test_name,
+                        })))
+                      }
+                      setSession(viewedSession!.session.session)
+                      setYear(viewedSession!.session.year)
+                    }}
+                    className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                  >
+                    'Edit'
+                  </button>
                 )}
                 <button
                   onClick={() => {
@@ -1082,14 +1120,14 @@ export default function FitnessTestingPage() {
                 ) : (
                   <div className="divide-y divide-gray-100">
                     {sessionsWithResults.map(sessionResult => (
-                      <div key={sessionResult.session.id} className="p-4 hover:bg-gray-50 transition cursor-pointer" onClick={() => {
-                        setViewedSession(sessionResult)
-                        setIsDraft(sessionResult.session.is_draft)
-                        setEditingSessionId(sessionResult.session.id)
-                        setViewMode('view_results')
-                      }}>
+                      <div key={sessionResult.session.id} className="p-4 hover:bg-gray-50 transition">
                         <div className="flex items-center justify-between mb-3">
-                          <div>
+                          <div className="flex-1 cursor-pointer" onClick={() => {
+                            setViewedSession(sessionResult)
+                            setIsDraft(sessionResult.session.is_draft)
+                            setEditingSessionId(sessionResult.session.id)
+                            setViewMode('view_results')
+                          }}>
                             <div className="flex items-center gap-2">
                               <p className="font-semibold text-[#111]">{sessionResult.session.session} {sessionResult.session.year}</p>
                               {sessionResult.session.is_draft && (
@@ -1098,9 +1136,30 @@ export default function FitnessTestingPage() {
                             </div>
                             <p className="text-xs text-[#888]">{new Date(sessionResult.session.recorded_date).toLocaleDateString('ms-MY')}</p>
                           </div>
-                          <span className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded">
-                            {sessionResult.results.length} ujian
-                          </span>
+                          <div className="flex items-center gap-3 shrink-0">
+                            <span className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded">
+                              {sessionResult.results.length} ujian
+                            </span>
+                            {can('fitness', 'update') && (
+                              <button
+                                onClick={() => {
+                                  setViewMode('record_tests')
+                                  setEditingSessionId(sessionResult.session.id)
+                                  setResults(sessionResult.results.map(r => ({
+                                    test_id: r.test_id,
+                                    result_value: r.result_value,
+                                    notes: r.notes || undefined,
+                                    test_name: r.test_name,
+                                  })))
+                                  setSession(sessionResult.session.session)
+                                  setYear(sessionResult.session.year)
+                                }}
+                                className="px-3 py-1 text-xs font-semibold text-[#F56A00] border border-[#F56A00] rounded hover:bg-[#F56A00] hover:text-white transition"
+                              >
+                                Edit
+                              </button>
+                            )}
+                          </div>
                         </div>
                         <div className="space-y-2">
                           {sessionResult.results.map(result => (
