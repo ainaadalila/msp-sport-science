@@ -1121,7 +1121,7 @@ export default function FitnessTestingPage() {
                                   setSession(sessionResult.session.session)
                                   setYear(sessionResult.session.year)
                                 }}
-                                className="text-xs text-[#F56A00] hover:underline font-semibold"
+                                className="px-3 py-1 text-xs font-semibold text-[#F56A00] border border-[#F56A00] rounded hover:bg-[#F56A00] hover:text-white transition"
                               >
                                 Kemaskini
                               </button>
