@@ -51,12 +51,6 @@ interface ScheduleSlotForm {
   slot_date: string; start_time: string; end_time: string
 }
 
-interface AttendanceForm {
-  athlete_id: string; session_date: string
-  attendance: 'present' | 'absent' | 'mc'
-  training_program: string; notes: string
-}
-
 interface ProgramForm {
   sport: string; month: number; year: number
   program_type: 'structured'
@@ -75,10 +69,6 @@ const attendanceStyle: Record<string, string> = {
   mc: 'bg-blue-50 text-[#3A7EC8] border border-blue-200',
 }
 
-const emptyAttendanceForm: AttendanceForm = {
-  athlete_id: '', session_date: new Date().toISOString().slice(0, 10),
-  attendance: 'present', training_program: '', notes: '',
-}
 const emptyStructuredData: StructuredProgramData = { phase: '', training_goals: [''], sessions: [] }
 
 function convert24To12(time24: string): { hour: string; minute: string; ampm: 'AM' | 'PM' } {
@@ -107,7 +97,6 @@ export default function StrengthPage() {
   const { can } = usePermissions()
   const { sports } = useSports()
   const [searchParams] = useSearchParams()
-  const athleteIdParam = searchParams.get('athlete')
   const tabParam = searchParams.get('tab') as 'kehadiran' | 'program' | 'jadual' | null
 
   // Ensure component re-renders when sports data arrives
@@ -125,15 +114,12 @@ export default function StrengthPage() {
 
   // Tab 1 — Kehadiran
   const [records, setRecords] = useState<SCRecord[]>([])
-  const [filterSport, setFilterSport] = useState('')
-  const [filterDate, setFilterDate] = useState('')
-  const [filterAthlete, setFilterAthlete] = useState('')
-  const [filterAttendance, setFilterAttendance] = useState('')
-  const [attendanceModalOpen, setAttendanceModalOpen] = useState(false)
-  const [editingRecord, setEditingRecord] = useState<SCRecord | null>(null)
-  const [attendanceForm, setAttendanceForm] = useState<AttendanceForm>(emptyAttendanceForm)
-  const [modalFilterSport, setModalFilterSport] = useState('')
-  const [confirmDelete, setConfirmDelete] = useState<SCRecord | null>(null)
+  const [attendanceSport, setAttendanceSport] = useState('')
+  const [attendanceSearch, setAttendanceSearch] = useState('')
+  const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().slice(0, 10))
+  const [expandedAthletes, setExpandedAthletes] = useState<{ [key: string]: boolean }>({})
+  const [showMoreHistory, setShowMoreHistory] = useState<{ [key: string]: boolean }>({})
+  const [savingAttendance, setSavingAttendance] = useState<{ [key: string]: boolean }>({})
 
   // Tab 2 — Program Bulanan
   const [programs, setPrograms] = useState<SCProgram[]>([])
@@ -164,7 +150,6 @@ export default function StrengthPage() {
   ])
   const [confirmDeleteSchedule, setConfirmDeleteSchedule] = useState<CoachSchedule | null>(null)
   const [confirmDeleteSlot, setConfirmDeleteSlot] = useState<{ schedule: CoachSchedule; slot: CoachScheduleSlot } | null>(null)
-  const [deletingAttendance, setDeletingAttendance] = useState(false)
   const [deletingProgram, setDeletingProgram] = useState(false)
   const [deletingSchedule, setDeletingSchedule] = useState(false)
   const [deletingSlot, setDeletingSlot] = useState(false)
@@ -173,13 +158,10 @@ export default function StrengthPage() {
   useEffect(() => { fetchAll() }, [])
 
   useEffect(() => {
-    if (athleteIdParam) {
-      setFilterAthlete(athleteIdParam)
-    }
     if (tabParam) {
       setActiveTab(tabParam)
     }
-  }, [athleteIdParam, tabParam])
+  }, [tabParam])
 
   async function fetchAll() {
     setLoading(true)
@@ -201,36 +183,29 @@ export default function StrengthPage() {
   const allSports = sports.map(s => s.name)
 
   // --- ATTENDANCE ---
-  function openAddAttendance() {
-    setEditingRecord(null); setAttendanceForm(emptyAttendanceForm); setModalFilterSport(''); setError(null); setAttendanceModalOpen(true)
-  }
-  function openEditAttendance(rec: SCRecord) {
-    setEditingRecord(rec)
-    setAttendanceForm({ athlete_id: rec.athlete_id, session_date: rec.session_date, attendance: rec.attendance, training_program: rec.training_program ?? '', notes: rec.notes ?? '' })
-    setError(null); setAttendanceModalOpen(true)
-  }
-  async function handleSaveAttendance() {
-    if (!attendanceForm.athlete_id || !attendanceForm.session_date) { setError('Atlet dan tarikh sesi wajib dipilih.'); return }
-    setSaving(true); setError(null)
-    const payload = { athlete_id: attendanceForm.athlete_id, session_date: attendanceForm.session_date, attendance: attendanceForm.attendance, training_program: attendanceForm.training_program || null, notes: attendanceForm.notes || null, recorded_by: profile?.id }
-    if (editingRecord) {
-      const { error } = await supabase.from('strength_conditioning').update(payload).eq('id', editingRecord.id)
-      if (error) { setError(error.message); setSaving(false); return }
-      await logAction(profile!.id, 'update_sc_session', 'strength_conditioning', editingRecord.id)
-    } else {
-      const { data, error } = await supabase.from('strength_conditioning').insert(payload).select('id').single()
-      if (error) { setError(error.message); setSaving(false); return }
-      await logAction(profile!.id, 'create_sc_session', 'strength_conditioning', data.id)
-    }
-    setSaving(false); setAttendanceModalOpen(false); fetchAll()
-  }
-  async function handleDeleteAttendance(rec: SCRecord) {
+  async function quickSaveAttendance(athleteId: string, status: 'present' | 'absent' | 'mc') {
+    const key = `${athleteId}-${attendanceDate}`
+    setSavingAttendance(prev => ({ ...prev, [key]: true }))
+    setError(null)
+
     try {
-      setDeletingAttendance(true)
-      await supabase.from('strength_conditioning').delete().eq('id', rec.id)
-      setConfirmDelete(null); await fetchAll()
+      const existing = records.find(r => r.athlete_id === athleteId && r.session_date === attendanceDate)
+      const payload = { athlete_id: athleteId, session_date: attendanceDate, attendance: status, training_program: null, notes: null, recorded_by: profile?.id }
+
+      if (existing) {
+        const { error } = await supabase.from('strength_conditioning').update(payload).eq('id', existing.id)
+        if (error) throw error
+        await logAction(profile!.id, 'update_sc_session', 'strength_conditioning', existing.id)
+      } else {
+        const { data, error } = await supabase.from('strength_conditioning').insert(payload).select('id').single()
+        if (error) throw error
+        await logAction(profile!.id, 'create_sc_session', 'strength_conditioning', data.id)
+      }
+      await fetchAll()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save attendance')
     } finally {
-      setDeletingAttendance(false)
+      setSavingAttendance(prev => ({ ...prev, [key]: false }))
     }
   }
 
@@ -484,22 +459,26 @@ async function handleSaveSchedule() {
   }
 
   // --- DERIVED ---
-  const filteredAthletes = filterSport ? athletes.filter(a => a.sport?.name === filterSport) : athletes
-  const filteredAthleteIds = new Set(filteredAthletes.map(a => a.id))
+  const attendanceFilteredAthletes = attendanceSport
+    ? athletes.filter(a => a.sport?.name === attendanceSport)
+    : athletes
 
-  const filteredAttendance = records.filter(r => {
-    const matchSport = !filterSport || filteredAthleteIds.has(r.athlete_id)
-    const matchDate = !filterDate || r.session_date === filterDate
-    const matchAthlete = !filterAthlete || r.athlete_id === filterAthlete
-    const matchAttendance = !filterAttendance || r.attendance === filterAttendance
-    return matchSport && matchDate && matchAthlete && matchAttendance
-  }).sort((a, b) => {
-    const dateCompare = new Date(b.session_date).getTime() - new Date(a.session_date).getTime()
-    if (dateCompare !== 0) return dateCompare
-    const athleteA = athletes.find(at => at.id === a.athlete_id)?.name ?? ''
-    const athleteB = athletes.find(at => at.id === b.athlete_id)?.name ?? ''
-    return athleteA.localeCompare(athleteB)
-  })
+  const attendanceFilteredBySearch = attendanceSearch
+    ? attendanceFilteredAthletes.filter(a => a.name.toLowerCase().includes(attendanceSearch.toLowerCase()))
+    : attendanceFilteredAthletes
+
+  // Get attendance records for selected date for each athlete
+  const getAthleteAttendanceForDate = (athleteId: string) => {
+    return records.find(r => r.athlete_id === athleteId && r.session_date === attendanceDate)
+  }
+
+  // Get past 3 records for an athlete
+  const getAthletePastRecords = (athleteId: string, limit: number = 3) => {
+    return records
+      .filter(r => r.athlete_id === athleteId)
+      .sort((a, b) => new Date(b.session_date).getTime() - new Date(a.session_date).getTime())
+      .slice(0, limit)
+  }
 
   const visiblePrograms = programs.filter(p =>
     (!filterProgramSport || p.sport === filterProgramSport) &&
@@ -507,11 +486,6 @@ async function handleSaveSchedule() {
   )
 
   const programYears = [...new Set(programs.map(p => p.year))].sort((a, b) => b - a)
-  const summary = {
-    present: records.filter(r => r.attendance === 'present').length,
-    absent: records.filter(r => r.attendance === 'absent').length,
-    mc: records.filter(r => r.attendance === 'mc').length,
-  }
 
   return (
     <div className="space-y-4">
@@ -536,92 +510,103 @@ async function handleSaveSchedule() {
       {/* ── TAB 1: KEHADIRAN ── */}
       {activeTab === 'kehadiran' && (
         <>
-          <div className="flex items-center justify-between">
-            <p className="text-[12px] text-[#888]">{records.length} rekod sesi</p>
-            {can('strength', 'create') && (
-              <button onClick={openAddAttendance} className="bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
-                + Rekod Sesi
-              </button>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {[
-              { label: 'Hadir', value: summary.present, color: 'text-[#3A9E6A]' },
-              { label: 'Tidak Hadir', value: summary.absent, color: 'text-[#D44040]' },
-              { label: 'MC', value: summary.mc, color: 'text-[#3A7EC8]' },
-            ].map(s => (
-              <div key={s.label} className="bg-white rounded-xl border border-gray-200 border-t-4 border-t-[#F56A00] px-4 py-3">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-[#888] mb-1">{s.label}</p>
-                <p className={`text-2xl font-bold font-mono ${s.color}`}>{s.value}</p>
+          <div className="space-y-4">
+            <div className="flex flex-wrap gap-2 items-end">
+              <div>
+                <label className="block text-xs font-semibold text-[#888] mb-1">Sukan</label>
+                <select value={attendanceSport} onChange={e => setAttendanceSport(e.target.value)} className={filterCls}>
+                  <option value="">Semua Sukan</option>
+                  {allSports.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
               </div>
-            ))}
-          </div>
+              <div className="flex-1 min-w-[200px]">
+                <label className="block text-xs font-semibold text-[#888] mb-1">Cari Atlet</label>
+                <input type="text" placeholder="Nama atlet..." value={attendanceSearch} onChange={e => setAttendanceSearch(e.target.value)} className={filterCls} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-[#888] mb-1">Tarikh</label>
+                <input type="date" value={attendanceDate} onChange={e => setAttendanceDate(e.target.value)} className={filterCls} />
+              </div>
+              {(attendanceSport || attendanceSearch) && (
+                <button onClick={() => { setAttendanceSport(''); setAttendanceSearch('') }} className="px-3 py-2 text-xs text-[#888] hover:text-[#F56A00] border border-gray-200 rounded-lg transition">
+                  Kosongkan
+                </button>
+              )}
+            </div>
 
-          <div className="flex flex-wrap gap-2">
-            <select value={filterSport} onChange={e => { setFilterSport(e.target.value); setFilterAthlete('') }} className={filterCls}>
-              <option value="">Semua Sukan</option>
-              {allSports.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <select value={filterAthlete} onChange={e => setFilterAthlete(e.target.value)} className={filterCls}>
-              <option value="">Semua Atlet</option>
-              {filteredAthletes.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
-            <select value={filterAttendance} onChange={e => setFilterAttendance(e.target.value)} className={filterCls}>
-              <option value="">Semua Kehadiran</option>
-              <option value="present">Hadir</option>
-              <option value="absent">Tidak Hadir</option>
-              <option value="mc">MC</option>
-            </select>
-            <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)} className={filterCls} />
-            {(filterSport || filterDate || filterAthlete || filterAttendance) && (
-              <button onClick={() => { setFilterSport(''); setFilterDate(''); setFilterAthlete(''); setFilterAttendance('') }} className="px-3 py-2 text-xs text-[#888] hover:text-[#F56A00] border border-gray-200 rounded-lg transition">
-                Kosongkan Penapis
-              </button>
-            )}
-          </div>
-
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             {loading ? (
               <div className="py-16 text-center text-[#888] text-sm">Memuatkan...</div>
-            ) : filteredAttendance.length === 0 ? (
+            ) : attendanceFilteredBySearch.length === 0 ? (
               <div className="py-16 text-center text-[#888] text-sm">
-                {records.length === 0 ? 'Tiada rekod sesi lagi.' : 'Tiada rekod sepadan penapis.'}
+                {athletes.length === 0 ? 'Tiada atlet.' : 'Tiada atlet sepadan carian.'}
               </div>
             ) : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-100">
-                    {['Tarikh', 'Atlet', 'Sukan', 'Kehadiran', 'Program Latihan', 'Nota', ''].map(h => (
-                      <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-wider text-[#888] px-4 py-3">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredAttendance.map(r => (
-                    <tr key={r.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
-                      <td className="px-4 py-3 font-mono text-[12px] text-[#444] whitespace-nowrap">
-                        {new Date(r.session_date).toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric' })}
-                      </td>
-                      <td className="px-4 py-3 font-medium text-[#111]">{athletes.find(a => a.id === r.athlete_id)?.name ?? '—'}</td>
-                      <td className="px-4 py-3 text-[#888]">{athletes.find(a => a.id === r.athlete_id)?.sport?.name ?? '—'}</td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full ${attendanceStyle[r.attendance]}`}>
-                          {attendanceLabel[r.attendance]}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-[#444] max-w-[160px] truncate">{r.training_program ?? '—'}</td>
-                      <td className="px-4 py-3 text-[#888] max-w-[160px] truncate">{r.notes ?? '—'}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex gap-3 justify-end">
-                          {can('strength', 'update') && <button onClick={() => openEditAttendance(r)} className="text-xs text-[#F56A00] hover:underline font-medium">Edit</button>}
-                          {can('strength', 'delete') && <button onClick={() => setConfirmDelete(r)} className="text-xs text-[#D44040] hover:underline font-medium">Padam</button>}
+              <div className="space-y-2">
+                {attendanceFilteredBySearch.map(athlete => {
+                  const record = getAthleteAttendanceForDate(athlete.id)
+                  const pastRecords = getAthletePastRecords(athlete.id)
+                  const hasHistory = pastRecords.length > 0
+                  const isExpanded = expandedAthletes[athlete.id]
+
+                  return (
+                    <div key={athlete.id} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                      <div className={`px-4 py-3 flex items-center justify-between gap-3 cursor-pointer ${hasHistory ? 'hover:bg-gray-50' : ''}`} onClick={() => hasHistory && setExpandedAthletes(prev => ({ ...prev, [athlete.id]: !isExpanded }))}>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-[#111] text-sm">{athlete.name}</p>
+                          <p className="text-xs text-[#888]">{athlete.sport?.name}</p>
                         </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {record && (
+                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${attendanceStyle[record.attendance]}`}>
+                              {attendanceLabel[record.attendance]}
+                            </span>
+                          )}
+                          {can('strength', 'create') && (
+                            <div className="flex gap-1">
+                              <button onClick={e => { e.stopPropagation(); quickSaveAttendance(athlete.id, 'present') }} disabled={savingAttendance[`${athlete.id}-${attendanceDate}`]} className={`px-2 py-1 text-xs font-semibold rounded transition ${record?.attendance === 'present' ? 'bg-[#3A9E6A] text-white' : 'bg-gray-100 text-[#666] hover:bg-gray-200'} disabled:opacity-50`}>
+                                Hadir
+                              </button>
+                              <button onClick={e => { e.stopPropagation(); quickSaveAttendance(athlete.id, 'absent') }} disabled={savingAttendance[`${athlete.id}-${attendanceDate}`]} className={`px-2 py-1 text-xs font-semibold rounded transition ${record?.attendance === 'absent' ? 'bg-[#D44040] text-white' : 'bg-gray-100 text-[#666] hover:bg-gray-200'} disabled:opacity-50`}>
+                                Tidak Hadir
+                              </button>
+                              <button onClick={e => { e.stopPropagation(); quickSaveAttendance(athlete.id, 'mc') }} disabled={savingAttendance[`${athlete.id}-${attendanceDate}`]} className={`px-2 py-1 text-xs font-semibold rounded transition ${record?.attendance === 'mc' ? 'bg-[#3A7EC8] text-white' : 'bg-gray-100 text-[#666] hover:bg-gray-200'} disabled:opacity-50`}>
+                                MC
+                              </button>
+                            </div>
+                          )}
+                          {hasHistory && (
+                            <span className="text-[#888] text-sm select-none">{isExpanded ? '▲' : '▼'}</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {hasHistory && isExpanded && (
+                        <div className="px-4 py-3 bg-gray-50 border-t border-gray-200 space-y-2">
+                          <p className="text-xs font-semibold text-[#888] uppercase">Rekod Lalu {showMoreHistory[athlete.id] ? '' : `(3 terbaru)`}</p>
+                          {pastRecords.slice(0, showMoreHistory[athlete.id] ? undefined : 3).map(r => (
+                            <div key={r.id} className="flex items-center justify-between text-xs">
+                              <span className="text-[#666]">{new Date(r.session_date).toLocaleDateString('ms-MY', { day: '2-digit', month: 'short' })}</span>
+                              <span className={`font-semibold px-2 py-0.5 rounded-full ${attendanceStyle[r.attendance]}`}>
+                                {attendanceLabel[r.attendance]}
+                              </span>
+                            </div>
+                          ))}
+                          {!showMoreHistory[athlete.id] && pastRecords.length > 3 && (
+                            <button onClick={() => setShowMoreHistory(prev => ({ ...prev, [athlete.id]: true }))} className="text-xs text-[#F56A00] hover:underline font-semibold mt-2 w-full text-left">
+                              Tunjuk Lebih ▼
+                            </button>
+                          )}
+                          {showMoreHistory[athlete.id] && pastRecords.length > 3 && (
+                            <button onClick={() => setShowMoreHistory(prev => ({ ...prev, [athlete.id]: false }))} className="text-xs text-[#F56A00] hover:underline font-semibold mt-2 w-full text-left">
+                              Tunjuk Kurang ▲
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
             )}
           </div>
         </>
@@ -883,57 +868,6 @@ async function handleSaveSchedule() {
                   )}
                 </div>
               ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── MODAL: ATTENDANCE ── */}
-      {attendanceModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm md:max-w-md mx-4">
-            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
-              <h3 className="font-bold text-[#111]">{editingRecord ? 'Edit Rekod Sesi' : 'Rekod Sesi Baharu'}</h3>
-              <button onClick={() => setAttendanceModalOpen(false)} className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
-            </div>
-            <div className="px-6 py-5 space-y-4">
-              {error && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-600">{error}</div>}
-              <Field label="Sukan">
-                <select value={modalFilterSport} onChange={e => { setModalFilterSport(e.target.value); setAttendanceForm(f => ({ ...f, athlete_id: '' })) }} className={inputCls}>
-                  <option value="">Semua Sukan</option>
-                  {allSports.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </Field>
-              <Field label="Atlet" required>
-                <select value={attendanceForm.athlete_id} onChange={e => setAttendanceForm(f => ({ ...f, athlete_id: e.target.value }))} className={inputCls}>
-                  <option value="">— Pilih atlet —</option>
-                  {(modalFilterSport ? athletes.filter(a => a.sport?.name === modalFilterSport) : athletes).map(a => <option key={a.id} value={a.id}>{a.name} ({a.sport?.name})</option>)}
-                </select>
-              </Field>
-              <div className="grid grid-cols-2 gap-4">
-                <Field label="Tarikh Sesi" required>
-                  <input type="date" value={attendanceForm.session_date} onChange={e => setAttendanceForm(f => ({ ...f, session_date: e.target.value }))} className={inputCls} />
-                </Field>
-                <Field label="Kehadiran" required>
-                  <select value={attendanceForm.attendance} onChange={e => setAttendanceForm(f => ({ ...f, attendance: e.target.value as AttendanceForm['attendance'] }))} className={inputCls}>
-                    <option value="present">Hadir</option>
-                    <option value="absent">Tidak Hadir</option>
-                    <option value="mc">MC</option>
-                  </select>
-                </Field>
-              </div>
-              <Field label="Program Latihan">
-                <input value={attendanceForm.training_program} onChange={e => setAttendanceForm(f => ({ ...f, training_program: e.target.value.toUpperCase() }))} className={inputCls} placeholder="cth. FASA KEKUATAN 1" />
-              </Field>
-              <Field label="Nota">
-                <textarea value={attendanceForm.notes} onChange={e => setAttendanceForm(f => ({ ...f, notes: e.target.value.toUpperCase() }))} className={`${inputCls} resize-none`} rows={3} placeholder="CATATAN TAMBAHAN..." />
-              </Field>
-            </div>
-            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
-              <button onClick={() => setAttendanceModalOpen(false)} className="px-4 py-2 text-sm text-[#888] hover:text-[#111] transition">Batal</button>
-              <button onClick={handleSaveAttendance} disabled={saving} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
-                {saving ? 'Menyimpan...' : 'Simpan'}
-              </button>
             </div>
           </div>
         </div>
@@ -1252,22 +1186,6 @@ async function handleSaveSchedule() {
                   </div>
                 </div>
               ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── CONFIRM DELETE: ATTENDANCE ── */}
-      {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 text-center">
-            <p className="text-sm font-semibold text-[#111] mb-1">Padam rekod ini?</p>
-            <p className="text-[13px] text-[#888] mb-6">
-              {athletes.find(a => a.id === confirmDelete.athlete_id)?.name} — {new Date(confirmDelete.session_date).toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric' })}
-            </p>
-            <div className="flex gap-3 justify-center">
-              <button onClick={() => setConfirmDelete(null)} className="px-4 py-2 text-sm text-[#888] border border-gray-200 rounded-lg hover:border-gray-400 transition">Batal</button>
-              <button onClick={() => handleDeleteAttendance(confirmDelete)} disabled={deletingAttendance} className="px-4 py-2 text-sm font-semibold text-white bg-[#D44040] hover:bg-red-700 disabled:opacity-60 rounded-lg transition">{deletingAttendance ? 'Padam...' : 'Padam'}</button>
             </div>
           </div>
         </div>
