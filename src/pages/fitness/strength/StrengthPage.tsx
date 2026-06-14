@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
@@ -8,7 +8,7 @@ import { logAction } from '../../../lib/audit'
 import StructuredProgramBuilder from './StructuredProgramBuilder'
 import type { StructuredProgramData } from '../../../types'
 
-interface Athlete { id: string; name: string; sport_id: string; sport?: { name: string } }
+interface Athlete { id: string; name: string; ic_number?: string; sport_id: string; sport?: { name: string } }
 interface Coach { id: string; full_name: string }
 
 interface SCRecord {
@@ -167,7 +167,7 @@ export default function StrengthPage() {
     setLoading(true)
     const [recRes, athRes, progRes, schedRes, coachRes] = await Promise.all([
       supabase.from('strength_conditioning').select('id, athlete_id, session_date, attendance, training_program, notes'),
-      supabase.from('athletes').select('id, name, sport_id, sport:sport_id(name)').order('name'),
+      supabase.from('athletes').select('id, name, ic_number, sport_id, sport:sport_id(name)').order('name'),
       supabase.from('sc_programs').select('id, sport, month, year, program_type, coach_id, structured_data, start_date, end_date, coach:profiles(full_name)').order('year', { ascending: false }).order('month'),
       supabase.from('coach_schedules').select('id, coach_id, sport, schedule_name, valid_from, repeats, repeat_pattern, repeat_until, slots:coach_schedule_slots(id, schedule_id, slot_date, start_time, end_time)').order('valid_from', { ascending: false }),
       supabase.from('profiles').select('id, full_name').eq('role', 'coach').order('full_name'),

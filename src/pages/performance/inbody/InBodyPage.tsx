@@ -1,16 +1,20 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
 import { usePermissions } from '../../../hooks/usePermissions'
 import { logAction } from '../../../lib/audit'
+import { useSports } from '../../../hooks/useSports'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import html2canvas from 'html2canvas'
 
 interface Athlete {
   id: string
   name: string
+  ic_number: string
   sport_id: string
+  status: string
+  is_elite: boolean
   sport?: { name: string }
 }
 
@@ -137,9 +141,11 @@ function InBodyScoreGauge({ score }: { score: number | null }) {
   )
 }
 
+
 export default function InBodyPage() {
   const { profile } = useAuth()
   const { can } = usePermissions()
+  const { sports } = useSports()
   const [searchParams] = useSearchParams()
   const athleteIdParam = searchParams.get('athlete')
   const chartRef = useRef<HTMLDivElement>(null)
@@ -148,10 +154,10 @@ export default function InBodyPage() {
   const [athletes, setAthletes] = useState<Athlete[]>([])
   const [loading, setLoading] = useState(true)
 
+  // Athlete-first filters (matches AthletesPage style)
+  const [search, setSearch] = useState('')
   const [filterSport, setFilterSport] = useState('')
-  const [filterAthlete, setFilterAthlete] = useState('')
-  const [filterFrom, setFilterFrom] = useState('')
-  const [filterTo, setFilterTo] = useState('')
+  const [expandedAthleteId, setExpandedAthleteId] = useState<string | null>(null)
 
   const [modalOpen, setModalOpen] = useState(false)
   const [viewRecord, setViewRecord] = useState<InBodyRecord | null>(null)
@@ -170,9 +176,8 @@ export default function InBodyPage() {
   const [profilRecords, setProfilRecords] = useState<InBodyRecord[]>([])
   const [profilLoading, setProfilLoading] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
-  const RECORDS_PER_PAGE = 25
+  const ATHLETES_PER_PAGE = 25
 
-  // Diet plan upload
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploadingDietPlan, setUploadingDietPlan] = useState(false)
   const [dietPlanError, setDietPlanError] = useState<string | null>(null)
@@ -217,9 +222,18 @@ export default function InBodyPage() {
 
   useEffect(() => {
     if (athleteIdParam && athletes.length > 0) {
-      setFilterAthlete(athleteIdParam)
+      const athlete = athletes.find(a => a.id === athleteIdParam)
+      setActiveTab('profil')
+      setProfilAthlete(athleteIdParam)
+      if (athlete) setProfilSport(athlete.sport_id)
     }
   }, [athleteIdParam, athletes])
+
+  // Reset pagination and collapse expanded row when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+    setExpandedAthleteId(null)
+  }, [search, filterSport])
 
   async function fetchAll() {
     setLoading(true)
@@ -228,7 +242,10 @@ export default function InBodyPage() {
         .from('inbody_records')
         .select('id, athlete_id, recorded_date, weight, smm, body_fat_mass, bmi, fat_pct, inbody_score, diet_plan_url, athlete:athletes(name, sport_id, sport:sport_id(name))')
         .order('recorded_date', { ascending: false }),
-      supabase.from('athletes').select('id, name, sport_id, sport:sport_id(name)').order('name'),
+      supabase
+        .from('athletes')
+        .select('id, name, ic_number, sport_id, status, is_elite, sport:sport_id(name)')
+        .order('name'),
     ]) as any
     setRecords(recRes.data ?? [])
     setAthletes(athRes.data ?? [])
@@ -249,11 +266,16 @@ export default function InBodyPage() {
 
   function openAdd() {
     setEditing(null)
-    setForm({
-      ...emptyForm,
-      recorded_date: new Date().toISOString().slice(0, 10),
-    })
+    setForm({ ...emptyForm, recorded_date: new Date().toISOString().slice(0, 10) })
     setFormSportFilter('')
+    setError(null)
+    setModalOpen(true)
+  }
+
+  function openAddForAthlete(a: Athlete) {
+    setEditing(null)
+    setForm({ ...emptyForm, athlete_id: a.id, recorded_date: new Date().toISOString().slice(0, 10) })
+    setFormSportFilter(a.sport?.name ?? '')
     setError(null)
     setModalOpen(true)
   }
@@ -320,7 +342,6 @@ export default function InBodyPage() {
     setDietPlanError(null)
 
     try {
-      // Sanitize filename - remove spaces and special characters
       const sanitizedName = file.name
         .replace(/\s+/g, '_')
         .replace(/[^a-zA-Z0-9._-]/g, '')
@@ -363,7 +384,6 @@ export default function InBodyPage() {
     setDietPlanError(null)
 
     try {
-      // Extract file name from URL
       const fileName = viewRecord.diet_plan_url.split('/').pop() || ''
       if (fileName) {
         await supabase.storage.from('inbody_diet_plans').remove([fileName])
@@ -385,24 +405,38 @@ export default function InBodyPage() {
     }
   }
 
-  const filtered = records.filter(r => {
-    const matchSport = !filterSport || r.athlete?.sport?.name === filterSport
-    const matchAthlete = !filterAthlete || r.athlete_id === filterAthlete
-    const matchFrom = !filterFrom || r.recorded_date >= filterFrom
-    const matchTo = !filterTo || r.recorded_date <= filterTo
-    return matchSport && matchAthlete && matchFrom && matchTo
-  })
+  // Compute latest record and count per athlete from fetched records
+  const latestByAthlete = useMemo(() => {
+    const map = new Map<string, InBodyRecord>()
+    for (const r of records) {
+      const existing = map.get(r.athlete_id)
+      if (!existing || r.recorded_date > existing.recorded_date) map.set(r.athlete_id, r)
+    }
+    return map
+  }, [records])
 
-  // Reset page when filters change
-  useEffect(() => {
-    setCurrentPage(1)
-  }, [filterSport, filterAthlete, filterFrom, filterTo])
+  const countByAthlete = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const r of records) map.set(r.athlete_id, (map.get(r.athlete_id) ?? 0) + 1)
+    return map
+  }, [records])
 
-  // Pagination logic
-  const totalPages = Math.ceil(filtered.length / RECORDS_PER_PAGE)
-  const startIdx = (currentPage - 1) * RECORDS_PER_PAGE
-  const endIdx = startIdx + RECORDS_PER_PAGE
-  const paginatedRecords = filtered.slice(startIdx, endIdx)
+  // Filter athletes using AthletesPage-style filters
+  const filteredAthletes = useMemo(() => {
+    return athletes.filter(a => {
+      const q = search.toLowerCase()
+      const sportName = a.sport?.name?.toLowerCase() || ''
+      const matchSearch = !q || a.name.toLowerCase().includes(q) || (a.ic_number || '').toLowerCase().includes(q) || sportName.includes(q)
+      const matchSport = !filterSport || a.sport_id === filterSport
+      return matchSearch && matchSport
+    })
+  }, [athletes, search, filterSport])
+
+  const totalPages = Math.ceil(filteredAthletes.length / ATHLETES_PER_PAGE)
+  const paginatedAthletes = filteredAthletes.slice(
+    (currentPage - 1) * ATHLETES_PER_PAGE,
+    currentPage * ATHLETES_PER_PAGE
+  )
 
   function fmtDate(d: string) {
     return new Date(d).toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -447,154 +481,235 @@ export default function InBodyPage() {
             className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${
               activeTab === t ? 'bg-white text-[#111] shadow-sm' : 'text-[#888] hover:text-[#444]'
             }`}>
-            {t === 'jadual' ? 'Semua Rekod' : 'Profil InBody'}
+            {t === 'jadual' ? 'Senarai Atlet' : 'Profil InBody'}
           </button>
         ))}
       </div>
 
       {activeTab === 'jadual' ? (
         <>
-          {/* Filters */}
+          {/* Filters — AthletesPage style */}
           <div className="flex flex-wrap gap-2">
-            <select value={filterSport} onChange={e => { setFilterSport(e.target.value); setFilterAthlete('') }} className={filterCls}>
+            <input
+              type="text"
+              placeholder="Cari nama, IC, sukan..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className={`${filterCls} min-w-[200px]`}
+            />
+            <select value={filterSport} onChange={e => setFilterSport(e.target.value)} className={filterCls}>
               <option value="">Semua Sukan</option>
-              {Array.from(new Set(athletes.map(a => a.sport?.name))).sort().map(sport => (
-                <option key={sport} value={sport}>{sport}</option>
-              ))}
+              {sports.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
-            <select value={filterAthlete} onChange={e => setFilterAthlete(e.target.value)} className={filterCls}>
-              <option value="">Semua Atlet</option>
-              {athletes.filter(a => !filterSport || a.sport?.name === filterSport).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
-            <div className="flex items-center gap-2">
-              <input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)} className={filterCls} placeholder="Dari" />
-              <span className="text-[#888] text-xs">—</span>
-              <input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)} className={filterCls} placeholder="Hingga" />
-            </div>
-            {(filterSport || filterAthlete || filterFrom || filterTo) && (
-              <button onClick={() => { setFilterSport(''); setFilterAthlete(''); setFilterFrom(''); setFilterTo('') }} className="px-3 py-2 text-xs text-[#888] hover:text-[#F56A00] border border-gray-200 rounded-lg transition">
+            {(search || filterSport) && (
+              <button
+                onClick={() => { setSearch(''); setFilterSport('') }}
+                className="px-3 py-2 text-xs text-[#888] hover:text-[#F56A00] border border-gray-200 rounded-lg transition"
+              >
                 Kosongkan Penapis
               </button>
             )}
           </div>
 
-          {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        {loading ? (
-          <div className="py-16 text-center text-[#888] text-sm">Memuatkan...</div>
-        ) : filtered.length === 0 ? (
-          <div className="py-16 text-center text-[#888] text-sm">
-            {records.length === 0 ? 'Tiada rekod InBody lagi.' : 'Tiada rekod sepadan penapis.'}
-          </div>
-        ) : (
-          <>
-            <div className="flex justify-between items-center px-4 py-3 bg-gray-50 border-b border-gray-100 text-sm text-[#888]">
-              <span>{filtered.length} rekod ({currentPage} dari {totalPages} halaman)</span>
-            </div>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100">
-                  {['Tarikh', 'Atlet', 'Sukan', 'Berat (kg)', 'BMI', 'Lemak (%)', 'SMM (kg)', 'Skor InBody', 'Diet Plan', ''].map(h => (
-                    <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-wider text-[#888] px-4 py-3">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {paginatedRecords.map(r => {
-                const badge = scoreBadge(r.inbody_score)
-                return (
-                  <tr key={r.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
-                    <td className="px-4 py-3 font-mono text-[12px] text-[#444] whitespace-nowrap">{fmtDate(r.recorded_date)}</td>
-                    <td className="px-4 py-3 font-medium text-left">
-                      {r.athlete?.name ? (
-                        <button
-                          onClick={() => { setActiveTab('profil'); setProfilAthlete(r.athlete_id); setProfilSport(r.athlete?.sport?.name || '') }}
-                          className="text-[#F56A00] hover:underline font-medium cursor-pointer text-left"
-                        >
-                          {r.athlete.name}
-                        </button>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-[#888]">{r.athlete?.sport?.name ?? '—'}</td>
-                    <td className="px-4 py-3 text-[#444]">{n(r.weight, ' kg')}</td>
-                    <td className="px-4 py-3 text-[#444]">{n(r.bmi)}</td>
-                    <td className="px-4 py-3 text-[#444]">{n(r.fat_pct, '%')}</td>
-                    <td className="px-4 py-3 text-[#444]">{n(r.smm, ' kg')}</td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-block text-[11px] font-bold px-2 py-0.5 rounded-full ${badge.style}`}>{badge.label}</span>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      {r.diet_plan_url ? (
-                        <span className="text-lg">✓</span>
-                      ) : (
-                        <span className="text-[#888]">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex gap-3 justify-end">
-                        {can('inbody', 'update') && <button onClick={() => openEdit(r)} className="text-xs text-[#F56A00] hover:underline font-medium">Edit</button>}
-                        {can('inbody', 'delete') && <button onClick={() => setConfirmDelete(r)} className="text-xs text-[#D44040] hover:underline font-medium">Padam</button>}
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-            </table>
-
-            {/* Pagination Controls */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between px-4 py-4 bg-white border-t border-gray-100">
-                <button
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  className="px-3 py-2 text-sm text-[#F56A00] border border-gray-300 rounded-lg hover:bg-orange-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
-                >
-                  ← Sebelumnya
-                </button>
-                <div className="flex gap-2">
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                    <button
-                      key={page}
-                      onClick={() => setCurrentPage(page)}
-                      className={`px-3 py-2 text-sm rounded-lg transition ${
-                        currentPage === page
-                          ? 'bg-[#F56A00] text-white font-semibold'
-                          : 'text-[#444] border border-gray-300 hover:bg-gray-50'
-                      }`}
-                    >
-                      {page}
-                    </button>
-                  ))}
+          {/* Athlete-first table */}
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            {loading ? (
+              <div className="py-16 text-center text-[#888] text-sm">Memuatkan...</div>
+            ) : (
+              <>
+                <div className="flex justify-between items-center px-4 py-3 bg-gray-50 border-b border-gray-100 text-sm text-[#888]">
+                  <span>{filteredAthletes.length} atlet</span>
                 </div>
-                <button
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
-                  className="px-3 py-2 text-sm text-[#F56A00] border border-gray-300 rounded-lg hover:bg-orange-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
-                >
-                  Seterusnya →
-                </button>
-              </div>
+                {filteredAthletes.length === 0 ? (
+                  <div className="py-16 text-center text-[#888] text-sm">Tiada atlet sepadan penapis.</div>
+                ) : (
+                  <>
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-100">
+                          {['Atlet', 'Sukan', 'Rekod Terkini', 'Skor InBody', 'Jumlah Rekod', ''].map(h => (
+                            <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-wider text-[#888] px-4 py-3">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {paginatedAthletes.map(a => {
+                          const latest = latestByAthlete.get(a.id) ?? null
+                          const count = countByAthlete.get(a.id) ?? 0
+                          const isExpanded = expandedAthleteId === a.id
+                          const athleteRecords = records
+                            .filter(r => r.athlete_id === a.id)
+                            .sort((x, y) => y.recorded_date.localeCompare(x.recorded_date))
+                          const badge = scoreBadge(latest?.inbody_score ?? null)
+
+                          return (
+                            <>
+                              <tr
+                                key={a.id}
+                                onClick={() => setExpandedAthleteId(isExpanded ? null : a.id)}
+                                className={`border-b border-gray-50 cursor-pointer ${isExpanded ? 'bg-orange-50' : 'hover:bg-gray-50'}`}
+                              >
+                                <td className="px-4 py-3 font-medium text-[#111]">{a.name}</td>
+                                <td className="px-4 py-3 text-[#888]">{a.sport?.name ?? '—'}</td>
+                                <td className="px-4 py-3 font-mono text-[12px] text-[#444]">
+                                  {latest ? fmtDate(latest.recorded_date) : '—'}
+                                </td>
+                                <td className="px-4 py-3">
+                                  {latest ? (
+                                    <span className={`inline-block text-[11px] font-bold px-2 py-0.5 rounded-full ${badge.style}`}>{badge.label}</span>
+                                  ) : (
+                                    <span className="text-[#888] text-xs">Tiada rekod</span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 text-[#888] text-xs">
+                                  {count > 0 ? `${count} rekod` : '—'}
+                                </td>
+                                <td className="px-4 py-3 text-right text-[#888] text-xs select-none">
+                                  {isExpanded ? '▲' : '▼'}
+                                </td>
+                              </tr>
+
+                              {isExpanded && (
+                                <tr key={`${a.id}-detail`}>
+                                  <td colSpan={6} className="px-4 pb-4 pt-0 bg-orange-50/40">
+                                    <div className="border border-orange-100 rounded-xl overflow-hidden">
+                                      <div className="flex items-center justify-between px-4 py-2 bg-orange-50 border-b border-orange-100">
+                                        <span className="text-xs font-semibold text-[#F56A00]">
+                                          Rekod InBody — {a.name}
+                                        </span>
+                                        <div className="flex gap-2">
+                                          <button
+                                            onClick={e => { e.stopPropagation(); setActiveTab('profil'); setProfilAthlete(a.id); setProfilSport(a.sport_id) }}
+                                            className="text-xs font-semibold text-[#3A7EC8] border border-[#3A7EC8] hover:bg-blue-50 px-3 py-1 rounded-lg transition"
+                                          >
+                                            Lihat Profil
+                                          </button>
+                                          {can('inbody', 'create') && (
+                                            <button
+                                              onClick={e => { e.stopPropagation(); openAddForAthlete(a) }}
+                                              className="text-xs font-semibold text-white bg-[#F56A00] hover:bg-[#D45A00] px-3 py-1 rounded-lg transition"
+                                            >
+                                              + Tambah Rekod
+                                            </button>
+                                          )}
+                                        </div>
+                                      </div>
+                                      {athleteRecords.length === 0 ? (
+                                        <div className="px-4 py-6 text-center text-[#888] text-xs">
+                                          Tiada rekod InBody untuk atlet ini.
+                                        </div>
+                                      ) : (
+                                        <table className="w-full text-xs">
+                                          <thead>
+                                            <tr className="border-b border-orange-100">
+                                              {['Tarikh', 'Berat (kg)', 'BMI', 'Lemak (%)', 'SMM (kg)', 'Skor InBody', 'Pelan Diet', ''].map(h => (
+                                                <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-wider text-[#888] px-3 py-2">{h}</th>
+                                              ))}
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {athleteRecords.map(r => {
+                                              const rb = scoreBadge(r.inbody_score)
+                                              return (
+                                                <tr key={r.id} className="border-b border-orange-50 last:border-0 hover:bg-orange-50">
+                                                  <td className="px-3 py-2 font-mono text-[#444]">{fmtDate(r.recorded_date)}</td>
+                                                  <td className="px-3 py-2 text-[#444]">{n(r.weight, ' kg')}</td>
+                                                  <td className="px-3 py-2 text-[#444]">{n(r.bmi)}</td>
+                                                  <td className="px-3 py-2 text-[#444]">{n(r.fat_pct, '%')}</td>
+                                                  <td className="px-3 py-2 text-[#444]">{n(r.smm, ' kg')}</td>
+                                                  <td className="px-3 py-2">
+                                                    <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ${rb.style}`}>{rb.label}</span>
+                                                  </td>
+                                                  <td className="px-3 py-2 text-center">
+                                                    {r.diet_plan_url ? <span className="text-green-600 font-bold">✓</span> : <span className="text-[#888]">—</span>}
+                                                  </td>
+                                                  <td className="px-3 py-2">
+                                                    <div className="flex gap-3 justify-end">
+                                                      {can('inbody', 'update') && (
+                                                        <button
+                                                          onClick={e => { e.stopPropagation(); openEdit(r) }}
+                                                          className="text-[#F56A00] hover:underline font-medium"
+                                                        >
+                                                          Edit
+                                                        </button>
+                                                      )}
+                                                      {can('inbody', 'delete') && (
+                                                        <button
+                                                          onClick={e => { e.stopPropagation(); setConfirmDelete(r) }}
+                                                          className="text-[#D44040] hover:underline font-medium"
+                                                        >
+                                                          Padam
+                                                        </button>
+                                                      )}
+                                                    </div>
+                                                  </td>
+                                                </tr>
+                                              )
+                                            })}
+                                          </tbody>
+                                        </table>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+
+                    {/* Pagination */}
+                    {totalPages > 1 && (
+                      <div className="flex items-center justify-between px-4 py-4 bg-white border-t border-gray-100">
+                        <button
+                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                          disabled={currentPage === 1}
+                          className="px-3 py-2 text-sm text-[#F56A00] border border-gray-300 rounded-lg hover:bg-orange-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                        >
+                          ← Sebelumnya
+                        </button>
+                        <div className="flex gap-2">
+                          {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                            <button
+                              key={page}
+                              onClick={() => setCurrentPage(page)}
+                              className={`px-3 py-2 text-sm rounded-lg transition ${
+                                currentPage === page
+                                  ? 'bg-[#F56A00] text-white font-semibold'
+                                  : 'text-[#444] border border-gray-300 hover:bg-gray-50'
+                              }`}
+                            >
+                              {page}
+                            </button>
+                          ))}
+                        </div>
+                        <button
+                          onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                          disabled={currentPage === totalPages}
+                          className="px-3 py-2 text-sm text-[#F56A00] border border-gray-300 rounded-lg hover:bg-orange-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                        >
+                          Seterusnya →
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </>
             )}
-          </>
-        )}
-      </div>
+          </div>
         </>
       ) : (
         <div className="space-y-5">
-          {/* A. Sport and Athlete selectors */}
+          {/* Sport and Athlete selectors */}
           <div className="flex gap-2">
             <select value={profilSport} onChange={e => { setProfilSport(e.target.value); setProfilAthlete('') }} className={filterCls} style={{ flex: 1 }}>
               <option value="">— Semua Sukan —</option>
-              {Array.from(new Set(athletes.map(a => a.sport?.name))).sort().map(sport => (
-                <option key={sport} value={sport}>{sport}</option>
-              ))}
+              {sports.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
             <select value={profilAthlete} onChange={e => setProfilAthlete(e.target.value)} className={filterCls} style={{ flex: 2 }}>
               <option value="">— Pilih Atlet —</option>
-              {athletes.filter(a => !profilSport || a.sport?.name === profilSport).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              {athletes.filter(a => !profilSport || a.sport_id === profilSport).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
           </div>
 
@@ -604,7 +719,7 @@ export default function InBodyPage() {
             <div className="text-sm text-[#888]">Pilih atlet untuk melihat profil.</div>
           ) : (
             <>
-              {/* B. 4 metric cards */}
+              {/* 4 metric cards */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 {[
                   { label: 'Berat Badan',      val: n(latestRecord.weight, ' kg'), color: 'text-[#111]' },
@@ -619,7 +734,7 @@ export default function InBodyPage() {
                 ))}
               </div>
 
-              {/* C+D. Chart | Gauge+Norms */}
+              {/* Chart | Gauge+Norms */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                 <div className="bg-white rounded-xl border border-gray-200 border-t-4 border-t-[#F56A00] p-5">
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-[#888] mb-4">Komposisi Badan (Trend)</p>
@@ -628,9 +743,7 @@ export default function InBodyPage() {
                       <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F0" vertical={false} />
                       <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#888' }} tickLine={false} axisLine={false} />
                       <YAxis tick={{ fontSize: 10, fill: '#888' }} tickLine={false} axisLine={false} unit=" kg" />
-                      <Tooltip
-                        contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #eee' }}
-                      />
+                      <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #eee' }} />
                       <Legend formatter={(v: string) => v === 'smm' ? 'Jisim Otot' : 'Lemak Badan'} iconType="square" iconSize={10} wrapperStyle={{ fontSize: 11 }} />
                       <Bar dataKey="smm"     stackId="a" fill="#F56A00" radius={[0,0,0,0]} name="smm" />
                       <Bar dataKey="fatMass" stackId="a" fill="#FFB3A7" radius={[4,4,0,0]} name="fatMass" />
@@ -663,7 +776,7 @@ export default function InBodyPage() {
                 </div>
               </div>
 
-              {/* E. Latest record detail */}
+              {/* Latest record detail */}
               <div className="bg-white rounded-xl border border-gray-200 p-5">
                 <p className="text-[10px] font-semibold uppercase tracking-widest text-[#888] mb-4">
                   Rekod Terkini — {new Date(latestRecord.recorded_date + 'T00:00:00').toLocaleDateString('ms-MY', { day: '2-digit', month: 'long', year: 'numeric' })}
@@ -687,7 +800,7 @@ export default function InBodyPage() {
                 </div>
               </div>
 
-              {/* F. Diet Plan Section */}
+              {/* Diet Plan Section */}
               {latestRecord && (
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-[#888] mb-4">Pelan Diet</p>
@@ -710,20 +823,14 @@ export default function InBodyPage() {
                           Muat Turun
                         </a>
                         <button
-                          onClick={() => {
-                            setViewRecord(latestRecord)
-                            fileInputRef.current?.click()
-                          }}
+                          onClick={() => { setViewRecord(latestRecord); fileInputRef.current?.click() }}
                           disabled={uploadingDietPlan}
                           className="flex-1 px-3 py-2 text-xs font-semibold text-[#F56A00] border border-[#F56A00] rounded-lg hover:bg-orange-50 disabled:opacity-60 transition"
                         >
                           {uploadingDietPlan ? 'Memuat...' : 'Ganti'}
                         </button>
                         <button
-                          onClick={() => {
-                            setViewRecord(latestRecord)
-                            handleDeleteDietPlan()
-                          }}
+                          onClick={() => { setViewRecord(latestRecord); handleDeleteDietPlan() }}
                           disabled={uploadingDietPlan}
                           className="flex-1 px-3 py-2 text-xs font-semibold text-[#D44040] border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-60 transition"
                         >
@@ -733,10 +840,7 @@ export default function InBodyPage() {
                     </div>
                   ) : (
                     <button
-                      onClick={() => {
-                        setViewRecord(latestRecord)
-                        fileInputRef.current?.click()
-                      }}
+                      onClick={() => { setViewRecord(latestRecord); fileInputRef.current?.click() }}
                       disabled={uploadingDietPlan}
                       className="w-full px-4 py-3 text-sm font-semibold text-white bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 rounded-lg transition"
                     >
@@ -772,7 +876,7 @@ export default function InBodyPage() {
                   <Field label="Sukan" required>
                     <select value={formSportFilter} onChange={e => { setFormSportFilter(e.target.value); setField('athlete_id', '') }} className={inputCls}>
                       <option value="">— Pilih sukan —</option>
-                      {[...new Set(athletes.map(a => a.sport?.name))].sort().map(s => <option key={s} value={s}>{s}</option>)}
+                      {sports.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
                     </select>
                   </Field>
                 </div>
@@ -817,8 +921,6 @@ export default function InBodyPage() {
           </div>
         </div>
       )}
-
-      {/* View Modal */}
 
       {/* Delete Confirmation */}
       {confirmDelete && (
