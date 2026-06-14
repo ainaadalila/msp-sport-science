@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { useState, useRef, useEffect, useMemo, Fragment } from 'react'
 import { supabase } from '../../lib/supabase'
 import { usePermissions } from '../../hooks/usePermissions'
 import { useSports } from '../../hooks/useSports'
@@ -615,9 +615,8 @@ export default function PsychologyRatingPage() {
                     const isExpanded = expandedAthleteId === a.id
 
                     return (
-                      <>
+                      <Fragment key={a.id}>
                         <tr
-                          key={a.id}
                           onClick={() => setExpandedAthleteId(isExpanded ? null : a.id)}
                           className={`border-b border-gray-50 cursor-pointer ${isExpanded ? 'bg-orange-50' : 'hover:bg-gray-50'}`}
                         >
@@ -727,7 +726,7 @@ export default function PsychologyRatingPage() {
                             </td>
                           </tr>
                         )}
-                      </>
+                      </Fragment>
                     )
                   })}
                 </tbody>
