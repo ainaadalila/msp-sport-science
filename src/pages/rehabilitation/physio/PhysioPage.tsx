@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, Fragment } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
@@ -445,9 +445,8 @@ export default function PhysioPage() {
                       const isExpanded = expandedAthleteId === a.id
 
                       return (
-                        <>
+                        <Fragment key={a.id}>
                           <tr
-                            key={a.id}
                             onClick={() => setExpandedAthleteId(isExpanded ? null : a.id)}
                             className={`border-b border-gray-50 cursor-pointer ${isExpanded ? 'bg-orange-50' : 'hover:bg-gray-50'}`}
                           >
@@ -526,7 +525,7 @@ export default function PhysioPage() {
                               </td>
                             </tr>
                           )}
-                        </>
+                        </Fragment>
                       )
                     })}
                   </tbody>

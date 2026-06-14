@@ -165,19 +165,32 @@ export default function StrengthPage() {
 
   async function fetchAll() {
     setLoading(true)
-    const [recRes, athRes, progRes, schedRes, coachRes] = await Promise.all([
-      supabase.from('strength_conditioning').select('id, athlete_id, session_date, attendance, training_program, notes'),
-      supabase.from('athletes').select('id, name, ic_number, sport_id, sport:sport_id(name)').order('name'),
-      supabase.from('sc_programs').select('id, sport, month, year, program_type, coach_id, structured_data, start_date, end_date, coach:profiles(full_name)').order('year', { ascending: false }).order('month'),
-      supabase.from('coach_schedules').select('id, coach_id, sport, schedule_name, valid_from, repeats, repeat_pattern, repeat_until, slots:coach_schedule_slots(id, schedule_id, slot_date, start_time, end_time)').order('valid_from', { ascending: false }),
-      supabase.from('profiles').select('id, full_name').eq('role', 'coach').order('full_name'),
-    ]) as any
-    setRecords(recRes.data ?? [])
-    setAthletes(athRes.data ?? [])
-    setPrograms(progRes.data ?? [])
-    setSchedules(schedRes.data ?? [])
-    setCoaches(coachRes.data ?? [])
-    setLoading(false)
+    try {
+      const [recRes, athRes, progRes, schedRes, coachRes] = await Promise.all([
+        supabase.from('strength_conditioning').select('id, athlete_id, session_date, attendance'),
+        supabase.from('athletes').select('id, name, ic_number, sport_id, sport:sport_id(name)').order('name'),
+        supabase.from('sc_programs').select('id, sport, month, year, program_type, coach_id, structured_data, start_date, end_date, coach:profiles(full_name)').order('year', { ascending: false }).order('month'),
+        supabase.from('coach_schedules').select('id, coach_id, sport, schedule_name, valid_from, repeats, repeat_pattern, repeat_until, slots:coach_schedule_slots(id, schedule_id, slot_date, start_time, end_time)').order('valid_from', { ascending: false }),
+        supabase.from('profiles').select('id, full_name').eq('role', 'coach').order('full_name'),
+      ]) as any
+
+      if (recRes.error) throw new Error(`strength_conditioning: ${recRes.error.message}`)
+      if (athRes.error) throw new Error(`athletes: ${athRes.error.message}`)
+      if (progRes.error) throw new Error(`sc_programs: ${progRes.error.message}`)
+      if (schedRes.error) throw new Error(`coach_schedules: ${schedRes.error.message}`)
+      if (coachRes.error) throw new Error(`profiles: ${coachRes.error.message}`)
+
+      setRecords(recRes.data ?? [])
+      setAthletes(athRes.data ?? [])
+      setPrograms(progRes.data ?? [])
+      setSchedules(schedRes.data ?? [])
+      setCoaches(coachRes.data ?? [])
+    } catch (err) {
+      console.error('fetchAll error:', err)
+      setError(err instanceof Error ? err.message : 'Failed to load data')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const allSports = sports.map(s => s.name)
