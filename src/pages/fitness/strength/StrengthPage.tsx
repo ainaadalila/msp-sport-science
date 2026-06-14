@@ -511,22 +511,13 @@ async function handleSaveSchedule() {
       {activeTab === 'kehadiran' && (
         <>
           <div className="space-y-4">
-            <div className="flex flex-wrap gap-2 items-end">
-              <div>
-                <label className="block text-xs font-semibold text-[#888] mb-1">Sukan</label>
-                <select value={attendanceSport} onChange={e => setAttendanceSport(e.target.value)} className={filterCls}>
-                  <option value="">Semua Sukan</option>
-                  {allSports.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
-              <div className="flex-1 min-w-[200px]">
-                <label className="block text-xs font-semibold text-[#888] mb-1">Cari Atlet</label>
-                <input type="text" placeholder="Nama atlet..." value={attendanceSearch} onChange={e => setAttendanceSearch(e.target.value)} className={filterCls} />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-[#888] mb-1">Tarikh</label>
-                <input type="date" value={attendanceDate} onChange={e => setAttendanceDate(e.target.value)} className={filterCls} />
-              </div>
+            <div className="flex gap-2 items-center">
+              <select value={attendanceSport} onChange={e => setAttendanceSport(e.target.value)} className={filterCls}>
+                <option value="">Semua Sukan</option>
+                {allSports.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <input type="text" placeholder="Cari nama, IC, sukan..." value={attendanceSearch} onChange={e => setAttendanceSearch(e.target.value)} className={`${filterCls} flex-1`} />
+              <input type="date" value={attendanceDate} onChange={e => setAttendanceDate(e.target.value)} className={filterCls} />
               {(attendanceSport || attendanceSearch) && (
                 <button onClick={() => { setAttendanceSport(''); setAttendanceSearch('') }} className="px-3 py-2 text-xs text-[#888] hover:text-[#F56A00] border border-gray-200 rounded-lg transition">
                   Kosongkan
