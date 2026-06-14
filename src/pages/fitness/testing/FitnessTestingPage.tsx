@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
 import { usePermissions } from '../../../hooks/usePermissions'
 import { logAction } from '../../../lib/audit'
+import html2canvas from 'html2canvas'
 import type { Athlete, FitnessTestSession, SportFitnessTest, FitnessTestNorm } from '../../../types'
 
 interface TestResultInput {
@@ -34,6 +35,7 @@ export default function FitnessTestingPage() {
   const canRecord = can('fitness', 'create')
   const [searchParams] = useSearchParams()
   const athleteIdParam = searchParams.get('athlete')
+  const chartRef = useRef<HTMLDivElement>(null)
 
   const [athletes, setAthletes] = useState<Athlete[]>([])
   const [selectedAthlete, setSelectedAthlete] = useState<Athlete | null>(null)
@@ -63,6 +65,36 @@ export default function FitnessTestingPage() {
   const [selectedAthletesGender, setSelectedAthletesGender] = useState<'M' | 'F' | null>(null)
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null)
   const [isDraft, setIsDraft] = useState(false)
+
+  async function handlePrint() {
+    if (!chartRef.current) return
+    try {
+      const canvas = await html2canvas(chartRef.current, { scale: 2, useCORS: true })
+      const image = canvas.toDataURL('image/png')
+      const printWindow = window.open('', '', 'width=900,height=700')
+      if (printWindow) {
+        printWindow.document.write(`
+          <html><head><title>Cetak - ${selectedAthlete?.name}</title>
+          <style>
+            body { margin: 20px; font-family: Arial, sans-serif; }
+            img { max-width: 100%; height: auto; }
+            .header { margin-bottom: 20px; }
+          </style>
+          </head><body>
+          <div class="header">
+            <h2>${selectedAthlete?.name}</h2>
+            <p>${selectedAthlete?.sport?.name}</p>
+          </div>
+          <img src="${image}" />
+          </body></html>
+        `)
+        printWindow.document.close()
+        printWindow.print()
+      }
+    } catch (error) {
+      console.error('Print failed:', error)
+    }
+  }
 
   useEffect(() => {
     if (!canRecord) return
@@ -362,6 +394,17 @@ export default function FitnessTestingPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold text-[#111]">Pencatatan Ujian Kecergasan</h2>
+        {selectedAthlete && (
+          <button
+            onClick={handlePrint}
+            className="flex items-center gap-2 px-4 py-2 bg-[#F56A00] text-white text-sm font-semibold rounded-lg hover:bg-[#D45A00] transition"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <path d="M9 12h6m-6 4h6M9 8h.01M15 8h.01M7 5h10a2 2 0 012 2v10a2 2 0 01-2 2H7a2 2 0 01-2-2V7a2 2 0 012-2z"/>
+            </svg>
+            Cetak
+          </button>
+        )}
       </div>
 
       {!selectedAthlete ? (
@@ -617,18 +660,13 @@ export default function FitnessTestingPage() {
                     {currentTest && testHistory.length > 0 && (
                       <>
                         {/* Detailed Test View with Tahap Pencapaian */}
-                        <div className="grid grid-cols-3 gap-4">
+                        <div className="grid grid-cols-3 gap-4" ref={chartRef}>
                           {/* Chart Section */}
                           <div className="col-span-2 bg-white rounded-xl border border-gray-200 overflow-hidden">
                             <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
-                              <div className="flex items-center justify-between">
-                                <p className="text-sm font-semibold text-[#111]">
-                                  {currentTest.test_name} — {testHistory.length} Sesi
-                                </p>
-                                <a href="#" className="text-xs text-[#F56A00] hover:underline">
-                                  Eksport →
-                                </a>
-                              </div>
+                              <p className="text-sm font-semibold text-[#111]">
+                                {currentTest.test_name} — {testHistory.length} Sesi
+                              </p>
                             </div>
 
                             <div className="p-4 space-y-4">
@@ -643,7 +681,7 @@ export default function FitnessTestingPage() {
                                         <span className="text-xs font-semibold text-[#111]">{h.result.result_value}</span>
                                       </div>
                                       <div
-                                        className="w-full bg-gradient-to-t from-orange-400 to-orange-300 rounded-t"
+                                        className="w-full bg-gradient-to-t from-orange-400 to-orange-300 rounded-t fitness-chart-bar"
                                         style={{ height: `${heightPx}px` }}
                                       />
                                     </div>

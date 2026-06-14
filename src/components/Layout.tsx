@@ -42,6 +42,13 @@ export default function Layout() {
   const notifRef = useRef<HTMLDivElement>(null)
   const userRef = useRef<HTMLDivElement>(null)
 
+  useEffect(() => {
+    const style = document.createElement('style')
+    style.textContent = '@media print { .no-print { display: none !important; } }'
+    document.head.appendChild(style)
+    return () => style.remove()
+  }, [])
+
   const athleteProfileMatch = pathname.match(/^\/athletes\/[^/]+$/)
   const meta = routeMeta[pathname] ?? (athleteProfileMatch ? { title: 'Profil Atlet', parent: 'Atlet' } : { title: 'MSP Sains Sukan' })
   const totalAlerts = alerts.injured + alerts.pendingSupplements
