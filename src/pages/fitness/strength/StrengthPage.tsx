@@ -576,7 +576,7 @@ async function handleSaveSchedule() {
                           <p className="text-xs font-semibold text-[#888] uppercase">Rekod Lalu {showMoreHistory[athlete.id] ? '' : `(3 terbaru)`}</p>
                           {pastRecords.slice(0, showMoreHistory[athlete.id] ? undefined : 3).map(r => (
                             <div key={r.id} className="flex items-center justify-between text-xs">
-                              <span className="text-[#666]">{new Date(r.session_date).toLocaleDateString('ms-MY', { day: '2-digit', month: 'short' })}</span>
+                              <span className="text-[#666]">{new Date(r.session_date).toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
                               <span className={`font-semibold px-2 py-0.5 rounded-full ${attendanceStyle[r.attendance]}`}>
                                 {attendanceLabel[r.attendance]}
                               </span>
