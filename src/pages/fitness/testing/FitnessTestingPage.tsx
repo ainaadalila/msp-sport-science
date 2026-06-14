@@ -1055,7 +1055,7 @@ export default function FitnessTestingPage() {
                     }}
                     className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
                   >
-                    {isDraft ? 'Lanjutkan Edit Draf' : 'Kemaskini'}
+                    'Edit'
                   </button>
                 )}
                 <button
@@ -1123,7 +1123,7 @@ export default function FitnessTestingPage() {
                                 }}
                                 className="px-3 py-1 text-xs font-semibold text-[#F56A00] border border-[#F56A00] rounded hover:bg-[#F56A00] hover:text-white transition"
                               >
-                                Kemaskini
+                                Edit
                               </button>
                             )}
                           </div>
