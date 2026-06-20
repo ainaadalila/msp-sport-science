@@ -48,7 +48,7 @@ export function useAthletes() {
         const { data, error } = await supabase
           .from('athletes')
           .select('id, name, ic_number, sport_id, status, gender, date_of_birth, weight, height, is_elite, photo_url, category, sport:sports!sport_id(name)')
-          .order('name') as any
+          .order('name').limit(5000) as any
 
         if (!error && data && isMounted.current) {
           athleteCache.data = data

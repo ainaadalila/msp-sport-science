@@ -70,7 +70,9 @@ export default function PhysioCasePage() {
   const isAdmin = profile?.role === 'superadmin' || profile?.role === 'admin'
   const canEdit = can('physio_cases', 'update')
 
+  const CASES_PER_PAGE = 25
   const [tab, setTab] = useState<Tab>('active')
+  const [currentPage, setCurrentPage] = useState(1)
   const [cases, setCases] = useState<PhysioCase[]>([])
   const [athletes, setAthletes] = useState<Athlete[]>([])
   const [caseStats, setCaseStats] = useState<CaseStats>({})
@@ -104,13 +106,14 @@ export default function PhysioCasePage() {
   const [caseActionError, setCaseActionError] = useState<string | null>(null)
 
   useEffect(() => { fetchAll() }, [])
+  useEffect(() => { setCurrentPage(1) }, [tab])
 
   async function fetchAll() {
     setLoading(true)
     const [casesRes, slotsRes, athRes] = await Promise.all([
-      supabase.from('physio_cases').select('id, athlete_id, open_date, status, referred_to_doctor, injury_type, athlete:athletes(id, name, ic_number, sport_id, sport:sport_id(name), date_of_birth, gender)').order('open_date', { ascending: false }),
-      supabase.from('physio_slots').select('case_id, pain_scale, slot_date').not('case_id', 'is', null),
-      supabase.from('athletes').select('id, name, ic_number, sport_id, sport:sport_id(name), date_of_birth, gender').order('name'),
+      supabase.from('physio_cases').select('id, athlete_id, open_date, status, referred_to_doctor, injury_type, athlete:athletes(id, name, ic_number, sport_id, sport:sport_id(name), date_of_birth, gender)').order('open_date', { ascending: false }).limit(5000),
+      supabase.from('physio_slots').select('case_id, pain_scale, slot_date').not('case_id', 'is', null).limit(5000),
+      supabase.from('athletes').select('id, name, ic_number, sport_id, sport:sport_id(name), date_of_birth, gender').order('name').limit(5000),
     ]) as any
     setCases(casesRes.data ?? [])
     setAthletes(athRes.data ?? [])
@@ -359,6 +362,8 @@ export default function PhysioCasePage() {
   const activeCases = cases.filter(c => c.status === 'active')
   const closedCases = cases.filter(c => c.status === 'closed')
   const displayCases = tab === 'active' ? activeCases : closedCases
+  const totalPages = Math.ceil(displayCases.length / CASES_PER_PAGE)
+  const pagedCases = displayCases.slice((currentPage - 1) * CASES_PER_PAGE, currentPage * CASES_PER_PAGE)
 
   const allSports = [...new Set(athletes.map(a => a.sport?.name))].filter(Boolean).sort()
   const modalAthletes = createFormSport ? athletes.filter(a => a.sport?.name === createFormSport) : athletes
@@ -407,7 +412,7 @@ export default function PhysioCasePage() {
                 </tr>
               </thead>
               <tbody>
-                {displayCases.map(c => (
+                {pagedCases.map(c => (
                   <tr key={c.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
                     <td className="px-4 py-3 font-medium text-[#111]">{c.athlete?.name ?? '—'}</td>
                     <td className="px-4 py-3 text-[#888]">{c.athlete?.sport?.name ?? '—'}</td>
@@ -442,6 +447,21 @@ export default function PhysioCasePage() {
                 ))}
               </tbody>
             </table>
+          )}
+          {totalPages > 1 && (
+            <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-between">
+              <p className="text-[11px] text-[#888]">Halaman {currentPage} daripada {totalPages} ({displayCases.length} kes)</p>
+              <div className="flex items-center gap-1">
+                <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1.5 text-[11px] rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50 transition">← Sebelumnya</button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1).map((page, idx, arr) => (
+                  <span key={page} className="flex items-center">
+                    {idx > 0 && arr[idx - 1] !== page - 1 && <span className="px-1 text-[#888] text-[11px]">…</span>}
+                    <button onClick={() => setCurrentPage(page)} className={`w-7 h-7 text-[11px] rounded-lg ${currentPage === page ? 'bg-[#F56A00] text-white font-semibold' : 'text-[#444] border border-gray-300 hover:bg-gray-50'}`}>{page}</button>
+                  </span>
+                ))}
+                <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-3 py-1.5 text-[11px] rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50 transition">Seterusnya →</button>
+              </div>
+            </div>
           )}
         </div>
       )}

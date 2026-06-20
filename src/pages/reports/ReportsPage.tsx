@@ -232,7 +232,7 @@ export default function ReportsPage() {
           let q = supabase
             .from('fitness_test_sessions')
             .select('*, athlete:athletes(name, ic_number, category, sport_id, sport:sport_id(name))')
-            .order('recorded_date', { ascending: false })
+            .order('recorded_date', { ascending: false }).limit(5000)
           if (filterSession) {
             q = q.eq('session', filterSession)
           }
@@ -274,7 +274,7 @@ export default function ReportsPage() {
             })
           )
         } else if (active === 'inbody') {
-          let q = supabase.from('inbody_records').select('recorded_date, weight, smm, bmi, fat_pct, inbody_score, diet_plan_url, athlete:athletes(name, sport_id, sport:sport_id(name))').order('recorded_date', { ascending: false }) as any
+          let q = supabase.from('inbody_records').select('recorded_date, weight, smm, bmi, fat_pct, inbody_score, diet_plan_url, athlete:athletes(name, sport_id, sport:sport_id(name))').order('recorded_date', { ascending: false }).limit(5000) as any
           if (filterFrom) q = q.gte('recorded_date', filterFrom)
           if (filterTo) q = q.lte('recorded_date', filterTo)
           const { data: rows } = await q
@@ -294,7 +294,7 @@ export default function ReportsPage() {
           )
         } else if (active === 'attendance') {
           if (latihkanMode === 'kehadiran') {
-            let q = supabase.from('strength_conditioning').select('session_date, attendance, athlete:athletes(name, sport_id, sport:sport_id(name))').order('session_date', { ascending: false }) as any
+            let q = supabase.from('strength_conditioning').select('session_date, attendance, athlete:athletes(name, sport_id, sport:sport_id(name))').order('session_date', { ascending: false }).limit(5000) as any
             if (filterFrom) q = q.gte('session_date', filterFrom)
             if (filterTo) q = q.lte('session_date', filterTo)
             if (filterStatus) q = q.eq('attendance', filterStatus)
@@ -313,7 +313,7 @@ export default function ReportsPage() {
             const { data: schedules, error } = await supabase
               .from('coach_schedules')
               .select('id, coach_id, sport, schedule_name, valid_from, coach:profiles(full_name), slots:coach_schedule_slots(id)')
-              .order('valid_from', { ascending: false }) as any
+              .order('valid_from', { ascending: false }).limit(5000) as any
             if (error) throw error
             setData((schedules ?? [])
               .filter((s: any) => !filterSport || s.sport === filterSport)
@@ -330,7 +330,7 @@ export default function ReportsPage() {
               .from('strength_conditioning_programs')
               .select('id, sport, month, year, start_date, end_date, structured_data, coach_id, coach:profiles(full_name)')
               .order('year', { ascending: false })
-              .order('month', { ascending: false }) as any
+              .order('month', { ascending: false }).limit(5000) as any
             if (error) throw error
             const monthNames = ['Januari', 'Februari', 'Mac', 'April', 'Mei', 'Jun', 'Julai', 'Ogos', 'September', 'Oktober', 'November', 'Disember']
             setData((programs ?? [])
@@ -353,7 +353,7 @@ export default function ReportsPage() {
         } else if (active === 'supplement') {
           let q = supabase.from('supplement_requests')
             .select('*, supplement:supplements(name, unit)')
-            .order('created_at', { ascending: false })
+            .order('created_at', { ascending: false }).limit(5000)
           if (filterStatus) q = q.eq('status', filterStatus)
           if (filterFrom) q = q.gte('request_date', filterFrom)
           if (filterTo) q = q.lte('request_date', filterTo)
@@ -384,7 +384,7 @@ export default function ReportsPage() {
             .gte('slot_date', startDate)
             .lte('slot_date', endDate)
             .not('athlete_id', 'is', null)
-            .order('slot_date', { ascending: true }) as any)
+            .order('slot_date', { ascending: true }).limit(5000) as any)
 
           const grouped = new Map<string, Record<string, unknown>>()
           ;(rows ?? []).forEach((s: any) => {
@@ -415,7 +415,7 @@ export default function ReportsPage() {
           let q = supabase
             .from('psychology_ratings')
             .select('id, athlete_id, phase, assessment_date, cognitive_anxiety_score, somatic_anxiety_score, self_confidence_score, catatan, athlete:athletes(name, sport_id, sport:sport_id(name))')
-            .order('assessment_date', { ascending: false }) as any
+            .order('assessment_date', { ascending: false }).limit(5000) as any
           if (filterFrom) q = q.gte('assessment_date', filterFrom)
           if (filterTo) q = q.lte('assessment_date', filterTo)
           const { data: rows, error } = await q
@@ -485,7 +485,7 @@ export default function ReportsPage() {
         let q = supabase
           .from('fitness_test_sessions')
           .select('*, athlete:athletes(name, ic_number, category, sport_id, sport:sport_id(name))')
-          .order('recorded_date', { ascending: false })
+          .order('recorded_date', { ascending: false }).limit(5000)
         if (filterSession) {
           q = q.eq('session', filterSession)
         }
@@ -534,7 +534,7 @@ export default function ReportsPage() {
           })
         )
       } else if (active === 'inbody') {
-        let q = supabase.from('inbody_records').select('recorded_date, weight, smm, bmi, fat_pct, inbody_score, ulasan, athlete:athletes(name, sport_id, sport:sport_id(name))').order('recorded_date', { ascending: false }) as any
+        let q = supabase.from('inbody_records').select('recorded_date, weight, smm, bmi, fat_pct, inbody_score, ulasan, athlete:athletes(name, sport_id, sport:sport_id(name))').order('recorded_date', { ascending: false }).limit(5000) as any
         if (filterFrom) q = q.gte('recorded_date', filterFrom)
         if (filterTo) q = q.lte('recorded_date', filterTo)
         const { data: rows } = await q
@@ -555,7 +555,7 @@ export default function ReportsPage() {
       } else if (active === 'attendance') {
         if (latihkanMode === 'kehadiran') {
           // Attendance records
-          let q = supabase.from('strength_conditioning').select('session_date, attendance, athlete:athletes(name, sport_id, sport:sport_id(name))').order('session_date', { ascending: false }) as any
+          let q = supabase.from('strength_conditioning').select('session_date, attendance, athlete:athletes(name, sport_id, sport:sport_id(name))').order('session_date', { ascending: false }).limit(5000) as any
           if (filterFrom) q = q.gte('session_date', filterFrom)
           if (filterTo) q = q.lte('session_date', filterTo)
           if (filterStatus) q = q.eq('attendance', filterStatus)
@@ -575,7 +575,7 @@ export default function ReportsPage() {
           const { data: schedules, error } = await supabase
             .from('coach_schedules')
             .select('id, coach_id, sport, schedule_name, valid_from, coach:profiles(full_name), slots:coach_schedule_slots(id)')
-            .order('valid_from', { ascending: false }) as any
+            .order('valid_from', { ascending: false }).limit(5000) as any
           if (error) {
             console.error('Coach schedules error:', error)
             throw error
@@ -596,7 +596,7 @@ export default function ReportsPage() {
             .from('strength_conditioning_programs')
             .select('id, sport, month, year, start_date, end_date, structured_data, coach_id, coach:profiles(full_name)')
             .order('year', { ascending: false })
-            .order('month', { ascending: false }) as any
+            .order('month', { ascending: false }).limit(5000) as any
           if (error) {
             console.error('Training programs error:', error)
             throw error
@@ -622,7 +622,7 @@ export default function ReportsPage() {
       } else if (active === 'supplement') {
         let q = supabase.from('supplement_requests')
           .select('*, supplement:supplements(name, unit)')
-          .order('created_at', { ascending: false })
+          .order('created_at', { ascending: false }).limit(5000)
         if (filterStatus) q = q.eq('status', filterStatus)
         if (filterFrom) q = q.gte('request_date', filterFrom)
         if (filterTo) q = q.lte('request_date', filterTo)
@@ -659,7 +659,7 @@ export default function ReportsPage() {
             .gte('slot_date', startDate)
             .lte('slot_date', endDate)
             .not('athlete_id', 'is', null)
-            .order('slot_date', { ascending: true }) as any)
+            .order('slot_date', { ascending: true }).limit(5000) as any)
 
           const grouped = new Map<string, Record<string, unknown>>()
           ;(rows ?? []).forEach((s: any) => {
@@ -696,7 +696,7 @@ export default function ReportsPage() {
             .gte('slot_date', startDate)
             .lte('slot_date', endDate)
             .not('athlete_id', 'is', null)
-            .order('slot_date', { ascending: true }) as any)
+            .order('slot_date', { ascending: true }).limit(5000) as any)
 
           const grouped = new Map<string, Record<string, unknown>>()
           ;(rows ?? []).forEach((s: any) => {
@@ -728,7 +728,7 @@ export default function ReportsPage() {
         let q = supabase
           .from('psychology_ratings')
           .select('id, athlete_id, phase, assessment_date, cognitive_anxiety_score, somatic_anxiety_score, self_confidence_score, catatan, athlete:athletes(name, sport_id, sport:sport_id(name))')
-          .order('assessment_date', { ascending: false }) as any
+          .order('assessment_date', { ascending: false }).limit(5000) as any
         if (filterFrom) q = q.gte('assessment_date', filterFrom)
         if (filterTo) q = q.lte('assessment_date', filterTo)
         const { data: rows, error } = await q

@@ -95,11 +95,15 @@ const ROLE_LABELS: Record<UserRole, string> = {
 }
 
 export default function AuditLogPage() {
+  const LOGS_PER_PAGE = 50
   const [logs, setLogs] = useState<AuditLogWithProfile[]>([])
   const [loading, setLoading] = useState(true)
+  const [currentPage, setCurrentPage] = useState(1)
   const [filterDateRange, setFilterDateRange] = useState('all')
   const [filterCategory, setFilterCategory] = useState('all')
   const [filterUser, setFilterUser] = useState('all')
+
+  useEffect(() => { setCurrentPage(1) }, [filterDateRange, filterCategory, filterUser])
 
   useEffect(() => {
     async function fetchLogs() {
@@ -152,6 +156,9 @@ export default function AuditLogPage() {
 
     return true
   })
+
+  const totalPages = Math.ceil(filtered.length / LOGS_PER_PAGE)
+  const pagedLogs = filtered.slice((currentPage - 1) * LOGS_PER_PAGE, currentPage * LOGS_PER_PAGE)
 
   const users = Array.from(
     new Map(logs.map(l => [l.user_id, { id: l.user_id, name: l.profile?.full_name || 'Unknown' }])).values()
@@ -243,7 +250,7 @@ export default function AuditLogPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((log, i) => (
+                {pagedLogs.map((log, i) => (
                   <tr key={log.id} className={`border-b border-gray-50 last:border-0 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
                     <td className="px-6 py-3 text-sm text-[#111]">
                       {new Date(log.created_at).toLocaleString('ms-MY', {
@@ -268,6 +275,21 @@ export default function AuditLogPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+        {totalPages > 1 && (
+          <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
+            <p className="text-[11px] text-[#888]">Halaman {currentPage} daripada {totalPages} ({filtered.length} catatan)</p>
+            <div className="flex items-center gap-1">
+              <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1.5 text-[11px] rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50 transition">← Sebelumnya</button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1).map((page, idx, arr) => (
+                <span key={page} className="flex items-center">
+                  {idx > 0 && arr[idx - 1] !== page - 1 && <span className="px-1 text-[#888] text-[11px]">…</span>}
+                  <button onClick={() => setCurrentPage(page)} className={`w-7 h-7 text-[11px] rounded-lg ${currentPage === page ? 'bg-[#F56A00] text-white font-semibold' : 'text-[#444] border border-gray-300 hover:bg-gray-50'}`}>{page}</button>
+                </span>
+              ))}
+              <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-3 py-1.5 text-[11px] rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50 transition">Seterusnya →</button>
+            </div>
           </div>
         )}
       </div>

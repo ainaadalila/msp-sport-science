@@ -101,6 +101,12 @@ function formatIC(value: string) {
   return `${digits.slice(0, 6)}-${digits.slice(6, 8)}-${digits.slice(8)}`
 }
 
+function genderFromIC(ic: string): 'M' | 'F' | '' {
+  const digits = ic.replace(/\D/g, '')
+  if (digits.length < 12) return ''
+  return parseInt(digits[11], 10) % 2 === 1 ? 'M' : 'F'
+}
+
 function dobFromIC(ic: string): string {
   const digits = ic.replace(/\D/g, '')
   if (digits.length < 6) return ''
@@ -129,7 +135,13 @@ export default function AthletesPage() {
   const isAdmin = profile?.role === 'superadmin' || profile?.role === 'admin'
   const navigate = useNavigate()
 
+  const ATHLETES_PER_PAGE = 25
   const [athletes, setAthletes] = useState<Athlete[]>([])
+  const [totalCount, setTotalCount] = useState(0)
+  const [maleCount, setMaleCount] = useState(0)
+  const [femaleCount, setFemaleCount] = useState(0)
+  const [activeCount, setActiveCount] = useState(0)
+  const [injuredCount, setInjuredCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
@@ -142,15 +154,29 @@ export default function AthletesPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const [currentPage, setCurrentPage] = useState(1)
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { fetchAthletes() }, [])
+  useEffect(() => { setCurrentPage(1) }, [search, filterStatus, filterSport, filterElite])
 
   async function fetchAthletes() {
     setLoading(true)
-    const { data, error } = await supabase.from('athletes').select('id, name, ic_number, sport_id, status, gender, date_of_birth, weight, height, is_elite, photo_url, category, created_at, sport:sports!sport_id(name)').order('name') as any
-    if (!error) setAthletes(data ?? [])
+    const [listRes, totalRes, maleRes, femaleRes, activeRes, injuredRes] = await Promise.all([
+      supabase.from('athletes').select('id, name, ic_number, sport_id, status, gender, date_of_birth, weight, height, is_elite, photo_url, category, created_at, sport:sports!sport_id(name)').order('name').limit(5000),
+      supabase.from('athletes').select('*', { count: 'exact', head: true }),
+      supabase.from('athletes').select('*', { count: 'exact', head: true }).eq('gender', 'M'),
+      supabase.from('athletes').select('*', { count: 'exact', head: true }).eq('gender', 'F'),
+      supabase.from('athletes').select('*', { count: 'exact', head: true }).eq('status', 'active'),
+      supabase.from('athletes').select('*', { count: 'exact', head: true }).eq('status', 'injured'),
+    ]) as any
+    if (!listRes.error) setAthletes(listRes.data ?? [])
+    setTotalCount(totalRes.count ?? 0)
+    setMaleCount(maleRes.count ?? 0)
+    setFemaleCount(femaleRes.count ?? 0)
+    setActiveCount(activeRes.count ?? 0)
+    setInjuredCount(injuredRes.count ?? 0)
     setLoading(false)
     invalidateAthletesCache()
   }
@@ -166,7 +192,7 @@ export default function AthletesPage() {
     setEditing(a)
     setForm({
       name: a.name,
-      ic_number: a.ic_number,
+      ic_number: formatIC(a.ic_number),
       date_of_birth: a.date_of_birth ?? '',
       gender: a.gender ?? '',
       sport_id: a.sport_id,
@@ -250,17 +276,15 @@ export default function AthletesPage() {
   })
 
   const totalSports = new Set(athletes.map(a => a.sport_id)).size
-  const maleAthletes = athletes.filter(a => a.gender === 'M').length
-  const femaleAthletes = athletes.filter(a => a.gender === 'F').length
-  const activeAthletes = athletes.filter(a => a.status === 'active').length
-  const injuredAthletes = athletes.filter(a => a.status === 'injured').length
+  const totalPages = Math.ceil(filtered.length / ATHLETES_PER_PAGE)
+  const pagedAthletes = filtered.slice((currentPage - 1) * ATHLETES_PER_PAGE, currentPage * ATHLETES_PER_PAGE)
 
   return (
     <div className="space-y-4">
 
       {/* Header */}
       <div className="flex items-center justify-between">
-        <p className="text-[12px] text-[#888]">{athletes.length} atlet terdaftar</p>
+        <p className="text-[12px] text-[#888]">{totalCount} atlet terdaftar</p>
         {can('athletes', 'create') && (
           <button onClick={openAdd} className="bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
             + Tambah Atlet
@@ -269,7 +293,7 @@ export default function AthletesPage() {
       </div>
 
       {/* Stat cards */}
-      {!loading && athletes.length > 0 && (
+      {!loading && totalCount > 0 && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Jumlah Sukan */}
           <div className="bg-white rounded-xl border border-gray-200 border-t-4 border-t-[#F56A00] px-5 py-4">
@@ -281,16 +305,16 @@ export default function AthletesPage() {
           {/* Jumlah Atlet — with gender breakdown */}
           <div className="bg-white rounded-xl border border-gray-200 border-t-4 border-t-[#F56A00] px-5 py-4">
             <p className="text-[11px] font-semibold uppercase tracking-widest text-[#888] mb-2">Jumlah Atlet</p>
-            <p className="text-3xl font-bold font-mono text-[#111] mb-2">{athletes.length}</p>
+            <p className="text-3xl font-bold font-mono text-[#111] mb-2">{totalCount}</p>
             <div className="flex items-center gap-3 mb-1">
               <div className="flex items-center gap-1.5">
                 <span className="text-[10px] font-bold text-[#3A7EC8]">L</span>
-                <span className="text-[13px] font-bold font-mono text-[#111]">{maleAthletes}</span>
+                <span className="text-[13px] font-bold font-mono text-[#111]">{maleCount}</span>
               </div>
               <div className="w-px h-3 bg-gray-200" />
               <div className="flex items-center gap-1.5">
                 <span className="text-[10px] font-bold text-[#D44040]">P</span>
-                <span className="text-[13px] font-bold font-mono text-[#111]">{femaleAthletes}</span>
+                <span className="text-[13px] font-bold font-mono text-[#111]">{femaleCount}</span>
               </div>
             </div>
             <p className="text-[11px] text-[#888]">Terdaftar dalam sistem</p>
@@ -299,16 +323,16 @@ export default function AthletesPage() {
           {/* Atlet Aktif */}
           <div className="bg-white rounded-xl border border-gray-200 border-t-4 border-t-[#F56A00] px-5 py-4">
             <p className="text-[11px] font-semibold uppercase tracking-widest text-[#888] mb-2">Atlet Aktif</p>
-            <p className="text-3xl font-bold font-mono text-[#3A9E6A] mb-1">{activeAthletes}</p>
+            <p className="text-3xl font-bold font-mono text-[#3A9E6A] mb-1">{activeCount}</p>
             <p className="text-[11px] text-[#888]">
-              {athletes.length > 0 ? `${Math.round((activeAthletes / athletes.length) * 100)}% daripada jumlah` : '—'}
+              {totalCount > 0 ? `${Math.round((activeCount / totalCount) * 100)}% daripada jumlah` : '—'}
             </p>
           </div>
 
           {/* Kecederaan */}
           <div className="bg-white rounded-xl border border-gray-200 border-t-4 border-t-[#F56A00] px-5 py-4">
             <p className="text-[11px] font-semibold uppercase tracking-widest text-[#888] mb-2">Kecederaan</p>
-            <p className={`text-3xl font-bold font-mono mb-1 ${injuredAthletes > 0 ? 'text-[#D44040]' : 'text-[#111]'}`}>{injuredAthletes}</p>
+            <p className={`text-3xl font-bold font-mono mb-1 ${injuredCount > 0 ? 'text-[#D44040]' : 'text-[#111]'}`}>{injuredCount}</p>
             <p className="text-[11px] text-[#888]">Atlet berstatus cedera</p>
           </div>
         </div>
@@ -403,7 +427,7 @@ export default function AthletesPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(a => (
+                {pagedAthletes.map(a => (
                   <tr
                     key={a.id}
                     onClick={() => navigate(`/athletes/${a.id}`)}
@@ -418,7 +442,7 @@ export default function AthletesPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-5 py-3 font-mono text-[12px] text-[#444]">{a.ic_number}</td>
+                    <td className="px-5 py-3 font-mono text-[12px] text-[#444]">{formatIC(a.ic_number)}</td>
                     <td className="px-5 py-3 text-[#444]">{a.gender ?? '—'}</td>
                     <td className="px-5 py-3 text-[#444]">{a.sport?.name ?? '—'}</td>
                     <td className="px-5 py-3 text-[#888]">{a.category ?? '—'}</td>
@@ -449,6 +473,21 @@ export default function AthletesPage() {
                 ))}
               </tbody>
             </table>
+            {totalPages > 1 && (
+              <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-between">
+                <p className="text-[11px] text-[#888]">Halaman {currentPage} daripada {totalPages} ({filtered.length} atlet)</p>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1.5 text-[11px] rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50 transition">← Sebelumnya</button>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1).map((page, idx, arr) => (
+                    <span key={page} className="flex items-center">
+                      {idx > 0 && arr[idx - 1] !== page - 1 && <span className="px-1 text-[#888] text-[11px]">…</span>}
+                      <button onClick={() => setCurrentPage(page)} className={`w-7 h-7 text-[11px] rounded-lg ${currentPage === page ? 'bg-[#F56A00] text-white font-semibold' : 'text-[#444] border border-gray-300 hover:bg-gray-50'}`}>{page}</button>
+                    </span>
+                  ))}
+                  <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-3 py-1.5 text-[11px] rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50 transition">Seterusnya →</button>
+                </div>
+              </div>
+            )}
             </div>
           )}
         </div>
@@ -498,7 +537,13 @@ export default function AthletesPage() {
                   <input value={form.ic_number} onChange={e => {
                     const ic = formatIC(e.target.value)
                     const dob = dobFromIC(ic)
-                    setForm(f => ({ ...f, ic_number: ic, ...(dob ? { date_of_birth: dob } : {}) }))
+                    const gender = genderFromIC(ic)
+                    setForm(f => ({
+                      ...f,
+                      ic_number: ic,
+                      ...(dob ? { date_of_birth: dob } : {}),
+                      ...(gender ? { gender } : {}),
+                    }))
                   }} className={inputCls} placeholder="000000-00-0000" maxLength={14} />
                 </Field>
                 <Field label="Tarikh Lahir">

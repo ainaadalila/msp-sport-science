@@ -31,11 +31,13 @@ export default function PhysioReportPage() {
   const [selectedYear, setSelectedYear] = useState(currentYear)
   const [selectedMonth, setSelectedMonth] = useState(currentMonth)
   const [filterSport, setFilterSport] = useState('')
+  const ROWS_PER_PAGE = 25
   const [rows, setRows] = useState<ReportRow[]>([])
   const [rawSlots, setRawSlots] = useState<SlotData[]>([])
   const [sports, setSports] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [generated, setGenerated] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
 
   useEffect(() => {
     fetchSports()
@@ -72,6 +74,7 @@ export default function PhysioReportPage() {
 
     const result = [...grouped.values()].sort((a, b) => a.sport.localeCompare(b.sport) || a.athlete_name.localeCompare(b.athlete_name))
     setRows(result)
+    setCurrentPage(1)
   }
 
   async function handleGenerate() {
@@ -126,12 +129,15 @@ export default function PhysioReportPage() {
         })
         const result = [...grouped.values()].sort((a, b) => a.sport.localeCompare(b.sport) || a.athlete_name.localeCompare(b.athlete_name))
         setRows(result)
+        setCurrentPage(1)
       }, 0)
     }
   }
 
   const yearOptions = Array.from({ length: 4 }, (_, i) => currentYear - i)
   const totalSessions = rows.reduce((acc, r) => acc + r.session_count, 0)
+  const totalPages = Math.ceil(rows.length / ROWS_PER_PAGE)
+  const pagedRows = rows.slice((currentPage - 1) * ROWS_PER_PAGE, currentPage * ROWS_PER_PAGE)
 
   return (
     <div className="space-y-4">
@@ -198,6 +204,7 @@ export default function PhysioReportPage() {
               Tiada sesi fisioterapi untuk bulan yang dipilih.
             </div>
           ) : (
+            <>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100">
@@ -207,7 +214,7 @@ export default function PhysioReportPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map(r => (
+                {pagedRows.map(r => (
                   <tr key={r.athlete_id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
                     <td className="px-4 py-3 font-medium text-[#111]">{r.athlete_name}</td>
                     <td className="px-4 py-3 text-[#888]">{r.sport}</td>
@@ -237,6 +244,22 @@ export default function PhysioReportPage() {
                 </tr>
               </tbody>
             </table>
+            {totalPages > 1 && (
+              <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-between">
+                <p className="text-[11px] text-[#888]">Halaman {currentPage} daripada {totalPages} ({rows.length} atlet)</p>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1.5 text-[11px] rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50 transition">← Sebelumnya</button>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1).map((page, idx, arr) => (
+                    <span key={page} className="flex items-center">
+                      {idx > 0 && arr[idx - 1] !== page - 1 && <span className="px-1 text-[#888] text-[11px]">…</span>}
+                      <button onClick={() => setCurrentPage(page)} className={`w-7 h-7 text-[11px] rounded-lg ${currentPage === page ? 'bg-[#F56A00] text-white font-semibold' : 'text-[#444] border border-gray-300 hover:bg-gray-50'}`}>{page}</button>
+                    </span>
+                  ))}
+                  <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-3 py-1.5 text-[11px] rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50 transition">Seterusnya →</button>
+                </div>
+              </div>
+            )}
+            </>
           )}
         </div>
       )}

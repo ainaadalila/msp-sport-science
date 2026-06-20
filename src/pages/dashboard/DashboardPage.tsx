@@ -105,17 +105,18 @@ export default function DashboardPage() {
     }
     async function fetchDashboard() {
       try {
-        const [athleteRes, pendingRes, logsRes] = await Promise.all([
-          supabase.from('athletes').select('id, status'),
+        const [totalRes, activeRes, injuredRes, pendingRes, logsRes] = await Promise.all([
+          supabase.from('athletes').select('*', { count: 'exact', head: true }),
+          supabase.from('athletes').select('*', { count: 'exact', head: true }).eq('status', 'active'),
+          supabase.from('athletes').select('*', { count: 'exact', head: true }).eq('status', 'injured'),
           supabase.from('supplement_requests').select('count', { count: 'exact' }).eq('status', 'pending'),
           supabase.from('audit_logs').select('id, action, created_at, profile:user_id(full_name)').order('created_at', { ascending: false }).limit(5),
         ])
 
-        const all = athleteRes.data ?? []
         setStats({
-          totalAthletes: all.length,
-          activeAthletes: all.filter(a => a.status === 'active').length,
-          injuredAthletes: all.filter(a => a.status === 'injured').length,
+          totalAthletes: totalRes.count ?? 0,
+          activeAthletes: activeRes.count ?? 0,
+          injuredAthletes: injuredRes.count ?? 0,
           pendingSupplements: pendingRes.count ?? 0,
         })
 

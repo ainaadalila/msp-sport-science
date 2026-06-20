@@ -7,6 +7,7 @@ import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import html2canvas from 'html2canvas'
+import jsPDF from 'jspdf'
 
 interface CSVRow {
   [key: string]: string
@@ -54,10 +55,12 @@ export default function PsychologyRatingPage() {
   const { can } = usePermissions()
   const { sports } = useSports()
 
+  const ATHLETES_PER_PAGE = 25
   const [ratings, setRatings] = useState<PhysioRating[]>([])
   const [athletes, setAthletes] = useState<AthleteBasic[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
 
   const [filterPhase, setFilterPhase] = useState<'all' | 'persediaan' | 'pertandingan' | 'pemulihan'>('all')
   const [filterSport, setFilterSport] = useState('')
@@ -82,30 +85,43 @@ export default function PsychologyRatingPage() {
   async function handlePrint() {
     if (!chartRef.current) return
     try {
-      const canvas = await html2canvas(chartRef.current, { scale: 2, useCORS: true })
-      const image = canvas.toDataURL('image/png')
-      const printWindow = window.open('', '', 'width=900,height=700')
-      if (printWindow) {
-        printWindow.document.write(`
-          <html><head><title>Cetak - Penilaian Psikologi</title>
-          <style>
-            body { margin: 20px; font-family: Arial, sans-serif; }
-            img { max-width: 100%; height: auto; }
-            .header { margin-bottom: 20px; }
-          </style>
-          </head><body>
-          <div class="header">
-            <h2>Penilaian Psikologi</h2>
-            <p>Laporan ${new Date().toLocaleDateString('ms-MY')}</p>
-          </div>
-          <img src="${image}" />
-          </body></html>
-        `)
-        printWindow.document.close()
-        printWindow.print()
+      const canvas = await html2canvas(chartRef.current, {
+        scale: 3,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+        allowTaint: true
+      })
+      const imgData = canvas.toDataURL('image/png', 1.0)
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+
+      const pageWidth = pdf.internal.pageSize.getWidth()
+      const pageHeight = pdf.internal.pageSize.getHeight()
+      const margin = 15
+      const contentWidth = pageWidth - margin * 2
+      const imgHeight = (canvas.height * contentWidth) / canvas.width
+
+      let yPos = margin
+
+      pdf.setFontSize(16)
+      pdf.text('Penilaian Psikologi', margin, yPos)
+      yPos += 8
+
+      pdf.setFontSize(11)
+      pdf.setTextColor(100)
+      pdf.text(`Laporan ${new Date().toLocaleDateString('ms-MY')}`, margin, yPos)
+      yPos += 15
+      pdf.setTextColor(0)
+
+      if (yPos + imgHeight > pageHeight - margin) {
+        pdf.addPage()
+        yPos = margin
       }
+
+      pdf.addImage(imgData, 'PNG', margin, yPos, contentWidth, imgHeight)
+      pdf.save(`Penilaian_Psikologi_${new Date().toISOString().slice(0, 10)}.pdf`)
     } catch (error) {
-      console.error('Print failed:', error)
+      console.error('Export PDF failed:', error)
     }
   }
 
@@ -113,9 +129,10 @@ export default function PsychologyRatingPage() {
     fetchAll()
   }, [])
 
-  // Reset expanded row when filters change
+  // Reset expanded row and page when filters change
   useEffect(() => {
     setExpandedAthleteId(null)
+    setCurrentPage(1)
   }, [search, filterSport, filterPhase])
 
   const fetchAll = async () => {
@@ -126,11 +143,11 @@ export default function PsychologyRatingPage() {
         supabase
           .from('psychology_ratings')
           .select('id, athlete_id, phase, assessment_date, cognitive_anxiety_score, somatic_anxiety_score, self_confidence_score, catatan, athlete:athletes(id, name, sport_id, sport:sport_id(name))')
-          .order('assessment_date', { ascending: false }),
+          .order('assessment_date', { ascending: false }).limit(5000),
         supabase
           .from('athletes')
           .select('id, name, ic_number, sport_id, status, sport:sport_id(name)')
-          .order('name'),
+          .order('name').limit(5000),
       ])
       if (ratingsRes.error) throw ratingsRes.error
       setRatings((ratingsRes.data as any) || [])
@@ -463,6 +480,9 @@ export default function PsychologyRatingPage() {
     })
   }, [athletes, search, filterSport, filterPhase, ratingsByAthlete])
 
+  const totalPages = Math.ceil(filteredAthletes.length / ATHLETES_PER_PAGE)
+  const pagedAthletes = filteredAthletes.slice((currentPage - 1) * ATHLETES_PER_PAGE, currentPage * ATHLETES_PER_PAGE)
+
   // Stats based on filtered athletes' ratings + phase filter
   const relevantRatings = useMemo(() => {
     const filteredIds = new Set(filteredAthletes.map(a => a.id))
@@ -603,7 +623,7 @@ export default function PsychologyRatingPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredAthletes.map(a => {
+                  {pagedAthletes.map(a => {
                     const athleteRatings = ratingsByAthlete.get(a.id) ?? []
                     const visibleRatings = filterPhase === 'all'
                       ? athleteRatings
@@ -731,6 +751,21 @@ export default function PsychologyRatingPage() {
                   })}
                 </tbody>
               </table>
+            )}
+            {totalPages > 1 && (
+              <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-between">
+                <p className="text-[11px] text-[#888]">Halaman {currentPage} daripada {totalPages} ({filteredAthletes.length} atlet)</p>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1.5 text-[11px] rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50 transition">← Sebelumnya</button>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1).map((page, idx, arr) => (
+                    <span key={page} className="flex items-center">
+                      {idx > 0 && arr[idx - 1] !== page - 1 && <span className="px-1 text-[#888] text-[11px]">…</span>}
+                      <button onClick={() => setCurrentPage(page)} className={`w-7 h-7 text-[11px] rounded-lg ${currentPage === page ? 'bg-[#F56A00] text-white font-semibold' : 'text-[#444] border border-gray-300 hover:bg-gray-50'}`}>{page}</button>
+                    </span>
+                  ))}
+                  <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-3 py-1.5 text-[11px] rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50 transition">Seterusnya →</button>
+                </div>
+              </div>
             )}
           </div>
         </div>

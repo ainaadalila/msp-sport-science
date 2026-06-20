@@ -69,6 +69,13 @@ function fmtDate(d: string) {
   return new Date(d + 'T00:00:00').toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
+function formatIC(value: string) {
+  const digits = value.replace(/\D/g, '').slice(0, 12)
+  if (digits.length <= 6) return digits
+  if (digits.length <= 8) return `${digits.slice(0, 6)}-${digits.slice(6)}`
+  return `${digits.slice(0, 6)}-${digits.slice(6, 8)}-${digits.slice(8)}`
+}
+
 function calcAge(dob: string) {
   const diff = Date.now() - new Date(dob + 'T00:00:00').getTime()
   return Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25))
@@ -230,7 +237,7 @@ export default function AthleteProfilePage() {
           </div>
           <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              { label: 'No. KP', value: athlete.ic_number || '—' },
+              { label: 'No. KP', value: athlete.ic_number ? formatIC(athlete.ic_number) : '—' },
               { label: 'Tarikh Lahir', value: athlete.date_of_birth ? fmtDate(athlete.date_of_birth) : '—' },
               { label: 'Umur', value: athlete.date_of_birth ? `${calcAge(athlete.date_of_birth)} tahun` : '—' },
               { label: 'Jantina', value: athlete.gender ?? '—' },
