@@ -37,6 +37,7 @@ export interface Athlete {
   id: string
   name: string
   ic_number: string
+  gender?: 'M' | 'F'
   sport_id: string
   sport?: { name: string }
   category?: string
@@ -234,7 +235,6 @@ export interface FitnessTestSession {
   year: number
   recorded_date: string
   recorded_by: string
-  is_draft: boolean
   created_at: string
   athlete?: { name: string; sport?: { name: string } } | null
 }

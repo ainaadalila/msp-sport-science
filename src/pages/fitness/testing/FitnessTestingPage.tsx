@@ -74,8 +74,6 @@ export default function FitnessTestingPage() {
   const [sessionsWithResults, setSessionsWithResults] = useState<SessionWithResults[]>([])
   const [selectedTestId, setSelectedTestId] = useState<string | null>(null)
   const [selectedAthletesGender, setSelectedAthletesGender] = useState<'M' | 'F' | null>(null)
-  const [editingSessionId, setEditingSessionId] = useState<string | null>(null)
-  const [isDraft, setIsDraft] = useState(false)
 
   async function handlePrint() {
     if (!chartRef.current) return
@@ -137,7 +135,7 @@ export default function FitnessTestingPage() {
 
   async function fetchAthletes() {
     setLoading(true)
-    const res = await supabase.from('athletes').select('id, name, ic_number, category, sport_id, sport:sport_id(name)').order('name').limit(5000) as any
+    const res = await supabase.from('athletes').select('id, name, ic_number, gender, category, sport_id, sport:sport_id(name)').order('name').limit(5000) as any
     setAthletes(res.data ?? [])
     setLoading(false)
   }
@@ -147,8 +145,7 @@ export default function FitnessTestingPage() {
     setResults([])
     setError(null)
 
-    // Extract gender from ic_number (12th digit: odd=M, even=F)
-    const gender = getAthleteGender(athlete.ic_number)
+    const gender = (athlete.gender as 'M' | 'F') ?? getAthleteGender(athlete.ic_number)
     setSelectedAthletesGender(gender)
 
     // Fetch sport tests for this athlete's sport
@@ -187,7 +184,7 @@ export default function FitnessTestingPage() {
           .in('test_id', testIds),
         supabase
           .from('fitness_test_sessions')
-          .select('id, athlete_id, session, year, recorded_date, recorded_by, is_draft, created_at')
+          .select('id, athlete_id, session, year, recorded_date, recorded_by, created_at')
           .eq('athlete_id', athlete.id)
           .order('recorded_date', { ascending: false })
       ])
@@ -211,7 +208,7 @@ export default function FitnessTestingPage() {
   async function fetchSessionsWithResults(athleteId: string) {
     const sessionsRes = await supabase
       .from('fitness_test_sessions')
-      .select('id, athlete_id, session, year, recorded_date, recorded_by, is_draft, created_at')
+      .select('id, athlete_id, session, year, recorded_date, recorded_by, created_at')
       .eq('athlete_id', athleteId)
       .order('recorded_date', { ascending: false })
 
@@ -252,19 +249,19 @@ export default function FitnessTestingPage() {
     const { rating_direction } = norm
 
     if (rating_direction === 'higher_is_better') {
-      if (norm.good_min !== undefined && norm.good_min !== null && value > norm.good_min) return 'baik'
+      if (norm.good_min !== undefined && norm.good_min !== null && value >= norm.good_min) return 'baik'
       if (norm.average_min !== undefined && norm.average_min !== null && value >= norm.average_min) return 'sederhana'
       return 'lemah'
     } else {
-      if (norm.good_max !== undefined && norm.good_max !== null && value < norm.good_max) return 'baik'
+      if (norm.good_max !== undefined && norm.good_max !== null && value <= norm.good_max) return 'baik'
       if (norm.average_max !== undefined && norm.average_max !== null && value <= norm.average_max) return 'sederhana'
       return 'lemah'
     }
   }
 
-  async function handleSave(asDraft: boolean) {
+  async function handleSave() {
     if (!selectedAthlete) return
-    if (!asDraft && results.some(r => !r.result_value)) {
+    if (results.some(r => !r.result_value)) {
       setError('Sila isi semua nilai ujian sebelum menyimpan.')
       return
     }
@@ -283,7 +280,6 @@ export default function FitnessTestingPage() {
             year,
             recorded_date: new Date().toISOString().split('T')[0],
             recorded_by: profile!.id,
-            is_draft: asDraft,
           },
           { onConflict: 'athlete_id,session,year' }
         )
@@ -310,7 +306,7 @@ export default function FitnessTestingPage() {
         if (resultsError) throw resultsError
       }
 
-      await logAction(profile!.id, asDraft ? 'draft_fitness_tests' : 'submit_fitness_tests', 'fitness_test_sessions', sessionData.id)
+      await logAction(profile!.id, 'submit_fitness_tests', 'fitness_test_sessions', sessionData.id)
 
       // Fetch the results that were just saved
       const resultsRes = await supabase
@@ -328,10 +324,7 @@ export default function FitnessTestingPage() {
         unit: (r.test as any)?.unit || '',
       })) as SessionResult[]
 
-      // Show results view with draft info
       setViewedSession({ session: sessionData, results: savedResults })
-      setIsDraft(asDraft)
-      setEditingSessionId(sessionData.id)
       setViewMode('view_results')
 
       // Update sessions list
@@ -397,7 +390,7 @@ export default function FitnessTestingPage() {
     'Illinois Test': { M: { good: '<15.2', average: '15.3-18.1', poor: '>18.2', unit: 'seconds' }, F: { good: '<17.0', average: '17.1-22.9', poor: '>23.0', unit: 'seconds' } },
     '20m Sprint': { M: { good: '<2.7', average: '2.7-3.1', poor: '>3.1', unit: 'seconds' }, F: { good: '<3.2', average: '3.1-3.5', poor: '>3.5', unit: 'seconds' } },
     '40m Sprint': { M: { good: '<4.0', average: '4.1-4.5', poor: '>4.6', unit: 'seconds' }, F: { good: '<4.5', average: '4.6-4.9', poor: '>5.0', unit: 'seconds' } },
-    'Bleep Test': { M: { good: '>2620', average: '1022-2620', poor: '<1022', unit: 'm' }, F: { good: '>2260', average: '820-2260', poor: '<820', unit: 'm' } },
+    'Bleep Test': { M: { good: '>2620', average: '1022-2600', poor: '<1020', unit: 'm' }, F: { good: '>2260', average: '820-2240', poor: '<800', unit: 'm' } },
     'Intermittent Recovery Test Level 2': { M: { good: '>21.6', average: '20.1-21.6', poor: '<20.1', unit: 'level' }, F: { good: '>21.1', average: '19.2-20.1', poor: '<19.2', unit: 'level' } },
     '24km Run Test': { M: { good: '<9m45s', average: '9m46s-14m', poor: '>14m01s', unit: 'minutes' }, F: { good: '<12m30s', average: '12m31s-18m30s', poor: '>18m31s', unit: 'minutes' } },
     'Alternate Hand Wall Toss': { both: { good: '>35', average: '16-34', poor: '<15', unit: 'reps' } },
@@ -1007,14 +1000,7 @@ export default function FitnessTestingPage() {
                   Batal
                 </button>
                 <button
-                  onClick={() => handleSave(true)}
-                  disabled={saving}
-                  className="px-4 py-2 text-sm text-[#F56A00] border border-[#F56A00] rounded-lg hover:bg-orange-50 transition disabled:opacity-60"
-                >
-                  {saving ? 'Menyimpan...' : 'Simpan sebagai Draf'}
-                </button>
-                <button
-                  onClick={() => handleSave(false)}
+                  onClick={() => handleSave()}
                   disabled={saving || results.every(r => !r.result_value)}
                   className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition"
                 >
@@ -1027,10 +1013,8 @@ export default function FitnessTestingPage() {
           {/* View Results */}
           {viewMode === 'view_results' && viewedSession && (
             <div className="space-y-4">
-              <div className={`${isDraft ? 'bg-blue-50 border-blue-200' : 'bg-green-50 border-green-200'} border rounded-lg px-4 py-3`}>
-                <p className={`text-sm font-semibold ${isDraft ? 'text-blue-700' : 'text-green-700'}`}>
-                  {isDraft ? '◐ Ujian disimpan sebagai DRAF' : '✓ Ujian telah diserahkan'}
-                </p>
+              <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3">
+                <p className="text-sm font-semibold text-green-700">✓ Ujian telah diserahkan</p>
               </div>
 
               <div className="bg-white rounded-xl border border-gray-200 p-4">
@@ -1067,33 +1051,6 @@ export default function FitnessTestingPage() {
                 >
                   Kembali ke Paparan
                 </button>
-                {isDraft && (
-                  <button
-                    onClick={async () => {
-                      setSaving(true)
-                      try {
-                        const { error } = await supabase
-                          .from('fitness_test_sessions')
-                          .update({ is_draft: false })
-                          .eq('id', editingSessionId)
-                        if (error) throw error
-                        await logAction(profile!.id, 'submit_fitness_tests', 'fitness_test_sessions', editingSessionId!)
-                        setIsDraft(false)
-                        if (viewedSession) {
-                          setViewedSession({ ...viewedSession, session: { ...viewedSession.session, is_draft: false } })
-                        }
-                      } catch (err) {
-                        setError((err as any).message || 'Ralat menyimpan')
-                      } finally {
-                        setSaving(false)
-                      }
-                    }}
-                    disabled={saving}
-                    className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition disabled:opacity-60"
-                  >
-                    {saving ? 'Menyimpan...' : 'Serah Draf'}
-                  </button>
-                )}
                 {can('fitness', 'update') && (
                   <button
                     onClick={() => {
@@ -1111,7 +1068,7 @@ export default function FitnessTestingPage() {
                     }}
                     className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
                   >
-                    'Edit'
+                    Edit
                   </button>
                 )}
                 <button
@@ -1147,15 +1104,10 @@ export default function FitnessTestingPage() {
                         <div className="flex items-center justify-between mb-3">
                           <div className="flex-1 cursor-pointer" onClick={() => {
                             setViewedSession(sessionResult)
-                            setIsDraft(sessionResult.session.is_draft)
-                            setEditingSessionId(sessionResult.session.id)
                             setViewMode('view_results')
                           }}>
                             <div className="flex items-center gap-2">
                               <p className="font-semibold text-[#111]">{sessionResult.session.session} {sessionResult.session.year}</p>
-                              {sessionResult.session.is_draft && (
-                                <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-semibold">DRAF</span>
-                              )}
                             </div>
                             <p className="text-xs text-[#888]">{new Date(sessionResult.session.recorded_date).toLocaleDateString('ms-MY')}</p>
                           </div>
@@ -1167,7 +1119,6 @@ export default function FitnessTestingPage() {
                               <button
                                 onClick={() => {
                                   setViewMode('record_tests')
-                                  setEditingSessionId(sessionResult.session.id)
                                   setResults(sessionResult.results.map(r => ({
                                     test_id: r.test_id,
                                     result_value: r.result_value,

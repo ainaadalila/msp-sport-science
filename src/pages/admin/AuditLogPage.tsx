@@ -46,7 +46,6 @@ const ACTION_LABELS: Record<string, string> = {
   approve_supplement_partial: 'Lulus Sebahagian Suplemen',
   supporter_approve_supplement: 'Sokong Suplemen',
   supporter_reject_supplement: 'Tidak Sokong Suplemen',
-  draft_fitness_tests: 'Draf Ujian Kecergasan',
   submit_fitness_tests: 'Hantar Ujian Kecergasan',
 }
 
@@ -57,7 +56,7 @@ const ACTION_CATEGORIES: Record<string, string[]> = {
   'InBody': ['create_inbody', 'update_inbody', 'upload_inbody_diet_plan', 'delete_inbody_diet_plan'],
   'Suplemen': ['create_supplement', 'update_supplement', 'submit_supplement_request', 'koordinator_approve_supplement', 'koordinator_reject_supplement', 'approve_supplement', 'approve_supplement_partial', 'supporter_approve_supplement', 'supporter_reject_supplement'],
   'S&C': ['create_sc_session', 'update_sc_session', 'create_sc_program', 'update_sc_program', 'update_coach_assignment', 'create_coach_assignment'],
-  'Kecergasan': ['draft_fitness_tests', 'submit_fitness_tests'],
+  'Kecergasan': ['submit_fitness_tests'],
 }
 
 const TABLE_LABELS: Record<string, string> = {
