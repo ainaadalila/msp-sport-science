@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
@@ -117,9 +117,12 @@ export default function StrengthPage() {
   const [attendanceSport, setAttendanceSport] = useState('')
   const [attendanceSearch, setAttendanceSearch] = useState('')
   const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().slice(0, 10))
+  useEffect(() => { setKehadiranPage(1) }, [attendanceSport, attendanceSearch])
   const [expandedAthletes, setExpandedAthletes] = useState<{ [key: string]: boolean }>({})
   const [showMoreHistory, setShowMoreHistory] = useState<{ [key: string]: boolean }>({})
   const [savingAttendance, setSavingAttendance] = useState<{ [key: string]: boolean }>({})
+  const KEHADIRAN_PER_PAGE = 25
+  const [kehadiranPage, setKehadiranPage] = useState(1)
 
   // Tab 2 — Program Bulanan
   const [programs, setPrograms] = useState<SCProgram[]>([])
@@ -167,11 +170,11 @@ export default function StrengthPage() {
     setLoading(true)
     try {
       const [recRes, athRes, progRes, schedRes, coachRes] = await Promise.all([
-        supabase.from('strength_conditioning').select('id, athlete_id, session_date, attendance'),
-        supabase.from('athletes').select('id, name, ic_number, sport_id, sport:sport_id(name)').order('name'),
-        supabase.from('sc_programs').select('id, sport, month, year, program_type, coach_id, structured_data, start_date, end_date, coach:profiles(full_name)').order('year', { ascending: false }).order('month'),
-        supabase.from('coach_schedules').select('id, coach_id, sport, schedule_name, valid_from, repeats, repeat_pattern, repeat_until, slots:coach_schedule_slots(id, schedule_id, slot_date, start_time, end_time)').order('valid_from', { ascending: false }),
-        supabase.from('profiles').select('id, full_name').eq('role', 'coach').order('full_name'),
+        supabase.from('strength_conditioning').select('id, athlete_id, session_date, attendance').limit(5000),
+        supabase.from('athletes').select('id, name, ic_number, sport_id, sport:sport_id(name)').order('name').limit(5000),
+        supabase.from('sc_programs').select('id, sport, month, year, program_type, coach_id, structured_data, start_date, end_date, coach:profiles(full_name)').order('year', { ascending: false }).order('month').limit(5000),
+        supabase.from('coach_schedules').select('id, coach_id, sport, schedule_name, valid_from, repeats, repeat_pattern, repeat_until, slots:coach_schedule_slots(id, schedule_id, slot_date, start_time, end_time)').order('valid_from', { ascending: false }).limit(5000),
+        supabase.from('profiles').select('id, full_name').eq('role', 'coach').order('full_name').limit(500),
       ]) as any
 
       if (recRes.error) throw new Error(`strength_conditioning: ${recRes.error.message}`)
@@ -346,6 +349,34 @@ export default function StrengthPage() {
     setError(null)
     setScheduleModalOpen(true)
   }
+
+  const busyCoachIds = useMemo(() => {
+    const busy = new Set<string>()
+    const slot = scheduleSlots[0]
+    if (!slot?.start_time || !slot?.end_time) return busy
+
+    const timesOverlap = (s1: string, e1: string, s2: string, e2: string) => s1 < e2 && s2 < e1
+
+    const DAY_MAP: Record<string, number> = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 }
+
+    for (const schedule of schedules) {
+      if (editingSchedule && schedule.id === editingSchedule.id) continue
+
+      for (const existingSlot of schedule.slots ?? []) {
+        if (!timesOverlap(slot.start_time, slot.end_time, existingSlot.start_time, existingSlot.end_time)) continue
+
+        const existingDay = new Date(existingSlot.slot_date + 'T00:00:00').getDay()
+
+        const dateConflict = scheduleForm.repeat_pattern === 'custom'
+          ? scheduleSlots.some(s => s.slot_date === existingSlot.slot_date)
+          : scheduleForm.selected_days.some(d => DAY_MAP[d] === existingDay)
+
+        if (dateConflict) { busy.add(schedule.coach_id); break }
+      }
+    }
+
+    return busy
+  }, [schedules, scheduleSlots, scheduleForm.selected_days, scheduleForm.repeat_pattern, editingSchedule])
 async function handleSaveSchedule() {
     if (!scheduleForm.coach_id || !scheduleForm.valid_from || !scheduleForm.sport) {
       setError('Jurulatih, tarikh mula, dan sukan wajib dipilih.')
@@ -480,6 +511,9 @@ async function handleSaveSchedule() {
     ? attendanceFilteredAthletes.filter(a => a.name.toLowerCase().includes(attendanceSearch.toLowerCase()))
     : attendanceFilteredAthletes
 
+  const kehadiranTotalPages = Math.ceil(attendanceFilteredBySearch.length / KEHADIRAN_PER_PAGE)
+  const kehadiranPaged = attendanceFilteredBySearch.slice((kehadiranPage - 1) * KEHADIRAN_PER_PAGE, kehadiranPage * KEHADIRAN_PER_PAGE)
+
   // Get attendance records for selected date for each athlete
   const getAthleteAttendanceForDate = (athleteId: string) => {
     return records.find(r => r.athlete_id === athleteId && r.session_date === attendanceDate)
@@ -546,7 +580,7 @@ async function handleSaveSchedule() {
               </div>
             ) : (
               <div className="space-y-2">
-                {attendanceFilteredBySearch.map(athlete => {
+                {kehadiranPaged.map(athlete => {
                   const record = getAthleteAttendanceForDate(athlete.id)
                   const pastRecords = getAthletePastRecords(athlete.id)
                   const hasHistory = pastRecords.length > 0
@@ -610,6 +644,21 @@ async function handleSaveSchedule() {
                     </div>
                   )
                 })}
+              </div>
+            )}
+            {kehadiranTotalPages > 1 && (
+              <div className="py-4 flex items-center justify-between">
+                <p className="text-[11px] text-[#888]">Halaman {kehadiranPage} daripada {kehadiranTotalPages} ({attendanceFilteredBySearch.length} atlet)</p>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => setKehadiranPage(p => Math.max(1, p - 1))} disabled={kehadiranPage === 1} className="px-3 py-1.5 text-[11px] rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50 transition">← Sebelumnya</button>
+                  {Array.from({ length: kehadiranTotalPages }, (_, i) => i + 1).filter(p => p === 1 || p === kehadiranTotalPages || Math.abs(p - kehadiranPage) <= 1).map((page, idx, arr) => (
+                    <span key={page} className="flex items-center">
+                      {idx > 0 && arr[idx - 1] !== page - 1 && <span className="px-1 text-[#888] text-[11px]">…</span>}
+                      <button onClick={() => setKehadiranPage(page)} className={`w-7 h-7 text-[11px] rounded-lg ${kehadiranPage === page ? 'bg-[#F56A00] text-white font-semibold' : 'text-[#444] border border-gray-300 hover:bg-gray-50'}`}>{page}</button>
+                    </span>
+                  ))}
+                  <button onClick={() => setKehadiranPage(p => Math.min(kehadiranTotalPages, p + 1))} disabled={kehadiranPage === kehadiranTotalPages} className="px-3 py-1.5 text-[11px] rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50 transition">Seterusnya →</button>
+                </div>
               </div>
             )}
           </div>
@@ -731,7 +780,7 @@ async function handleSaveSchedule() {
               {/* Header: Days of week */}
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-[#888] w-16 border-r border-gray-100">MASA</th>
+                  <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-[#888] w-20 border-r border-gray-100">MASA</th>
                   {Array.from({ length: 7 }).map((_, i) => {
                     const date = new Date(weekStartDate)
                     date.setDate(date.getDate() + i)
@@ -746,17 +795,18 @@ async function handleSaveSchedule() {
                 </tr>
               </thead>
 
-              {/* Time slots: 08:00 - 18:00 */}
+              {/* Time slots: 08:00 - 22:00 */}
               <tbody>
-                {Array.from({ length: 11 }).map((_, hourIdx) => {
+                {Array.from({ length: 15 }).map((_, hourIdx) => {
                   const hour = 8 + hourIdx
-                  const timeStr = `${String(hour).padStart(2, '0')}:00`
+                  const { hour: h12, ampm } = convert24To12(`${String(hour).padStart(2, '0')}:00`)
+                  const timeLabel = `${h12}:00 ${ampm}`
 
                   return (
                     <tr key={hour} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/50">
                       {/* Time label */}
-                      <td className="px-3 py-3 text-[11px] font-semibold text-[#888] border-r border-gray-100 bg-gray-50/50" style={{ height: '60px' }}>
-                        {timeStr}
+                      <td className="px-3 py-3 text-[11px] font-semibold text-[#888] border-r border-gray-100 bg-gray-50/50 whitespace-nowrap" style={{ height: '60px' }}>
+                        {timeLabel}
                       </td>
 
                       {/* Days */}
@@ -825,7 +875,7 @@ async function handleSaveSchedule() {
                                     <>
                                       <p className="font-semibold text-[#F56A00] truncate leading-tight text-xs">{slots[0].schedule.schedule_name}</p>
                                       <p className="text-[10px] text-[#666] leading-tight">{slots[0].schedule.sport}</p>
-                                      <p className="text-[9px] text-[#888] font-mono leading-tight">{startTime}–{endTime}</p>
+                                      <p className="text-[9px] text-[#888] font-mono leading-tight">{(() => { const s = convert24To12(startTime); const e = convert24To12(endTime); return `${s.hour}:${s.minute}${s.ampm}–${e.hour}:${e.minute}${e.ampm}` })()}</p>
                                       <div className="hidden group-hover:flex gap-1 mt-0.5 pt-0.5 border-t border-[rgba(245,106,0,0.2)]">
                                         {can('strength', 'delete') && (
                                           <button onClick={(e) => { e.stopPropagation(); setConfirmDeleteSlot({ schedule: slots[0].schedule, slot: slots[0].slot }) }} className="flex-1 px-1 py-0.5 text-[8px] font-semibold text-[#D44040] hover:underline">Padam</button>
@@ -853,7 +903,7 @@ async function handleSaveSchedule() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
             <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
-              <h3 className="font-bold text-[#111]">Jadual pada {selectedTimeSlot.startTime}–{selectedTimeSlot.endTime}</h3>
+              <h3 className="font-bold text-[#111]">Jadual pada {(() => { const s = convert24To12(selectedTimeSlot.startTime); const e = convert24To12(selectedTimeSlot.endTime); return `${s.hour}:${s.minute} ${s.ampm}–${e.hour}:${e.minute} ${e.ampm}` })()}</h3>
               <button onClick={() => setSelectedTimeSlot(null)} className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
             </div>
             <div className="px-6 py-4 space-y-3 max-h-[60vh] overflow-y-auto">
@@ -959,7 +1009,14 @@ async function handleSaveSchedule() {
                     <Field label="Jurulatih" required>
                       <select value={scheduleForm.coach_id} onChange={e => setScheduleForm(f => ({ ...f, coach_id: e.target.value }))} className={inputCls}>
                         <option value="">— Pilih Jurulatih —</option>
-                        {coaches.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
+                        {coaches.map(c => {
+                          const busy = busyCoachIds.has(c.id)
+                          return (
+                            <option key={c.id} value={c.id} disabled={busy}>
+                              {c.full_name}{busy ? ' (Telah ditempah)' : ''}
+                            </option>
+                          )
+                        })}
                       </select>
                     </Field>
                     <Field label="Sukan" required>
@@ -996,20 +1053,15 @@ async function handleSaveSchedule() {
 
                       <Field label="Waktu" required>
                         {scheduleSlots[0] && (
-                          <div className="flex gap-2">
-                            <input
-                              type="time"
-                              value={scheduleSlots[0].start_time}
-                              onChange={e => setScheduleSlots(s => [{ ...s[0], start_time: e.target.value }, ...s.slice(1)])}
-                              className={inputCls}
-                            />
-                            <span className="text-center py-2 text-[#888]">hingga</span>
-                            <input
-                              type="time"
-                              value={scheduleSlots[0].end_time}
-                              onChange={e => setScheduleSlots(s => [{ ...s[0], end_time: e.target.value }, ...s.slice(1)])}
-                              className={inputCls}
-                            />
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[11px] text-[#888] w-10 shrink-0">Mula</span>
+                              <TimeInput12h value={scheduleSlots[0].start_time} onChange={t => setScheduleSlots(s => [{ ...s[0], start_time: t }, ...s.slice(1)])} />
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[11px] text-[#888] w-10 shrink-0">Akhir</span>
+                              <TimeInput12h value={scheduleSlots[0].end_time} onChange={t => setScheduleSlots(s => [{ ...s[0], end_time: t }, ...s.slice(1)])} />
+                            </div>
                           </div>
                         )}
                       </Field>
@@ -1236,7 +1288,7 @@ async function handleSaveSchedule() {
               {confirmDeleteSlot.schedule.schedule_name}
             </p>
             <p className="text-[12px] text-[#666] mb-6">
-              {new Date(confirmDeleteSlot.slot.slot_date + 'T00:00:00').toLocaleDateString('ms-MY', { weekday: 'long', day: '2-digit', month: 'short' })} {confirmDeleteSlot.slot.start_time}–{confirmDeleteSlot.slot.end_time}
+              {new Date(confirmDeleteSlot.slot.slot_date + 'T00:00:00').toLocaleDateString('ms-MY', { weekday: 'long', day: '2-digit', month: 'short' })} {(() => { const s = convert24To12(confirmDeleteSlot.slot.start_time); const e = convert24To12(confirmDeleteSlot.slot.end_time); return `${s.hour}:${s.minute} ${s.ampm}–${e.hour}:${e.minute} ${e.ampm}` })()}
             </p>
 
             {error && <div className="px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-[12px] text-red-600 mb-4">{error}</div>}

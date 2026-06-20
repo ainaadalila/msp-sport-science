@@ -134,17 +134,20 @@ export default function SupplementPage() {
   const [filterSport, setFilterSport] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [sortBy, setSortBy] = useState<'date_desc' | 'date_asc'>('date_desc')
+  const REQS_PER_PAGE = 25
+  const [currentPage, setCurrentPage] = useState(1)
 
   useEffect(() => { fetchAll() }, [sortBy])
+  useEffect(() => { setCurrentPage(1) }, [search, filterSport, filterStatus, sortBy])
 
   async function fetchAll() {
     setLoading(true)
     const [supRes, reqRes, athRes] = await Promise.all([
-      supabase.from('supplements').select('id, name, stock, unit, expiry_date').order('name'),
+      supabase.from('supplements').select('id, name, stock, unit, expiry_date').order('name').limit(1000),
       supabase.from('supplement_requests')
         .select('id, sport, supplement_id, quantity, request_date, status, requested_by, reviewed_by, coordinator_id, coordinator_notes, supporter_id, supporter_status, supporter_notes, supporter_reviewed_at, approved_quantity, created_at, supplement:supplement_id(name, unit)')
-        .order('created_at', { ascending: sortBy === 'date_asc' }),
-      supabase.from('athletes').select('id, name, sport_id, sport:sport_id(name)').order('name'),
+        .order('created_at', { ascending: sortBy === 'date_asc' }).limit(5000),
+      supabase.from('athletes').select('id, name, sport_id, sport:sport_id(name)').order('name').limit(5000),
     ]) as any
     console.log('Supplements fetch:', { data: supRes.data, error: supRes.error })
     console.log('Requests fetch:', { data: reqRes.data, error: reqRes.error })
@@ -373,6 +376,9 @@ export default function SupplementPage() {
     return true
   })
 
+  const totalPages = Math.ceil(filteredReqs.length / REQS_PER_PAGE)
+  const pagedReqs = filteredReqs.slice((currentPage - 1) * REQS_PER_PAGE, currentPage * REQS_PER_PAGE)
+
   return (
     <div className="space-y-4">
 
@@ -525,7 +531,7 @@ export default function SupplementPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredReqs.map(r => (
+                  {pagedReqs.map(r => (
                     <tr key={r.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
                       <td className="px-5 py-3 font-mono text-[12px] text-[#444] whitespace-nowrap">{fmtDate(r.request_date)}</td>
                       <td className="px-5 py-3 font-medium text-[#111]">{r.sport}</td>
@@ -609,6 +615,21 @@ export default function SupplementPage() {
                   ))}
                 </tbody>
               </table>
+            )}
+            {totalPages > 1 && (
+              <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-between">
+                <p className="text-[11px] text-[#888]">Halaman {currentPage} daripada {totalPages} ({filteredReqs.length} permohonan)</p>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1.5 text-[11px] rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50 transition">← Sebelumnya</button>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1).map((page, idx, arr) => (
+                    <span key={page} className="flex items-center">
+                      {idx > 0 && arr[idx - 1] !== page - 1 && <span className="px-1 text-[#888] text-[11px]">…</span>}
+                      <button onClick={() => setCurrentPage(page)} className={`w-7 h-7 text-[11px] rounded-lg ${currentPage === page ? 'bg-[#F56A00] text-white font-semibold' : 'text-[#444] border border-gray-300 hover:bg-gray-50'}`}>{page}</button>
+                    </span>
+                  ))}
+                  <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-3 py-1.5 text-[11px] rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50 transition">Seterusnya →</button>
+                </div>
+              </div>
             )}
           </div>
         </div>

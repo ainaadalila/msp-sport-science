@@ -6,6 +6,7 @@ import { usePermissions } from '../../../hooks/usePermissions'
 import { useSports } from '../../../hooks/useSports'
 import { logAction } from '../../../lib/audit'
 import html2canvas from 'html2canvas'
+import jsPDF from 'jspdf'
 import type { Athlete, FitnessTestSession, SportFitnessTest, FitnessTestNorm } from '../../../types'
 
 interface TestResultInput {
@@ -28,6 +29,14 @@ interface SessionResult {
 interface SessionWithResults {
   session: FitnessTestSession
   results: SessionResult[]
+}
+
+const formatTestName = (name: string) => {
+  return name
+    .replace(/([a-z])and([A-Z])/g, '$1 and $2')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/(\d)([A-Za-z])/g, '$1 $2')
+    .trim()
 }
 
 export default function FitnessTestingPage() {
@@ -71,30 +80,44 @@ export default function FitnessTestingPage() {
   async function handlePrint() {
     if (!chartRef.current) return
     try {
-      const canvas = await html2canvas(chartRef.current, { scale: 2, useCORS: true })
-      const image = canvas.toDataURL('image/png')
-      const printWindow = window.open('', '', 'width=900,height=700')
-      if (printWindow) {
-        printWindow.document.write(`
-          <html><head><title>Cetak - ${selectedAthlete?.name}</title>
-          <style>
-            body { margin: 20px; font-family: Arial, sans-serif; }
-            img { max-width: 100%; height: auto; }
-            .header { margin-bottom: 20px; }
-          </style>
-          </head><body>
-          <div class="header">
-            <h2>${selectedAthlete?.name}</h2>
-            <p>${selectedAthlete?.sport?.name}</p>
-          </div>
-          <img src="${image}" />
-          </body></html>
-        `)
-        printWindow.document.close()
-        printWindow.print()
+      const canvas = await html2canvas(chartRef.current, {
+        scale: 3,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+        allowTaint: true
+      })
+      const imgData = canvas.toDataURL('image/png', 1.0)
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+
+      const pageWidth = pdf.internal.pageSize.getWidth()
+      const pageHeight = pdf.internal.pageSize.getHeight()
+      const margin = 15
+      const contentWidth = pageWidth - margin * 2
+      const imgHeight = (canvas.height * contentWidth) / canvas.width
+
+      let yPos = margin
+
+      pdf.setFontSize(16)
+      pdf.text(`Ujian Kecergasan - ${selectedAthlete?.name}`, margin, yPos)
+      yPos += 8
+
+      pdf.setFontSize(11)
+      pdf.setTextColor(100)
+      pdf.text(`${selectedAthlete?.sport?.name}`, margin, yPos)
+      pdf.text(`${new Date().toLocaleDateString('ms-MY')}`, pageWidth - margin - 50, yPos)
+      yPos += 15
+      pdf.setTextColor(0)
+
+      if (yPos + imgHeight > pageHeight - margin) {
+        pdf.addPage()
+        yPos = margin
       }
+
+      pdf.addImage(imgData, 'PNG', margin, yPos, contentWidth, imgHeight)
+      pdf.save(`Ujian_Kecergasan_${selectedAthlete?.name}_${new Date().toISOString().slice(0, 10)}.pdf`)
     } catch (error) {
-      console.error('Print failed:', error)
+      console.error('Export PDF failed:', error)
     }
   }
 
@@ -114,7 +137,7 @@ export default function FitnessTestingPage() {
 
   async function fetchAthletes() {
     setLoading(true)
-    const res = await supabase.from('athletes').select('id, name, ic_number, category, sport_id, sport:sport_id(name)').order('name') as any
+    const res = await supabase.from('athletes').select('id, name, ic_number, category, sport_id, sport:sport_id(name)').order('name').limit(5000) as any
     setAthletes(res.data ?? [])
     setLoading(false)
   }
@@ -600,7 +623,7 @@ export default function FitnessTestingPage() {
 
                               return (
                                 <tr key={test.test_id} className="border-b border-gray-100 hover:bg-gray-50 transition">
-                                  <td className="px-4 py-3 font-semibold text-[#111]">{test.test_name}</td>
+                                  <td className="px-4 py-3 font-semibold text-[#111]">{formatTestName(test.test_name)}</td>
                                   <td className="px-4 py-3 text-right text-[#888]">{previous?.result_value || '-'}</td>
                                   <td className="px-4 py-3 text-right font-semibold text-[#111]">{latest?.result_value || '-'}</td>
                                   <td className="px-4 py-3 text-right">
@@ -646,7 +669,7 @@ export default function FitnessTestingPage() {
                       >
                         {testsArray.map(test => (
                           <option key={test.test_id} value={test.test_id}>
-                            {test.test_name}
+                            {formatTestName(test.test_name)}
                           </option>
                         ))}
                       </select>
@@ -660,7 +683,7 @@ export default function FitnessTestingPage() {
                           <div className="col-span-2 bg-white rounded-xl border border-gray-200 overflow-hidden">
                             <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
                               <p className="text-sm font-semibold text-[#111]">
-                                {currentTest.test_name} — {testHistory.length} Sesi
+                                {formatTestName(currentTest.test_name)} — {testHistory.length} Sesi
                               </p>
                             </div>
 
