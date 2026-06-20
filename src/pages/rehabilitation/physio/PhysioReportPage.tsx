@@ -204,6 +204,7 @@ export default function PhysioReportPage() {
               Tiada sesi fisioterapi untuk bulan yang dipilih.
             </div>
           ) : (
+            <>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100">
@@ -258,6 +259,7 @@ export default function PhysioReportPage() {
                 </div>
               </div>
             )}
+            </>
           )}
         </div>
       )}
