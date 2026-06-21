@@ -37,7 +37,7 @@ export interface Athlete {
   id: string
   name: string
   ic_number: string
-  gender?: 'M' | 'F'
+  gender?: 'M' | 'F' | null
   sport_id: string
   sport?: { name: string }
   category?: string
