@@ -58,14 +58,14 @@ export default function StructuredProgramBuilder({ value, onChange }: Props) {
   }
 
   function updateExerciseName(si: number, ei: number, name: string) {
-    const exercises = value.sessions[si].exercises.map((ex, i) => i === ei ? { ...ex, name } : ex)
+    const exercises = value.sessions[si].exercises.map((ex, i) => i === ei ? { ...ex, name: name.toUpperCase() } : ex)
     updateSession(si, { exercises })
   }
 
   function updateExerciseWeek(si: number, ei: number, wi: number, field: typeof WEEK_FIELDS[number], val: string) {
     const exercises = value.sessions[si].exercises.map((ex, i) => {
       if (i !== ei) return ex
-      const weeks = ex.weeks.map((w, j) => j === wi ? { ...w, [field]: val } : w)
+      const weeks = ex.weeks.map((w, j) => j === wi ? { ...w, [field]: val.toUpperCase() } : w)
       return { ...ex, weeks }
     })
     updateSession(si, { exercises })
@@ -76,7 +76,7 @@ export default function StructuredProgramBuilder({ value, onChange }: Props) {
   }
 
   function updateListItem(si: number, field: 'warmup' | 'core', idx: number, text: string) {
-    const list = value.sessions[si][field].map((v, i) => i === idx ? text : v)
+    const list = value.sessions[si][field].map((v, i) => i === idx ? text.toUpperCase() : v)
     updateSession(si, { [field]: list })
   }
 
@@ -92,7 +92,7 @@ export default function StructuredProgramBuilder({ value, onChange }: Props) {
         <label className={labelCls}>Fasa Program</label>
         <input
           value={value.phase}
-          onChange={e => set({ phase: e.target.value })}
+          onChange={e => set({ phase: e.target.value.toUpperCase() })}
           placeholder="cth. PRE-COMP"
           className={inputCls}
         />
@@ -107,7 +107,7 @@ export default function StructuredProgramBuilder({ value, onChange }: Props) {
               <input
                 value={goal}
                 onChange={e => {
-                  const goals = value.training_goals.map((g, j) => j === i ? e.target.value : g)
+                  const goals = value.training_goals.map((g, j) => j === i ? e.target.value.toUpperCase() : g)
                   set({ training_goals: goals })
                 }}
                 placeholder={`Matlamat ${i + 1}`}
@@ -151,9 +151,9 @@ export default function StructuredProgramBuilder({ value, onChange }: Props) {
                 </select>
                 <input
                   value={session.session_type}
-                  onChange={e => updateSession(si, { session_type: e.target.value })}
+                  onChange={e => updateSession(si, { session_type: e.target.value.toUpperCase() })}
                   placeholder="Jenis sesi (cth. Kekuatan Bahagian Bawah)"
-                  className="flex-1 bg-white border border-[#E8E8E8] rounded-lg px-3 py-1.5 text-[12px] outline-none focus:border-[#F56A00] transition"
+                  className="flex-1 bg-white border border-[#E8E8E8] rounded-lg px-3 py-1.5 text-[12px] outline-none focus:border-[#F56A00] transition uppercase"
                 />
                 <button
                   type="button"
@@ -287,6 +287,6 @@ export default function StructuredProgramBuilder({ value, onChange }: Props) {
 const labelCls = 'block text-[10px] font-semibold uppercase tracking-widest text-[#888] mb-1.5'
 const subLabelCls = 'text-[10px] font-semibold uppercase tracking-wider text-[#888] mb-1.5'
 const addBtnCls = 'text-[11px] text-[#F56A00] hover:underline font-medium'
-const inputCls = 'w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2 text-sm text-[#111] outline-none focus:border-[#F56A00] focus:bg-white transition'
-const smallInputCls = 'flex-1 bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-1.5 text-[12px] text-[#111] outline-none focus:border-[#F56A00] focus:bg-white transition'
-const cellInputCls = 'w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded px-1.5 py-1 text-[10px] text-[#111] outline-none focus:border-[#F56A00] focus:bg-white transition'
+const inputCls = 'w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2 text-sm text-[#111] outline-none focus:border-[#F56A00] focus:bg-white transition uppercase'
+const smallInputCls = 'flex-1 bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-1.5 text-[12px] text-[#111] outline-none focus:border-[#F56A00] focus:bg-white transition uppercase'
+const cellInputCls = 'w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded px-1.5 py-1 text-[10px] text-[#111] outline-none focus:border-[#F56A00] focus:bg-white transition uppercase'

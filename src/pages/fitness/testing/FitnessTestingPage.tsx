@@ -1,9 +1,10 @@
 import { useEffect, useState, useRef } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, Navigate } from 'react-router-dom'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
 import { usePermissions } from '../../../hooks/usePermissions'
 import { useSports } from '../../../hooks/useSports'
+import { useAthletes } from '../../../hooks/useAthletes'
 import { logAction } from '../../../lib/audit'
 import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
@@ -48,7 +49,7 @@ export default function FitnessTestingPage() {
   const athleteIdParam = searchParams.get('athlete')
   const chartRef = useRef<HTMLDivElement>(null)
 
-  const [athletes, setAthletes] = useState<Athlete[]>([])
+  const { athletes, loading } = useAthletes()
   const [selectedAthlete, setSelectedAthlete] = useState<Athlete | null>(null)
   const [sportTests, setSportTests] = useState<SportFitnessTest[]>([])
   const [norms, setNorms] = useState<Map<string, FitnessTestNorm>>(new Map())
@@ -63,7 +64,6 @@ export default function FitnessTestingPage() {
   const [year, setYear] = useState(new Date().getFullYear())
   const [results, setResults] = useState<TestResultInput[]>([])
   const [saving, setSaving] = useState(false)
-  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filterSport, setFilterSport] = useState('')
   const [search, setSearch] = useState('')
@@ -119,10 +119,6 @@ export default function FitnessTestingPage() {
     }
   }
 
-  useEffect(() => {
-    if (!canRecord) return
-    fetchAthletes()
-  }, [canRecord])
 
   useEffect(() => {
     if (athleteIdParam && athletes.length > 0) {
@@ -133,12 +129,6 @@ export default function FitnessTestingPage() {
     }
   }, [athleteIdParam, athletes])
 
-  async function fetchAthletes() {
-    setLoading(true)
-    const res = await supabase.from('athletes').select('id, name, ic_number, gender, category, sport_id, sport:sport_id(name)').order('name').limit(5000) as any
-    setAthletes(res.data ?? [])
-    setLoading(false)
-  }
 
   async function selectAthlete(athlete: Athlete) {
     setSelectedAthlete(athlete)
@@ -401,7 +391,7 @@ export default function FitnessTestingPage() {
   }
 
   if (!canRecord) {
-    return <div className="py-16 text-center text-[#888]">Akses ditolak.</div>
+    return <Navigate to="/" replace />
   }
 
   if (loading) {
@@ -860,9 +850,17 @@ export default function FitnessTestingPage() {
                     </span>
                   </div>
                 </div>
+                {sessionsWithResults.some(s => s.session.session === session && s.session.year === year) && (
+                  <div className="flex items-center gap-2 px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-lg text-[13px] text-amber-700">
+                    <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                    </svg>
+                    Ujian {session} {year} telah direkodkan. Sila pilih sesi atau tahun yang berbeza.
+                  </div>
+                )}
               </div>
 
-          {error && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-600">{error}</div>}
+              {error && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-600">{error}</div>}
 
           <div className="space-y-2">
             {(() => {
@@ -1001,10 +999,10 @@ export default function FitnessTestingPage() {
                 </button>
                 <button
                   onClick={() => handleSave()}
-                  disabled={saving || results.every(r => !r.result_value)}
+                  disabled={saving || results.every(r => !r.result_value) || sessionsWithResults.some(s => s.session.session === session && s.session.year === year)}
                   className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition"
                 >
-                  {saving ? 'Menyimpan...' : 'Serah Ujian'}
+                  {saving ? 'Menyimpan...' : 'Simpan'}
                 </button>
               </div>
             </>
@@ -1014,7 +1012,7 @@ export default function FitnessTestingPage() {
           {viewMode === 'view_results' && viewedSession && (
             <div className="space-y-4">
               <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3">
-                <p className="text-sm font-semibold text-green-700">✓ Ujian telah diserahkan</p>
+                <p className="text-sm font-semibold text-green-700">✓ Ujian telah disimpan</p>
               </div>
 
               <div className="bg-white rounded-xl border border-gray-200 p-4">

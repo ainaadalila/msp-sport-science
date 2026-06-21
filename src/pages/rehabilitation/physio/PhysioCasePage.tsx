@@ -1,19 +1,10 @@
 import { useEffect, useState } from 'react'
+import { useAthletes } from '../../../hooks/useAthletes'
 import jsPDF from 'jspdf'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
 import { usePermissions } from '../../../hooks/usePermissions'
 import { logAction } from '../../../lib/audit'
-
-interface Athlete {
-  id: string
-  name: string
-  ic_number: string
-  sport_id: string
-  sport?: { name: string }
-  date_of_birth: string | null
-  gender: 'M' | 'F' | null
-}
 
 interface PhysioCase {
   id: string
@@ -74,7 +65,7 @@ export default function PhysioCasePage() {
   const [tab, setTab] = useState<Tab>('active')
   const [currentPage, setCurrentPage] = useState(1)
   const [cases, setCases] = useState<PhysioCase[]>([])
-  const [athletes, setAthletes] = useState<Athlete[]>([])
+  const { athletes } = useAthletes()
   const [caseStats, setCaseStats] = useState<CaseStats>({})
   const [loading, setLoading] = useState(true)
 
@@ -110,13 +101,11 @@ export default function PhysioCasePage() {
 
   async function fetchAll() {
     setLoading(true)
-    const [casesRes, slotsRes, athRes] = await Promise.all([
+    const [casesRes, slotsRes] = await Promise.all([
       supabase.from('physio_cases').select('id, athlete_id, open_date, status, referred_to_doctor, injury_type, athlete:athletes(id, name, ic_number, sport_id, sport:sport_id(name), date_of_birth, gender)').order('open_date', { ascending: false }).limit(5000),
       supabase.from('physio_slots').select('case_id, pain_scale, slot_date').not('case_id', 'is', null).limit(5000),
-      supabase.from('athletes').select('id, name, ic_number, sport_id, sport:sport_id(name), date_of_birth, gender').order('name').limit(5000),
     ]) as any
     setCases(casesRes.data ?? [])
-    setAthletes(athRes.data ?? [])
 
     // Compute per-case stats
     const stats: CaseStats = {}
@@ -428,7 +417,12 @@ export default function PhysioCasePage() {
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full ${statusStyle[c.status]}`}>{statusLabel[c.status]}</span>
+                      <div className="flex flex-wrap gap-1">
+                        <span className={`inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full ${statusStyle[c.status]}`}>{statusLabel[c.status]}</span>
+                        {c.referred_to_doctor && (
+                          <span className="inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">Dirujuk Doktor</span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-2 justify-end flex-wrap">
@@ -568,7 +562,12 @@ export default function PhysioCasePage() {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
             <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between shrink-0">
               <div>
-                <h3 className="font-bold text-[#111]">{detailCase.athlete?.name ?? 'Tiada Atlet'}</h3>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="font-bold text-[#111]">{detailCase.athlete?.name ?? 'Tiada Atlet'}</h3>
+                  {detailCase.referred_to_doctor && (
+                    <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">Dirujuk Doktor</span>
+                  )}
+                </div>
                 <p className="text-[12px] text-[#888]">{detailCase.injury_type ? detailCase.injury_type + ' · ' : ''}{fmtDate(detailCase.open_date)} · {detailCase.athlete?.sport?.name ?? ''}</p>
               </div>
               <button onClick={() => setDetailCase(null)} className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>

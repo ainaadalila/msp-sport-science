@@ -8,20 +8,6 @@ interface Props {
   module?: keyof ModulePermissions
 }
 
-function AccessDeniedPage() {
-  return (
-    <div className="flex items-center justify-center h-screen">
-      <div className="text-center">
-        <h1 className="text-3xl font-bold text-[#111] mb-2">Akses Ditolak</h1>
-        <p className="text-[#888] mb-6">Anda tidak mempunyai akses ke laman ini.</p>
-        <a href="/" className="inline-block px-6 py-2 bg-[#F56A00] text-white rounded-lg hover:bg-[#E55A00] transition">
-          Kembali ke Laman Utama
-        </a>
-      </div>
-    </div>
-  )
-}
-
 // Roles that implicitly grant module access
 const roleModuleMap: Record<UserRole, (keyof ModulePermissions)[]> = {
   superadmin: ['athletes', 'inbody', 'supplement', 'physio', 'fitness', 'strength', 'reports', 'psychology', 'supplement_coordinator', 'supplement_supporter', 'supplement_approver'],
@@ -47,7 +33,7 @@ export function ProtectedRoute({ children, roles, module }: Props) {
     const hasImplicitPermission = roleModuleMap[profile.role]?.includes(module)
 
     if (!isSuperAdmin && !hasExplicitPermission && !hasImplicitPermission) {
-      return <AccessDeniedPage />
+      return <Navigate to="/" replace />
     }
   }
 

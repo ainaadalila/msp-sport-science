@@ -4,11 +4,11 @@ import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
 import { usePermissions } from '../../../hooks/usePermissions'
 import { useSports } from '../../../hooks/useSports'
+import { useAthletes } from '../../../hooks/useAthletes'
 import { logAction } from '../../../lib/audit'
 import StructuredProgramBuilder from './StructuredProgramBuilder'
 import type { StructuredProgramData } from '../../../types'
 
-interface Athlete { id: string; name: string; ic_number?: string; sport_id: string; sport?: { name: string } }
 interface Coach { id: string; full_name: string }
 
 interface SCRecord {
@@ -109,7 +109,7 @@ export default function StrengthPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const [athletes, setAthletes] = useState<Athlete[]>([])
+  const { athletes } = useAthletes()
   const [coaches, setCoaches] = useState<Coach[]>([])
 
   // Tab 1 — Kehadiran
@@ -166,34 +166,33 @@ export default function StrengthPage() {
     }
   }, [tabParam])
 
+  async function fetchSchedules() {
+    const { data, error } = await supabase
+      .from('coach_schedules')
+      .select('id, coach_id, sport, schedule_name, valid_from, repeats, repeat_pattern, repeat_until, slots:coach_schedule_slots(id, schedule_id, slot_date, start_time, end_time)')
+      .order('valid_from', { ascending: false })
+      .limit(5000) as any
+    if (!error) setSchedules(data ?? [])
+  }
+
   async function fetchAll() {
     setLoading(true)
-    try {
-      const [recRes, athRes, progRes, schedRes, coachRes] = await Promise.all([
-        supabase.from('strength_conditioning').select('id, athlete_id, session_date, attendance').limit(5000),
-        supabase.from('athletes').select('id, name, ic_number, sport_id, sport:sport_id(name)').order('name').limit(5000),
-        supabase.from('sc_programs').select('id, sport, month, year, program_type, coach_id, structured_data, start_date, end_date, coach:profiles(full_name)').order('year', { ascending: false }).order('month').limit(5000),
-        supabase.from('coach_schedules').select('id, coach_id, sport, schedule_name, valid_from, repeats, repeat_pattern, repeat_until, slots:coach_schedule_slots(id, schedule_id, slot_date, start_time, end_time)').order('valid_from', { ascending: false }).limit(5000),
-        supabase.from('profiles').select('id, full_name').eq('role', 'coach').order('full_name').limit(500),
-      ]) as any
+    const [recRes, progRes, schedRes, coachRes] = await Promise.all([
+      supabase.from('strength_conditioning').select('id, athlete_id, session_date, attendance').limit(5000),
+      supabase.from('sc_programs').select('id, sport, month, year, program_type, coach_id, structured_data, start_date, end_date, coach:profiles(full_name)').order('year', { ascending: false }).order('month').limit(5000),
+      supabase.from('coach_schedules').select('id, coach_id, sport, schedule_name, valid_from, repeats, repeat_pattern, repeat_until, slots:coach_schedule_slots(id, schedule_id, slot_date, start_time, end_time)').order('valid_from', { ascending: false }).limit(5000),
+      supabase.from('profiles').select('id, full_name').eq('role', 'coach').order('full_name').limit(500),
+    ]) as any
 
-      if (recRes.error) throw new Error(`strength_conditioning: ${recRes.error.message}`)
-      if (athRes.error) throw new Error(`athletes: ${athRes.error.message}`)
-      if (progRes.error) throw new Error(`sc_programs: ${progRes.error.message}`)
-      if (schedRes.error) throw new Error(`coach_schedules: ${schedRes.error.message}`)
-      if (coachRes.error) throw new Error(`profiles: ${coachRes.error.message}`)
+    if (!recRes.error) setRecords(recRes.data ?? [])
+    if (!progRes.error) setPrograms(progRes.data ?? [])
+    if (!schedRes.error) setSchedules(schedRes.data ?? [])
+    if (!coachRes.error) setCoaches(coachRes.data ?? [])
 
-      setRecords(recRes.data ?? [])
-      setAthletes(athRes.data ?? [])
-      setPrograms(progRes.data ?? [])
-      setSchedules(schedRes.data ?? [])
-      setCoaches(coachRes.data ?? [])
-    } catch (err) {
-      console.error('fetchAll error:', err)
-      setError(err instanceof Error ? err.message : 'Failed to load data')
-    } finally {
-      setLoading(false)
-    }
+    const firstError = [recRes, progRes, schedRes, coachRes].find(r => r.error)
+    if (firstError) console.error('fetchAll partial error:', firstError.error.message)
+
+    setLoading(false)
   }
 
   const allSports = sports.map(s => s.name)
@@ -206,7 +205,7 @@ export default function StrengthPage() {
 
     try {
       const existing = records.find(r => r.athlete_id === athleteId && r.session_date === attendanceDate)
-      const payload = { athlete_id: athleteId, session_date: attendanceDate, attendance: status, training_program: null, notes: null, recorded_by: profile?.id }
+      const payload = { athlete_id: athleteId, session_date: attendanceDate, attendance: status, recorded_by: profile?.id }
 
       if (existing) {
         const { error } = await supabase.from('strength_conditioning').update(payload).eq('id', existing.id)
@@ -377,13 +376,25 @@ export default function StrengthPage() {
 
     return busy
   }, [schedules, scheduleSlots, scheduleForm.selected_days, scheduleForm.repeat_pattern, editingSchedule])
-async function handleSaveSchedule() {
+
+  useEffect(() => {
+    if (scheduleForm.coach_id && busyCoachIds.has(scheduleForm.coach_id)) {
+      setScheduleForm(f => ({ ...f, coach_id: '' }))
+      setError('Jurulatih yang dipilih sudah mempunyai jadual pada masa yang sama.')
+    }
+  }, [busyCoachIds])
+
+  async function handleSaveSchedule() {
     if (!scheduleForm.coach_id || !scheduleForm.valid_from || !scheduleForm.sport) {
       setError('Jurulatih, tarikh mula, dan sukan wajib dipilih.')
       return
     }
     if (scheduleSlots.length === 0) { setError('Sila tambah sekurang-kurangnya satu slot hari/masa.'); return }
-    if (scheduleForm.repeats && !scheduleForm.repeat_until) { setError('Sila tentukan tarikh akhir untuk jadual berulang.'); return }
+    if (scheduleForm.repeats && scheduleForm.repeat_pattern !== 'custom' && !scheduleForm.repeat_until) { setError('Sila tentukan tarikh akhir untuk jadual berulang.'); return }
+    if (busyCoachIds.has(scheduleForm.coach_id)) {
+      setError('Jurulatih ini sudah mempunyai jadual pada masa yang sama. Sila pilih masa atau jurulatih yang berbeza.')
+      return
+    }
     setSaving(true); setError(null)
 
     const coach = coaches.find(c => c.id === scheduleForm.coach_id)
@@ -396,7 +407,7 @@ async function handleSaveSchedule() {
       valid_from: scheduleForm.valid_from,
       repeats: scheduleForm.repeats,
       repeat_pattern: scheduleForm.repeats ? scheduleForm.repeat_pattern : null,
-      repeat_until: scheduleForm.repeats ? scheduleForm.repeat_until : null,
+      repeat_until: (scheduleForm.repeats && scheduleForm.repeat_pattern !== 'custom') ? scheduleForm.repeat_until : null,
     }
 
     const finalSlots = expandRecurringSlots(
@@ -424,7 +435,7 @@ async function handleSaveSchedule() {
         if (slotsError) throw new Error(`Insert slots failed: ${slotsError.message}`)
 
         await logAction(profile!.id, 'update_coach_schedule', 'coach_schedules', editingSchedule.id)
-        setSaving(false); setScheduleModalOpen(false); fetchAll()
+        setSaving(false); setScheduleModalOpen(false); fetchSchedules()
       } else {
         const { data: schedule, error: schedError } = await supabase
           .from('coach_schedules')
@@ -446,7 +457,7 @@ async function handleSaveSchedule() {
         if (slotsError) throw new Error(`Insert slots failed: ${slotsError.message}`)
 
         await logAction(profile!.id, 'create_coach_schedule', 'coach_schedules', scheduleId)
-        setSaving(false); setScheduleModalOpen(false); fetchAll()
+        setSaving(false); setScheduleModalOpen(false); fetchSchedules()
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err)
@@ -460,7 +471,7 @@ async function handleSaveSchedule() {
       await supabase.from('coach_schedules').delete().eq('id', s.id)
       await logAction(profile!.id, 'delete_coach_schedule', 'coach_schedules', s.id)
       setConfirmDeleteSchedule(null)
-      await fetchAll()
+      await fetchSchedules()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error deleting schedule')
     } finally {
@@ -473,23 +484,25 @@ async function handleSaveSchedule() {
       setSaving(true)
       setDeletingSlot(true)
       setError(null)
-      const { error: deleteError } = await supabase.from('coach_schedule_slots').delete().eq('id', slot.id)
-      if (deleteError) {
-        console.error('Supabase delete error:', deleteError)
-        setError(`Failed to delete: ${deleteError.message}`)
-        setSaving(false)
-        setDeletingSlot(false)
-        return
+      const isLastSlot = (_schedule.slots?.length ?? 0) <= 1
+      if (isLastSlot) {
+        const { error } = await supabase.from('coach_schedules').delete().eq('id', _schedule.id)
+        if (error) throw error
+        await logAction(profile!.id, 'delete_coach_schedule', 'coach_schedules', _schedule.id)
+      } else {
+        const { error } = await supabase.from('coach_schedule_slots').delete().eq('id', slot.id)
+        if (error) throw error
+        await logAction(profile!.id, 'delete_coach_schedule_slot', 'coach_schedule_slots', slot.id)
       }
-      await logAction(profile!.id, 'delete_coach_schedule_slot', 'coach_schedule_slots', slot.id)
       setSaving(false)
       setDeletingSlot(false)
       setConfirmDeleteSlot(null)
-      await fetchAll()
+      await fetchSchedules()
     } catch (err) {
       console.error('Delete error:', err)
       setError(err instanceof Error ? err.message : 'Error deleting slot')
       setSaving(false)
+      setDeletingSlot(false)
     }
   }
 
@@ -571,6 +584,8 @@ async function handleSaveSchedule() {
                 </button>
               )}
             </div>
+
+            {error && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-600">{error}</div>}
 
             {loading ? (
               <div className="py-16 text-center text-[#888] text-sm">Memuatkan...</div>
@@ -873,14 +888,15 @@ async function handleSaveSchedule() {
                                     </div>
                                   ) : (
                                     <>
-                                      <p className="font-semibold text-[#F56A00] truncate leading-tight text-xs">{slots[0].schedule.schedule_name}</p>
+                                      {can('strength', 'delete') && (
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); setConfirmDeleteSlot({ schedule: slots[0].schedule, slot: slots[0].slot }) }}
+                                          className="absolute top-0.5 right-0.5 w-4 h-4 flex items-center justify-center rounded-full bg-white/80 text-[#D44040] opacity-0 group-hover:opacity-100 transition hover:bg-red-50 z-10 text-[10px] leading-none"
+                                        >×</button>
+                                      )}
+                                      <p className="font-semibold text-[#F56A00] truncate leading-tight text-xs pr-4">{slots[0].schedule.schedule_name}</p>
                                       <p className="text-[10px] text-[#666] leading-tight">{slots[0].schedule.sport}</p>
                                       <p className="text-[9px] text-[#888] font-mono leading-tight">{(() => { const s = convert24To12(startTime); const e = convert24To12(endTime); return `${s.hour}:${s.minute}${s.ampm}–${e.hour}:${e.minute}${e.ampm}` })()}</p>
-                                      <div className="hidden group-hover:flex gap-1 mt-0.5 pt-0.5 border-t border-[rgba(245,106,0,0.2)]">
-                                        {can('strength', 'delete') && (
-                                          <button onClick={(e) => { e.stopPropagation(); setConfirmDeleteSlot({ schedule: slots[0].schedule, slot: slots[0].slot }) }} className="flex-1 px-1 py-0.5 text-[8px] font-semibold text-[#D44040] hover:underline">Padam</button>
-                                        )}
-                                      </div>
                                     </>
                                   )}
                                 </div>
@@ -1294,17 +1310,21 @@ async function handleSaveSchedule() {
             {error && <div className="px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-[12px] text-red-600 mb-4">{error}</div>}
 
             <div className="space-y-3">
-              <p className="text-[11px] text-[#888] font-semibold">Pilih tindakan:</p>
+              {(confirmDeleteSlot.schedule.slots?.length ?? 0) > 1 && (
+                <p className="text-[11px] text-[#888] font-semibold">Pilih tindakan:</p>
+              )}
               <div className="flex gap-2">
                 <button onClick={() => setConfirmDeleteSlot(null)} disabled={saving} className="flex-1 px-4 py-2 text-sm text-[#888] border border-gray-200 rounded-lg hover:border-gray-400 transition disabled:opacity-50">Batal</button>
-                <button onClick={() => handleDeleteSlot(confirmDeleteSlot.schedule, confirmDeleteSlot.slot)} disabled={saving || deletingSlot} className="flex-1 px-4 py-2 text-sm font-semibold text-white bg-[#F56A00] hover:bg-[#D45A00] rounded-lg transition disabled:opacity-50">{deletingSlot ? 'Padam...' : 'Padam Slot Sahaja'}</button>
-                <button
-                  onClick={() => handleDeleteScheduleFromModal(confirmDeleteSlot.schedule)}
-                  disabled={(confirmDeleteSlot.schedule.slots?.length ?? 0) <= 1 || saving}
-                  className="flex-1 px-4 py-2 text-sm font-semibold text-white bg-[#D44040] hover:bg-red-700 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#D44040]"
-                >
-                  {saving ? 'Memuatkan...' : 'Padam Seluruh Jadual'}
-                </button>
+                {(confirmDeleteSlot.schedule.slots?.length ?? 0) > 1 ? (
+                  <>
+                    <button onClick={() => handleDeleteSlot(confirmDeleteSlot.schedule, confirmDeleteSlot.slot)} disabled={saving || deletingSlot} className="flex-1 px-4 py-2 text-sm font-semibold text-white bg-[#F56A00] hover:bg-[#D45A00] rounded-lg transition disabled:opacity-50">{deletingSlot ? 'Padam...' : 'Padam Slot Sahaja'}</button>
+                    <button onClick={() => handleDeleteScheduleFromModal(confirmDeleteSlot.schedule)} disabled={saving} className="flex-1 px-4 py-2 text-sm font-semibold text-white bg-[#D44040] hover:bg-red-700 rounded-lg transition disabled:opacity-50">
+                      {saving ? 'Memuatkan...' : 'Padam Seluruh Jadual'}
+                    </button>
+                  </>
+                ) : (
+                  <button onClick={() => handleDeleteSlot(confirmDeleteSlot.schedule, confirmDeleteSlot.slot)} disabled={saving || deletingSlot} className="flex-1 px-4 py-2 text-sm font-semibold text-white bg-[#D44040] hover:bg-red-700 rounded-lg transition disabled:opacity-50">{deletingSlot ? 'Padam...' : 'Padam Slot & Jadual'}</button>
+                )}
               </div>
             </div>
           </div>

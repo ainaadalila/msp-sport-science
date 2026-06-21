@@ -351,6 +351,7 @@ export default function AthletesPage() {
           <option value="active">AKTIF</option>
           <option value="rest">REHAT</option>
           <option value="injured">CEDERA</option>
+          <option value="not_active">TIDAK AKTIF</option>
         </select>
         <input
           type="text"

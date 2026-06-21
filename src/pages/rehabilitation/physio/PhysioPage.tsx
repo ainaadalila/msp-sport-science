@@ -510,7 +510,6 @@ export default function PhysioPage() {
                                             </td>
                                             <td className="px-3 py-2">
                                               <div className="flex gap-2 justify-end">
-                                                <button onClick={e => { e.stopPropagation(); setDetailSlot(s); setDetailView('booking') }} className="text-[#3A7EC8] hover:underline font-medium">Lihat</button>
                                                 <button onClick={e => { e.stopPropagation(); setDetailSlot(s); setDetailView('full') }} className="text-[#F56A00] hover:underline font-medium">Catatan</button>
                                                 {can('physio', 'update') && <button onClick={e => { e.stopPropagation(); openBookingEdit(s) }} className="text-[#555] hover:underline font-medium">Edit</button>}
                                                 {can('physio', 'delete') && <button onClick={e => { e.stopPropagation(); setConfirmDelete(s) }} className="text-[#D44040] hover:underline font-medium">Padam</button>}
@@ -533,34 +532,18 @@ export default function PhysioPage() {
 
                 {/* Pagination */}
                 {totalPages > 1 && (
-                  <div className="flex items-center justify-between px-4 py-4 bg-white border-t border-gray-100">
-                    <button
-                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}
-                      className="px-3 py-2 text-sm text-[#F56A00] border border-gray-300 rounded-lg hover:bg-orange-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
-                    >
-                      ← Sebelumnya
-                    </button>
-                    <div className="flex gap-2">
-                      {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                        <button
-                          key={page}
-                          onClick={() => setCurrentPage(page)}
-                          className={`px-3 py-2 text-sm rounded-lg transition ${
-                            currentPage === page ? 'bg-[#F56A00] text-white font-semibold' : 'text-[#444] border border-gray-300 hover:bg-gray-50'
-                          }`}
-                        >
-                          {page}
-                        </button>
+                  <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-between">
+                    <p className="text-[11px] text-[#888]">Halaman {currentPage} daripada {totalPages}</p>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1.5 text-[11px] rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50 transition">← Sebelumnya</button>
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1).map((page, idx, arr) => (
+                        <span key={page} className="flex items-center">
+                          {idx > 0 && arr[idx - 1] !== page - 1 && <span className="px-1 text-[#888] text-[11px]">…</span>}
+                          <button onClick={() => setCurrentPage(page)} className={`w-7 h-7 text-[11px] rounded-lg ${currentPage === page ? 'bg-[#F56A00] text-white font-semibold' : 'text-[#444] border border-gray-300 hover:bg-gray-50'}`}>{page}</button>
+                        </span>
                       ))}
+                      <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-3 py-1.5 text-[11px] rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50 transition">Seterusnya →</button>
                     </div>
-                    <button
-                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                      disabled={currentPage === totalPages}
-                      className="px-3 py-2 text-sm text-[#F56A00] border border-gray-300 rounded-lg hover:bg-orange-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
-                    >
-                      Seterusnya →
-                    </button>
                   </div>
                 )}
               </>

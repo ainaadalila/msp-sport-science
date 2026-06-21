@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useMemo, Fragment } from 'react'
 import { supabase } from '../../lib/supabase'
 import { usePermissions } from '../../hooks/usePermissions'
 import { useSports } from '../../hooks/useSports'
+import { useAthletes } from '../../hooks/useAthletes'
 import type { PhysioRating } from '../../types'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
@@ -21,15 +22,6 @@ interface ParsedAssessment {
   cognitive_anxiety_score: number
   somatic_anxiety_score: number
   self_confidence_score: number
-}
-
-interface AthleteBasic {
-  id: string
-  name: string
-  ic_number: string
-  sport_id: string
-  status: string
-  sport?: { name: string }
 }
 
 const QUESTION_MAPPING = {
@@ -57,7 +49,7 @@ export default function PsychologyRatingPage() {
 
   const ATHLETES_PER_PAGE = 25
   const [ratings, setRatings] = useState<PhysioRating[]>([])
-  const [athletes, setAthletes] = useState<AthleteBasic[]>([])
+  const { athletes } = useAthletes()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
@@ -139,19 +131,12 @@ export default function PsychologyRatingPage() {
     try {
       setLoading(true)
       setError('')
-      const [ratingsRes, athletesRes] = await Promise.all([
-        supabase
-          .from('psychology_ratings')
-          .select('id, athlete_id, phase, assessment_date, cognitive_anxiety_score, somatic_anxiety_score, self_confidence_score, catatan, athlete:athletes(id, name, sport_id, sport:sport_id(name))')
-          .order('assessment_date', { ascending: false }).limit(5000),
-        supabase
-          .from('athletes')
-          .select('id, name, ic_number, sport_id, status, sport:sport_id(name)')
-          .order('name').limit(5000),
-      ])
+      const ratingsRes = await supabase
+        .from('psychology_ratings')
+        .select('id, athlete_id, phase, assessment_date, cognitive_anxiety_score, somatic_anxiety_score, self_confidence_score, catatan, athlete:athletes(id, name, sport_id, sport:sport_id(name))')
+        .order('assessment_date', { ascending: false }).limit(5000)
       if (ratingsRes.error) throw ratingsRes.error
       setRatings((ratingsRes.data as any) || [])
-      setAthletes((athletesRes.data as any) || [])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load data')
     } finally {

@@ -3,6 +3,7 @@ import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
 import { usePermissions } from '../../../hooks/usePermissions'
 import { useSports } from '../../../hooks/useSports'
+import { useAthletes } from '../../../hooks/useAthletes'
 import { logAction } from '../../../lib/audit'
 
 interface Supplement {
@@ -33,12 +34,6 @@ interface SupplementRequest {
   supplement?: { name: string; unit: string }
 }
 
-interface Athlete {
-  id: string
-  name: string
-  sport_id: string
-  sport?: { name: string }
-}
 
 type Tab = 'requests' | 'inventory'
 
@@ -75,7 +70,7 @@ export default function SupplementPage() {
   // Data
   const [supplements, setSupplements] = useState<Supplement[]>([])
   const [requests, setRequests] = useState<SupplementRequest[]>([])
-  const [athletes, setAthletes] = useState<Athlete[]>([])
+  const { athletes } = useAthletes()
   const [loading, setLoading] = useState(true)
 
   // Inventory modal
@@ -142,19 +137,14 @@ export default function SupplementPage() {
 
   async function fetchAll() {
     setLoading(true)
-    const [supRes, reqRes, athRes] = await Promise.all([
+    const [supRes, reqRes] = await Promise.all([
       supabase.from('supplements').select('id, name, stock, unit, expiry_date').order('name').limit(1000),
       supabase.from('supplement_requests')
         .select('id, sport, supplement_id, quantity, request_date, status, requested_by, reviewed_by, coordinator_id, coordinator_notes, supporter_id, supporter_status, supporter_notes, supporter_reviewed_at, approved_quantity, created_at, supplement:supplement_id(name, unit)')
         .order('created_at', { ascending: sortBy === 'date_asc' }).limit(5000),
-      supabase.from('athletes').select('id, name, sport_id, sport:sport_id(name)').order('name').limit(5000),
     ]) as any
-    console.log('Supplements fetch:', { data: supRes.data, error: supRes.error })
-    console.log('Requests fetch:', { data: reqRes.data, error: reqRes.error })
-    console.log('Athletes fetch:', { data: athRes.data, error: athRes.error })
     setSupplements(supRes.data ?? [])
     setRequests(reqRes.data ?? [])
-    setAthletes(athRes.data ?? [])
     setLoading(false)
   }
 
@@ -272,9 +262,10 @@ export default function SupplementPage() {
 
   async function handleCoordinatorReview(id: string, decision: 'lulus' | 'tolak', notes?: string) {
     setProcessingId(id)
-    const status = decision === 'lulus' ? 'semakan_lulus' : 'semakan_tolak'
-    const { error: updateError } = await supabase.from('supplement_requests').update({ status, coordinator_id: profile?.id, coordinator_notes: notes || null }).eq('id', id)
-    if (updateError) throw updateError
+    const status = (decision === 'lulus' ? 'semakan_lulus' : 'semakan_tolak') as SupplementRequest['status']
+    const patch = { status, coordinator_id: profile?.id, coordinator_notes: notes || null }
+    const { error } = await supabase.from('supplement_requests').update(patch).eq('id', id)
+    if (error) throw error
     await logAction(profile!.id, decision === 'lulus' ? 'koordinator_approve_supplement' : 'koordinator_reject_supplement', 'supplement_requests', id)
     await fetchAll()
     setProcessingId(null)
@@ -283,42 +274,27 @@ export default function SupplementPage() {
   async function handleApproval(id: string, status: 'approved' | 'partial', approvedQuantity?: number, notes?: string) {
     setProcessingId(id)
 
-    // Get the request to know which supplement and quantity to reduce
-    const { data: request, error: reqError } = await supabase.from('supplement_requests').select('supplement_id, quantity, approved_quantity').eq('id', id).single()
+    const { data: request } = await supabase.from('supplement_requests').select('supplement_id, quantity').eq('id', id).single() as any
+    const quantityToReduce = status === 'partial' ? (approvedQuantity ?? request?.quantity ?? 0) : (request?.quantity ?? 0)
 
-    console.log('Request fetched:', request, 'Error:', reqError)
+    const updatePayload: Partial<SupplementRequest> & Record<string, any> = { status, reviewed_by: profile?.id, approved_quantity: approvedQuantity || null }
+    if (notes) updatePayload.reviewer_notes = notes
 
-    if (request && request.supplement_id) {
-      const quantityToReduce = status === 'partial' ? (approvedQuantity || request.quantity) : request.quantity
+    // Fetch current stock and update request in parallel
+    const [supRes] = await Promise.all([
+      request?.supplement_id
+        ? supabase.from('supplements').select('stock').eq('id', request.supplement_id).single() as any
+        : Promise.resolve({ data: null }),
+      supabase.from('supplement_requests').update(updatePayload).eq('id', id),
+    ])
 
-      console.log('Reducing inventory - supplement_id:', request.supplement_id, 'quantity:', quantityToReduce)
-
-      // Reduce inventory
-      try {
-        const { data: sup, error: supError } = await supabase.from('supplements').select('stock').eq('id', request.supplement_id).single()
-        console.log('Supplement data:', sup, 'Error:', supError)
-
-        if (sup) {
-          const newStock = Math.max(0, sup.stock - quantityToReduce)
-          console.log('Updating stock from', sup.stock, 'to', newStock)
-
-          const { error: updateError } = await supabase.from('supplements')
-            .update({ stock: newStock })
-            .eq('id', request.supplement_id)
-
-          console.log('Stock update error:', updateError)
-        }
-      } catch (err) {
-        console.error('Error reducing inventory:', err)
-      }
-    } else {
-      console.error('Request data missing or no supplement_id:', request)
+    // Reduce stock
+    if (supRes.data) {
+      const newStock = Math.max(0, supRes.data.stock - quantityToReduce)
+      await supabase.from('supplements').update({ stock: newStock }).eq('id', request.supplement_id)
+      setSupplements(prev => prev.map(s => s.id === request.supplement_id ? { ...s, stock: newStock } : s))
     }
 
-    const updatePayload: any = { status, reviewed_by: profile?.id, approved_quantity: approvedQuantity || null }
-    if (notes) updatePayload.reviewer_notes = notes
-    const { error: updateError } = await supabase.from('supplement_requests').update(updatePayload).eq('id', id)
-    if (updateError) throw updateError
     await logAction(profile!.id, status === 'approved' ? 'approve_supplement' : 'approve_supplement_partial', 'supplement_requests', id)
     await fetchAll()
     setProcessingId(null)
@@ -326,13 +302,14 @@ export default function SupplementPage() {
 
   async function handleSupporterAction(id: string, decision: 'sokong' | 'tidak_sokong', notes?: string) {
     setProcessingId(id)
-    const { error: updateError } = await supabase.from('supplement_requests').update({
+    const patch = {
       supporter_id: profile?.id,
       supporter_status: decision,
       supporter_notes: notes || null,
       supporter_reviewed_at: new Date().toISOString(),
-    }).eq('id', id)
-    if (updateError) throw updateError
+    }
+    const { error } = await supabase.from('supplement_requests').update(patch).eq('id', id)
+    if (error) throw error
     await logAction(profile!.id, decision === 'sokong' ? 'supporter_approve_supplement' : 'supporter_reject_supplement', 'supplement_requests', id)
     await fetchAll()
     setProcessingId(null)
@@ -650,7 +627,7 @@ export default function SupplementPage() {
               </Field>
               <div className="grid grid-cols-2 gap-4">
                 <Field label="Stok">
-                  <input type="number" value={supForm.stock} onChange={e => setSupForm(f => ({ ...f, stock: +e.target.value }))} className={inputCls} min={0} />
+                  <input type="number" value={supForm.stock} onChange={e => setSupForm(f => ({ ...f, stock: +e.target.value }))} onFocus={e => e.target.select()} className={inputCls} min={0} />
                 </Field>
                 <Field label="Unit" required>
                   <select value={supForm.unit} onChange={e => setSupForm(f => ({ ...f, unit: e.target.value }))} className={inputCls}>
@@ -659,6 +636,7 @@ export default function SupplementPage() {
                     <option value="TABLET">Tablet</option>
                     <option value="CAPSULE">Capsule</option>
                     <option value="SACHET">Sachet</option>
+                    <option value="BOTTLE">Bottle</option>
                     <option value="BOX">Box</option>
                     <option value="KG">Kilogram</option>
                     <option value="GRAM">Gram</option>
@@ -724,6 +702,7 @@ export default function SupplementPage() {
                         min={1}
                         value={line.quantity}
                         onChange={e => setReqLine(i, 'quantity', +e.target.value)}
+                        onFocus={e => e.target.select()}
                         className="w-24 bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2.5 text-sm text-[#111] outline-none transition focus:border-[#F56A00] focus:bg-white text-center shrink-0"
                         placeholder="Qty"
                       />
@@ -788,9 +767,9 @@ export default function SupplementPage() {
                 <label className="block text-[12px] font-semibold text-[#888] uppercase mb-2">Ulasan (Pilihan)</label>
                 <textarea
                   value={coordNotesForm.notes}
-                  onChange={e => setCoordNotesForm(f => ({ ...f, notes: e.target.value }))}
+                  onChange={e => setCoordNotesForm(f => ({ ...f, notes: e.target.value.toUpperCase() }))}
                   placeholder="Masukkan ulasan anda..."
-                  className="w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2 text-sm resize-none h-24 outline-none transition focus:border-[#F56A00] focus:bg-white"
+                  className="w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2 text-sm resize-none h-24 outline-none transition focus:border-[#F56A00] focus:bg-white uppercase"
                 />
               </div>
             </div>
@@ -843,9 +822,9 @@ export default function SupplementPage() {
                 <label className="block text-[12px] font-semibold text-[#888] uppercase mb-2">Ulasan Anda (Pilihan)</label>
                 <textarea
                   value={supporterForm.notes}
-                  onChange={e => setSupporterForm(f => ({ ...f, notes: e.target.value }))}
+                  onChange={e => setSupporterForm(f => ({ ...f, notes: e.target.value.toUpperCase() }))}
                   placeholder="Masukkan ulasan anda..."
-                  className="w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2 text-sm resize-none h-24 outline-none transition focus:border-[#F56A00] focus:bg-white"
+                  className="w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2 text-sm resize-none h-24 outline-none transition focus:border-[#F56A00] focus:bg-white uppercase"
                 />
               </div>
             </div>
@@ -990,6 +969,7 @@ export default function SupplementPage() {
                     max={approvalRequest.quantity}
                     value={partialQuantity}
                     onChange={e => setPartialQuantity(Math.min(approvalRequest.quantity, Math.max(1, +e.target.value)))}
+                    onFocus={e => e.target.select()}
                     className="w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2 text-sm"
                   />
                 </div>
@@ -998,9 +978,9 @@ export default function SupplementPage() {
                 <label className="block text-[12px] font-semibold text-[#888] uppercase mb-2">Ulasan (Pilihan)</label>
                 <textarea
                   value={approvalForm.notes}
-                  onChange={e => setApprovalForm(f => ({ ...f, notes: e.target.value }))}
+                  onChange={e => setApprovalForm(f => ({ ...f, notes: e.target.value.toUpperCase() }))}
                   placeholder="Masukkan ulasan anda..."
-                  className="w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2 text-sm resize-none h-24 outline-none transition focus:border-[#F56A00] focus:bg-white"
+                  className="w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2 text-sm resize-none h-24 outline-none transition focus:border-[#F56A00] focus:bg-white uppercase"
                 />
               </div>
             </div>
@@ -1033,7 +1013,7 @@ export default function SupplementPage() {
   )
 }
 
-const inputCls = 'w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2.5 text-sm text-[#111] outline-none transition focus:border-[#F56A00] focus:bg-white'
+const inputCls = 'w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2.5 text-sm text-[#111] outline-none transition focus:border-[#F56A00] focus:bg-white uppercase'
 
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (

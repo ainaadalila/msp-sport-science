@@ -33,7 +33,7 @@ const expandableGroupPaths: Record<string, string[]> = Object.fromEntries(
   Object.entries(expandableGroups).map(([key, items]) => [key, items.map(i => i.path)])
 )
 
-export default function Sidebar() {
+export default function Sidebar({ onSignOut }: { onSignOut?: () => void }) {
   const { profile, signOut } = useAuth()
   const navigate = useNavigate()
   const { pathname } = useLocation()
@@ -74,6 +74,7 @@ export default function Sidebar() {
   }
 
   async function handleSignOut() {
+    if (onSignOut) { onSignOut(); return }
     await signOut()
     navigate('/login')
   }
