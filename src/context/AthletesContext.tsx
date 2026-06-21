@@ -7,7 +7,7 @@ export interface CachedAthlete {
   ic_number: string
   sport_id: string
   status: 'active' | 'rest' | 'injured'
-  gender: 'M' | 'F' | null
+  gender: 'M' | 'F' | null | undefined
   date_of_birth: string | null
   weight: number | null
   height: number | null
