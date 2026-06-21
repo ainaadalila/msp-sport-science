@@ -37,18 +37,21 @@ export interface Athlete {
   id: string
   name: string
   ic_number: string
-  gender?: 'M' | 'F'
+  gender?: 'M' | 'F' | null
   sport_id: string
   sport?: { name: string }
-  category?: string
+  category?: string | null
   coach_id?: string
   school?: string
   training_centre?: string
-  weight?: number
-  height?: number
+  weight?: number | null
+  height?: number | null
   championship_year?: number
-  status: 'active' | 'rest' | 'injured'
+  status: 'active' | 'rest' | 'injured' | 'not_active'
   created_at: string
+  is_elite?: boolean
+  photo_url?: string | null
+  date_of_birth?: string | null
 }
 
 export interface FitnessTest {

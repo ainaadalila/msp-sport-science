@@ -36,6 +36,7 @@ export default function Layout() {
   const [userOpen, setUserOpen] = useState(false)
   const [changePasswordOpen, setChangePasswordOpen] = useState(false)
   const [cpForm, setCpForm] = useState({ password: '', confirm: '', showPw: false })
+  const [signingOut, setSigningOut] = useState(false)
   const [cpLoading, setCpLoading] = useState(false)
   const [cpError, setCpError] = useState<string | null>(null)
   const [cpSuccess, setCpSuccess] = useState(false)
@@ -75,6 +76,7 @@ export default function Layout() {
 
   async function handleSignOut() {
     setUserOpen(false)
+    setSigningOut(true)
     if (profile) await logAction(profile.id, 'logout')
     await signOut()
     navigate('/login')
@@ -114,7 +116,7 @@ export default function Layout() {
 
   return (
     <div className="flex h-screen bg-[#F2F4F7]">
-      <Sidebar />
+      <Sidebar onSignOut={handleSignOut} />
       <div className="flex-1 flex flex-col overflow-hidden">
         <header className="h-[60px] bg-white border-b border-gray-200 flex items-center justify-between px-6 shrink-0">
 
@@ -240,6 +242,18 @@ export default function Layout() {
           <Outlet />
         </main>
       </div>
+
+      {signingOut && (
+        <div className="fixed inset-0 z-[999] flex items-center justify-center bg-white/80 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-3">
+            <svg className="animate-spin w-8 h-8 text-[#F56A00]" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+            </svg>
+            <p className="text-sm text-[#888]">Log keluar...</p>
+          </div>
+        </div>
+      )}
 
       {changePasswordOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">

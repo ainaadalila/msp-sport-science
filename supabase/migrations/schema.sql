@@ -2020,6 +2020,25 @@ using ((public.get_my_role() = 'coach'::text));
 
 
 
+  create policy "Supplement roles can update requests"
+  on "public"."supplement_requests"
+  as permissive
+  for update
+  to public
+  using (
+    exists (
+      select 1 from public.profiles
+      where id = auth.uid()
+      and (
+        (module_permissions->>'supplement_coordinator')::boolean = true
+        or (module_permissions->>'supplement_supporter')::boolean = true
+        or (module_permissions->>'supplement_approver')::boolean = true
+      )
+    )
+  );
+
+
+
   create policy "Admins delete supplements"
   on "public"."supplements"
   as permissive

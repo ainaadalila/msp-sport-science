@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { usePermissions } from '../../hooks/usePermissions'
 
 interface Athlete {
   id: string
@@ -105,6 +106,7 @@ function Avatar({ name, url, size }: { name: string; url: string | null; size: n
 export default function AthleteProfilePage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { can } = usePermissions()
 
   const [athlete, setAthlete] = useState<Athlete | null>(null)
   const [inbody, setInbody] = useState<InBodyRecord | null>(null)
@@ -217,17 +219,23 @@ export default function AthleteProfilePage() {
               <p className="text-sm text-[#888] mt-0.5">{athlete.sport?.name}{athlete.category ? ` · ${athlete.category}` : ''}</p>
             </div>
             <div className="flex gap-2 flex-wrap items-start">
-              <select
-                value={athlete.status}
-                onChange={(e) => updateStatus(e.target.value as Athlete['status'])}
-                disabled={updatingStatus}
-                className={`text-[11px] font-semibold px-3 py-1 rounded-full border-0 cursor-pointer disabled:opacity-50 ${statusStyle[athlete.status]}`}
-              >
-                <option value="active">Aktif</option>
-                <option value="rest">Rehat</option>
-                <option value="injured">Cedera</option>
-                <option value="not_active">Tidak Aktif</option>
-              </select>
+              {can('athletes', 'update') ? (
+                <select
+                  value={athlete.status}
+                  onChange={(e) => updateStatus(e.target.value as Athlete['status'])}
+                  disabled={updatingStatus}
+                  className={`text-[11px] font-semibold px-3 py-1 rounded-full border-0 cursor-pointer disabled:opacity-50 ${statusStyle[athlete.status]}`}
+                >
+                  <option value="active">Aktif</option>
+                  <option value="rest">Rehat</option>
+                  <option value="injured">Cedera</option>
+                  <option value="not_active">Tidak Aktif</option>
+                </select>
+              ) : (
+                <span className={`text-[11px] font-semibold px-3 py-1 rounded-full border ${statusStyle[athlete.status]}`}>
+                  {{ active: 'Aktif', rest: 'Rehat', injured: 'Cedera', not_active: 'Tidak Aktif' }[athlete.status]}
+                </span>
+              )}
               {athlete.is_elite && (
                 <span className="inline-block text-[11px] font-bold px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-600 border border-yellow-200">
                   ATLET ELIT

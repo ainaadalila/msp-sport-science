@@ -7,6 +7,7 @@ import { useAuth } from '../../../context/AuthContext'
 import { usePermissions } from '../../../hooks/usePermissions'
 import { logAction } from '../../../lib/audit'
 import { useSports } from '../../../hooks/useSports'
+import { useAthletes } from '../../../hooks/useAthletes'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 interface Athlete {
@@ -151,7 +152,7 @@ export default function InBodyPage() {
   const athleteIdParam = searchParams.get('athlete')
 
   const [records, setRecords] = useState<InBodyRecord[]>([])
-  const [athletes, setAthletes] = useState<Athlete[]>([])
+  const { athletes } = useAthletes()
   const [loading, setLoading] = useState(true)
 
   // Athlete-first filters (matches AthletesPage style)
@@ -208,18 +209,13 @@ export default function InBodyPage() {
 
   async function fetchAll() {
     setLoading(true)
-    const [recRes, athRes] = await Promise.all([
+    const [recRes] = await Promise.all([
       supabase
         .from('inbody_records')
-        .select('id, athlete_id, recorded_date, weight, smm, body_fat_mass, bmi, fat_pct, inbody_score, diet_plan_url, athlete:athletes(name, sport_id, sport:sport_id(name))')
+        .select('id, athlete_id, recorded_date, weight, smm, body_fat_mass, bmi, fat_pct, bmr, inbody_score, skor, diet_plan_url, diet_plan_name, athlete:athletes(name, sport_id, sport:sport_id(name))')
         .order('recorded_date', { ascending: false }).limit(5000),
-      supabase
-        .from('athletes')
-        .select('id, name, ic_number, sport_id, status, is_elite, sport:sport_id(name)')
-        .order('name').limit(5000),
     ]) as any
     setRecords(recRes.data ?? [])
-    setAthletes(athRes.data ?? [])
     setLoading(false)
   }
 
@@ -228,7 +224,7 @@ export default function InBodyPage() {
     setProfilLoading(true)
     const { data } = await supabase
       .from('inbody_records')
-      .select('id, athlete_id, recorded_date, weight, smm, body_fat_mass, bmi, fat_pct, inbody_score, diet_plan_url, athlete:athletes(name, sport_id, sport:sport_id(name))')
+      .select('id, athlete_id, recorded_date, weight, smm, body_fat_mass, bmi, fat_pct, bmr, inbody_score, skor, diet_plan_url, diet_plan_name, athlete:athletes(name, sport_id, sport:sport_id(name))')
       .eq('athlete_id', athleteId)
       .order('recorded_date', { ascending: true }) as any
     setProfilRecords(data ?? [])
@@ -445,6 +441,8 @@ export default function InBodyPage() {
   }
 
   const latestRecord = profilRecords.length > 0 ? profilRecords[profilRecords.length - 1] : null
+  const latestSkor = latestRecord ? computeSkor(latestRecord) : null
+  const latestUlasan = latestSkor != null ? computeUlasan(latestSkor) : null
 
   const chartData = profilRecords.slice(-10).map(r => ({
     date: new Date(r.recorded_date + 'T00:00:00').toLocaleDateString('ms-MY', { day: '2-digit', month: 'short' }),
@@ -664,36 +662,18 @@ export default function InBodyPage() {
 
                     {/* Pagination */}
                     {totalPages > 1 && (
-                      <div className="flex items-center justify-between px-4 py-4 bg-white border-t border-gray-100">
-                        <button
-                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                          disabled={currentPage === 1}
-                          className="px-3 py-2 text-sm text-[#F56A00] border border-gray-300 rounded-lg hover:bg-orange-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
-                        >
-                          ← Sebelumnya
-                        </button>
-                        <div className="flex gap-2">
-                          {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                            <button
-                              key={page}
-                              onClick={() => setCurrentPage(page)}
-                              className={`px-3 py-2 text-sm rounded-lg transition ${
-                                currentPage === page
-                                  ? 'bg-[#F56A00] text-white font-semibold'
-                                  : 'text-[#444] border border-gray-300 hover:bg-gray-50'
-                              }`}
-                            >
-                              {page}
-                            </button>
+                      <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-between">
+                        <p className="text-[11px] text-[#888]">Halaman {currentPage} daripada {totalPages} ({filteredAthletes.length} atlet)</p>
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1.5 text-[11px] rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50 transition">← Sebelumnya</button>
+                          {Array.from({ length: totalPages }, (_, i) => i + 1).filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1).map((page, idx, arr) => (
+                            <span key={page} className="flex items-center">
+                              {idx > 0 && arr[idx - 1] !== page - 1 && <span className="px-1 text-[#888] text-[11px]">…</span>}
+                              <button onClick={() => setCurrentPage(page)} className={`w-7 h-7 text-[11px] rounded-lg ${currentPage === page ? 'bg-[#F56A00] text-white font-semibold' : 'text-[#444] border border-gray-300 hover:bg-gray-50'}`}>{page}</button>
+                            </span>
                           ))}
+                          <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-3 py-1.5 text-[11px] rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50 transition">Seterusnya →</button>
                         </div>
-                        <button
-                          onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                          disabled={currentPage === totalPages}
-                          className="px-3 py-2 text-sm text-[#F56A00] border border-gray-300 rounded-lg hover:bg-orange-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
-                        >
-                          Seterusnya →
-                        </button>
                       </div>
                     )}
                   </>
@@ -793,7 +773,7 @@ export default function InBodyPage() {
                     ['% Lemak',           n(latestRecord.fat_pct, '%')],
                     ['BMR',               n(latestRecord.bmr, ' kcal', 0)],
                     ['Skor InBody',       n(latestRecord.inbody_score, '', 0)],
-                    ['Skor SUKMA',        latestRecord.skor != null ? `${latestRecord.skor}/5 — ${latestRecord.ulasan}` : '—'],
+                    ['Skor SUKMA',        latestSkor != null ? `${latestSkor}/5 — ${latestUlasan}` : '—'],
                   ] as [string, string][]).map(([label, val]) => (
                     <div key={label} className="bg-[#F5F5F7] rounded-lg px-4 py-3">
                       <p className="text-[10px] text-[#888] mb-0.5 whitespace-nowrap">{formatLabel(label)}</p>

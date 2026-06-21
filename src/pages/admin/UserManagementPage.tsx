@@ -82,11 +82,39 @@ export default function UserManagementPage() {
     }
 
     if (role === 'coach') {
-      return { ...base, strength: crudPermission, fitness: crudPermission, inbody: readOnlyPermission, supplement: readOnlyPermission, physio: readOnlyPermission }
+      return {
+        ...base,
+        strength: crudPermission, fitness: crudPermission,
+        fitness_config: readOnlyPermission,
+        inbody: readOnlyPermission, supplement: readOnlyPermission,
+        physio: readOnlyPermission, physio_cases: readOnlyPermission,
+        psychology: readOnlyPermission,
+      }
     } else if (role === 'physio') {
-      return { ...base, inbody: readOnlyPermission, physio: crudPermission, physio_cases: crudPermission }
+      return {
+        ...base,
+        strength: readOnlyPermission, fitness: readOnlyPermission,
+        inbody: readOnlyPermission, supplement: readOnlyPermission,
+        physio: crudPermission, physio_cases: crudPermission,
+        psychology: readOnlyPermission,
+      }
     } else if (role === 'psikologis') {
-      return { ...base, psychology: crudPermission }
+      return {
+        ...base,
+        strength: readOnlyPermission, fitness: readOnlyPermission,
+        inbody: readOnlyPermission, supplement: readOnlyPermission,
+        physio: readOnlyPermission, physio_cases: readOnlyPermission,
+        psychology: crudPermission,
+      }
+    } else if (role === 'pegawai_belia_sukan') {
+      return {
+        ...base,
+        strength: readOnlyPermission, fitness: readOnlyPermission,
+        inbody: readOnlyPermission,
+        physio: readOnlyPermission, physio_cases: readOnlyPermission,
+        psychology: readOnlyPermission,
+        reports: readOnlyPermission,
+      }
     }
 
     return base
@@ -131,7 +159,6 @@ export default function UserManagementPage() {
   }
 
   function openEdit(u: UserProfile) {
-    console.log('Opening edit for user:', u.full_name, 'Permissions:', u.module_permissions)
     setEditingUser(u)
     setEditForm({ full_name: u.full_name ?? '', role: u.role as Role, module_permissions: u.module_permissions || defaultModulePermissions })
     setSaveError(null)
@@ -171,7 +198,6 @@ export default function UserManagementPage() {
   }
 
   async function handleCreate(e?: React.MouseEvent) {
-    console.log('handleCreate called', e)
     e?.preventDefault()
     setCreateError(null)
     if (!createForm.email.trim() || !createForm.full_name.trim() || !createForm.password) {
@@ -184,11 +210,8 @@ export default function UserManagementPage() {
       return
     }
     setCreating(true)
-    // Always use the role to determine module permissions
-    const finalModulePermissions = getDefaultModulesByRole(createForm.role)
-    console.log('Creating user with role:', createForm.role, 'Permissions:', finalModulePermissions)
+    const finalModulePermissions = createForm.module_permissions
     try {
-      console.log('Calling createUserAdmin...')
       const newUser = await createUserAdmin(
         createForm.email.trim(),
         createForm.password,

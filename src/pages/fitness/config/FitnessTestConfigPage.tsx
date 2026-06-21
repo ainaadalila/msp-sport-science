@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Navigate } from 'react-router-dom'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
 import { usePermissions } from '../../../hooks/usePermissions'
@@ -96,7 +97,7 @@ export default function FitnessTestConfigPage() {
   }
 
   if (!isAdmin) {
-    return <div className="py-16 text-center text-[#888]">Akses ditolak.</div>
+    return <Navigate to="/" replace />
   }
 
   if (loading) {
