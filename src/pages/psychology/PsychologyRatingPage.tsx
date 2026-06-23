@@ -416,25 +416,19 @@ export default function PsychologyRatingPage() {
 
     const ranges = {
       cognitive: [
-        { min: 0, max: 7, label: 'Sangat Rendah', color: 'text-red-600' },
-        { min: 8, max: 11, label: 'Rendah', color: 'text-orange-600' },
-        { min: 12, max: 15, label: 'Sederhana', color: 'text-yellow-600' },
-        { min: 16, max: 19, label: 'Tinggi', color: 'text-blue-600' },
-        { min: 20, max: 20, label: 'Sangat Tinggi', color: 'text-red-600' },
+        { min: 5, max: 10, label: 'Baik', color: 'text-green-600' },
+        { min: 11, max: 15, label: 'Sederhana', color: 'text-yellow-600' },
+        { min: 16, max: 20, label: 'Lemah', color: 'text-red-600' },
       ],
       somatic: [
-        { min: 0, max: 10, label: 'Sangat Rendah', color: 'text-red-600' },
-        { min: 11, max: 15, label: 'Rendah', color: 'text-orange-600' },
-        { min: 16, max: 20, label: 'Sederhana', color: 'text-yellow-600' },
-        { min: 21, max: 25, label: 'Tinggi', color: 'text-blue-600' },
-        { min: 26, max: 28, label: 'Sangat Tinggi', color: 'text-red-600' },
+        { min: 8, max: 14, label: 'Baik', color: 'text-green-600' },
+        { min: 15, max: 21, label: 'Sederhana', color: 'text-yellow-600' },
+        { min: 22, max: 28, label: 'Lemah', color: 'text-red-600' },
       ],
       confidence: [
-        { min: 0, max: 7, label: 'Sangat Rendah', color: 'text-red-600' },
-        { min: 8, max: 11, label: 'Rendah', color: 'text-orange-600' },
-        { min: 12, max: 15, label: 'Sederhana', color: 'text-yellow-600' },
-        { min: 16, max: 19, label: 'Tinggi', color: 'text-green-600' },
-        { min: 20, max: 20, label: 'Sangat Tinggi', color: 'text-green-600' },
+        { min: 16, max: 20, label: 'Baik', color: 'text-green-600' },
+        { min: 11, max: 15, label: 'Sederhana', color: 'text-yellow-600' },
+        { min: 5, max: 10, label: 'Lemah', color: 'text-red-600' },
       ],
     }
 
@@ -806,15 +800,15 @@ export default function PsychologyRatingPage() {
                             <td className="px-4 py-3 font-medium text-[#111]">{data.phase}</td>
                             <td className="px-4 py-3 text-center">
                               <span className="font-semibold text-[#111]">{data.cognitive_anxiety}</span>
-                              <span className="text-[11px] text-[#888] ml-1">{data.cognitive_anxiety > 15 ? '(Tinggi)' : data.cognitive_anxiety > 10 ? '(Sederhana)' : '(Rendah)'}</span>
+                              <span className="text-[11px] text-[#888] ml-1">{getScoreInsight('cognitive', data.cognitive_anxiety).label !== '-' ? `(${getScoreInsight('cognitive', data.cognitive_anxiety).label})` : ''}</span>
                             </td>
                             <td className="px-4 py-3 text-center">
                               <span className="font-semibold text-[#111]">{data.somatic_anxiety}</span>
-                              <span className="text-[11px] text-[#888] ml-1">{data.somatic_anxiety > 17 ? '(Tinggi)' : data.somatic_anxiety > 10 ? '(Sederhana)' : '(Rendah)'}</span>
+                              <span className="text-[11px] text-[#888] ml-1">{getScoreInsight('somatic', data.somatic_anxiety).label !== '-' ? `(${getScoreInsight('somatic', data.somatic_anxiety).label})` : ''}</span>
                             </td>
                             <td className="px-4 py-3 text-center">
                               <span className="font-semibold text-[#111]">{data.confidence}</span>
-                              <span className="text-[11px] text-[#888] ml-1">{data.confidence >= 15 ? '(Tinggi)' : data.confidence >= 10 ? '(Sederhana)' : '(Rendah)'}</span>
+                              <span className="text-[11px] text-[#888] ml-1">{getScoreInsight('confidence', data.confidence).label !== '-' ? `(${getScoreInsight('confidence', data.confidence).label})` : ''}</span>
                             </td>
                           </tr>
                         ))}
