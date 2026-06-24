@@ -7,8 +7,7 @@ import type { PhysioRating } from '../../types'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import html2canvas from 'html2canvas'
-import jsPDF from 'jspdf'
+import { jsPDF } from 'jspdf'
 
 interface CSVRow {
   [key: string]: string
@@ -72,49 +71,148 @@ export default function PsychologyRatingPage() {
   const [savingCatatan, setSavingCatatan] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const chartRef = useRef<HTMLDivElement>(null)
 
-  async function handlePrint() {
-    if (!chartRef.current) return
-    try {
-      const canvas = await html2canvas(chartRef.current, {
-        scale: 3,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-        allowTaint: true
-      })
-      const imgData = canvas.toDataURL('image/png', 1.0)
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  function handlePrintComparison() {
+    if (comparisonData.length === 0) return
 
-      const pageWidth = pdf.internal.pageSize.getWidth()
-      const pageHeight = pdf.internal.pageSize.getHeight()
-      const margin = 15
-      const contentWidth = pageWidth - margin * 2
-      const imgHeight = (canvas.height * contentWidth) / canvas.width
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+    const PW = pdf.internal.pageSize.getWidth()
+    const M = 14
+    const CW = PW - M * 2
+    let y = M
 
-      let yPos = margin
-
-      pdf.setFontSize(16)
-      pdf.text('Penilaian Psikologi', margin, yPos)
-      yPos += 8
-
-      pdf.setFontSize(11)
-      pdf.setTextColor(100)
-      pdf.text(`Laporan ${new Date().toLocaleDateString('ms-MY')}`, margin, yPos)
-      yPos += 15
-      pdf.setTextColor(0)
-
-      if (yPos + imgHeight > pageHeight - margin) {
-        pdf.addPage()
-        yPos = margin
-      }
-
-      pdf.addImage(imgData, 'PNG', margin, yPos, contentWidth, imgHeight)
-      pdf.save(`Penilaian_Psikologi_${new Date().toISOString().slice(0, 10)}.pdf`)
-    } catch (error) {
-      console.error('Export PDF failed:', error)
+    const checkPage = (needed: number) => {
+      if (y + needed > pdf.internal.pageSize.getHeight() - M) { pdf.addPage(); y = M }
     }
+
+    function scoreRGB(label: string): [number,number,number] {
+      if (label === 'Baik') return [22, 163, 74]
+      if (label === 'Sederhana') return [202, 138, 4]
+      if (label === 'Lemah') return [220, 38, 38]
+      return [136, 136, 136]
+    }
+
+    // HEADER
+    pdf.setFontSize(8); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(245, 106, 0)
+    pdf.text('LAPORAN PENILAIAN PSIKOLOGI', M, y); y += 7
+    pdf.setFontSize(18); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(17, 17, 17)
+    pdf.text(selectedAthleteName, M, y); y += 7
+    pdf.setFontSize(10); pdf.setFont('helvetica', 'normal'); pdf.setTextColor(136, 136, 136)
+    const hDate = new Date().toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric' })
+    pdf.text(`${selectedAthleteSport}   ${hDate}`, M, y); y += 5
+    pdf.setDrawColor(220, 220, 220); pdf.setLineWidth(0.4); pdf.line(M, y, PW - M, y); y += 9
+
+    // GROUPED BAR CHART
+    pdf.setFontSize(8); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(136, 136, 136)
+    pdf.text('PERBANDINGAN SKOR MERENTASI FASA', M, y); y += 5
+
+    // Legend
+    const legendItems = [
+      { label: 'Keb. Kognitif', rgb: [255, 107, 107] as [number,number,number] },
+      { label: 'Keb. Somatik',  rgb: [255, 169, 77]  as [number,number,number] },
+      { label: 'Keyakinan Diri', rgb: [81, 207, 102]  as [number,number,number] },
+    ]
+    legendItems.forEach(({ label, rgb }, i) => {
+      const lx = M + i * 55
+      pdf.setFillColor(rgb[0], rgb[1], rgb[2]); pdf.rect(lx, y - 2.5, 5, 3, 'F')
+      pdf.setFontSize(7); pdf.setFont('helvetica', 'normal'); pdf.setTextColor(68, 68, 68)
+      pdf.text(label, lx + 6.5, y)
+    })
+    y += 5
+
+    const CHART_H = 55
+    const BAR_AREA_X = M + 4
+    const BAR_AREA_W = CW - 8
+    const BAR_AREA_H = CHART_H - 14
+    const BASE_Y = y + BAR_AREA_H
+    const maxVal = Math.max(...comparisonData.flatMap(d => [d.cognitive_anxiety ?? 0, d.somatic_anxiety ?? 0, d.confidence ?? 0])) * 1.15 || 30
+    const groupW = BAR_AREA_W / comparisonData.length
+    const barW = Math.min((groupW - 8) / 3, 10)
+
+    comparisonData.forEach((d, gi) => {
+      const gx = BAR_AREA_X + gi * groupW
+      const vals = [d.cognitive_anxiety, d.somatic_anxiety, d.confidence]
+      vals.forEach((v, bi) => {
+        if (v == null) return
+        const bh = (v / maxVal) * BAR_AREA_H
+        const bx = gx + (groupW - 3 * barW - 2) / 2 + bi * (barW + 1)
+        const by = BASE_Y - bh
+        pdf.setFillColor(legendItems[bi].rgb[0], legendItems[bi].rgb[1], legendItems[bi].rgb[2])
+        pdf.roundedRect(bx, by, barW, bh, 1, 0, 'F')
+        pdf.setFontSize(6); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(17, 17, 17)
+        pdf.text(String(v), bx + barW / 2, by - 1.5, { align: 'center' })
+      })
+      pdf.setFontSize(7.5); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(68, 68, 68)
+      pdf.text(d.phase, gx + groupW / 2, BASE_Y + 6, { align: 'center' })
+    })
+    y += CHART_H + 8
+
+    checkPage(30)
+
+    // COMPARISON TABLE
+    pdf.setFontSize(8); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(136, 136, 136)
+    pdf.text('JADUAL PERBANDINGAN', M, y); y += 5
+
+    const tCols = [
+      { label: 'Fasa',              w: CW * 0.22 },
+      { label: 'Keb. Kognitif',     w: CW * 0.26 },
+      { label: 'Keb. Somatik',      w: CW * 0.26 },
+      { label: 'Keyakinan Diri',    w: CW * 0.26 },
+    ]
+    const tX: number[] = [M]
+    for (let i = 0; i < tCols.length - 1; i++) tX.push(tX[i] + tCols[i].w)
+
+    pdf.setFillColor(249, 250, 251); pdf.rect(M, y, CW, 7, 'F')
+    pdf.setDrawColor(229, 231, 235); pdf.setLineWidth(0.3); pdf.line(M, y + 7, M + CW, y + 7)
+    pdf.setFontSize(7); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(85, 85, 85)
+    tCols.forEach((col, i) => pdf.text(col.label, i === 0 ? tX[i] + 2 : tX[i] + col.w / 2, y + 5, { align: i === 0 ? 'left' : 'center' }))
+    y += 7
+
+    const ROW_H = 13
+    comparisonData.forEach(d => {
+      checkPage(ROW_H + 2)
+      pdf.setFontSize(10); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(17, 17, 17)
+      pdf.text(d.phase, tX[0] + 2, y + 8)
+
+      const cells = [
+        { score: d.cognitive_anxiety, insight: getScoreInsight('cognitive', d.cognitive_anxiety) },
+        { score: d.somatic_anxiety,   insight: getScoreInsight('somatic',   d.somatic_anxiety)   },
+        { score: d.confidence,        insight: getScoreInsight('confidence', d.confidence)        },
+      ]
+      cells.forEach(({ score, insight }, ci) => {
+        const cx = tX[ci + 1] + tCols[ci + 1].w / 2
+        pdf.setFontSize(12); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(17, 17, 17)
+        pdf.text(score != null ? String(score) : '-', cx, y + 7, { align: 'center' })
+        if (insight.label !== '-') {
+          const rgb = scoreRGB(insight.label)
+          pdf.setFontSize(7); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(rgb[0], rgb[1], rgb[2])
+          pdf.text(`(${insight.label})`, cx, y + 11.5, { align: 'center' })
+        }
+      })
+
+      pdf.setDrawColor(243, 244, 246); pdf.setLineWidth(0.2); pdf.line(M, y + ROW_H, M + CW, y + ROW_H)
+      y += ROW_H
+    })
+    y += 8
+    checkPage(30)
+
+    // PANDUAN PEMBACAAN
+    pdf.setFillColor(239, 246, 255); pdf.roundedRect(M, y, CW, 32, 2, 2, 'F')
+    pdf.setDrawColor(191, 219, 254); pdf.setLineWidth(0.3); pdf.roundedRect(M, y, CW, 32, 2, 2, 'S')
+    pdf.setFontSize(8); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(30, 64, 175)
+    pdf.text('PANDUAN PEMBACAAN', M + 3, y + 6)
+    const guides = [
+      'Kebimbangan Kognitif: Kerisauan fikiran tentang prestasi (skor tinggi = lebih risau)',
+      'Kebimbangan Somatik: Kegelisahan fizikal seperti jantung berdegup (skor tinggi = lebih gelisah)',
+      'Kepercayaan Diri: Keyakinan diri dan kemampuan (skor tinggi = lebih yakin)',
+    ]
+    pdf.setFont('helvetica', 'normal'); pdf.setTextColor(30, 64, 175)
+    guides.forEach((g, i) => {
+      pdf.setFontSize(7.5)
+      pdf.text(`${i + 1}.  ${g}`, M + 3, y + 13 + i * 7)
+    })
+
+    pdf.save(`Psikologi_${selectedAthleteName}_${new Date().toISOString().slice(0, 10)}.pdf`)
   }
 
   useEffect(() => {
@@ -416,25 +514,19 @@ export default function PsychologyRatingPage() {
 
     const ranges = {
       cognitive: [
-        { min: 0, max: 7, label: 'Sangat Rendah', color: 'text-red-600' },
-        { min: 8, max: 11, label: 'Rendah', color: 'text-orange-600' },
-        { min: 12, max: 15, label: 'Sederhana', color: 'text-yellow-600' },
-        { min: 16, max: 19, label: 'Tinggi', color: 'text-blue-600' },
-        { min: 20, max: 20, label: 'Sangat Tinggi', color: 'text-red-600' },
+        { min: 5, max: 10, label: 'Baik', color: 'text-green-600' },
+        { min: 11, max: 15, label: 'Sederhana', color: 'text-yellow-600' },
+        { min: 16, max: 20, label: 'Lemah', color: 'text-red-600' },
       ],
       somatic: [
-        { min: 0, max: 10, label: 'Sangat Rendah', color: 'text-red-600' },
-        { min: 11, max: 15, label: 'Rendah', color: 'text-orange-600' },
-        { min: 16, max: 20, label: 'Sederhana', color: 'text-yellow-600' },
-        { min: 21, max: 25, label: 'Tinggi', color: 'text-blue-600' },
-        { min: 26, max: 28, label: 'Sangat Tinggi', color: 'text-red-600' },
+        { min: 8, max: 14, label: 'Baik', color: 'text-green-600' },
+        { min: 15, max: 21, label: 'Sederhana', color: 'text-yellow-600' },
+        { min: 22, max: 28, label: 'Lemah', color: 'text-red-600' },
       ],
       confidence: [
-        { min: 0, max: 7, label: 'Sangat Rendah', color: 'text-red-600' },
-        { min: 8, max: 11, label: 'Rendah', color: 'text-orange-600' },
-        { min: 12, max: 15, label: 'Sederhana', color: 'text-yellow-600' },
-        { min: 16, max: 19, label: 'Tinggi', color: 'text-green-600' },
-        { min: 20, max: 20, label: 'Sangat Tinggi', color: 'text-green-600' },
+        { min: 16, max: 20, label: 'Baik', color: 'text-green-600' },
+        { min: 11, max: 15, label: 'Sederhana', color: 'text-yellow-600' },
+        { min: 5, max: 10, label: 'Lemah', color: 'text-red-600' },
       ],
     }
 
@@ -478,20 +570,11 @@ export default function PsychologyRatingPage() {
   }, [ratings, filteredAthletes, filterPhase])
 
   return (
-    <div className="space-y-4" ref={chartRef}>
+    <div className="space-y-4">
 
       {/* Header */}
       <div className="flex items-center justify-between">
         <p className="text-[12px] text-[#888]">{athletes.length} atlet • {ratings.length} rekod penilaian</p>
-        <button
-          onClick={handlePrint}
-          className="flex items-center gap-2 px-4 py-2 bg-[#F56A00] text-white text-sm font-semibold rounded-lg hover:bg-[#D45A00] transition"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-            <path d="M9 12h6m-6 4h6M9 8h.01M15 8h.01M7 5h10a2 2 0 012 2v10a2 2 0 01-2 2H7a2 2 0 01-2-2V7a2 2 0 012-2z"/>
-          </svg>
-          Cetak
-        </button>
       </div>
 
       {/* Stats Section */}
@@ -765,7 +848,18 @@ export default function PsychologyRatingPage() {
                 <h2 className="text-xl font-bold text-[#111]">{selectedAthleteName}</h2>
                 <p className="text-sm text-[#888] mt-1">{selectedAthleteSport}</p>
               </div>
-              <button onClick={() => setSelectedAthleteId(null)} className="text-[#888] hover:text-[#111] text-2xl leading-none">×</button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handlePrintComparison}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-semibold border border-gray-200 text-[#444] hover:bg-gray-50 rounded-lg transition"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path d="M9 12h6m-6 4h6M9 8h.01M15 8h.01M7 5h10a2 2 0 012 2v10a2 2 0 01-2 2H7a2 2 0 01-2-2V7a2 2 0 012-2z"/>
+                  </svg>
+                  Cetak
+                </button>
+                <button onClick={() => setSelectedAthleteId(null)} className="text-[#888] hover:text-[#111] text-2xl leading-none">×</button>
+              </div>
             </div>
 
             <div className="p-6 space-y-6">
@@ -806,15 +900,15 @@ export default function PsychologyRatingPage() {
                             <td className="px-4 py-3 font-medium text-[#111]">{data.phase}</td>
                             <td className="px-4 py-3 text-center">
                               <span className="font-semibold text-[#111]">{data.cognitive_anxiety}</span>
-                              <span className="text-[11px] text-[#888] ml-1">{data.cognitive_anxiety > 15 ? '(Tinggi)' : data.cognitive_anxiety > 10 ? '(Sederhana)' : '(Rendah)'}</span>
+                              <span className="text-[11px] text-[#888] ml-1">{getScoreInsight('cognitive', data.cognitive_anxiety).label !== '-' ? `(${getScoreInsight('cognitive', data.cognitive_anxiety).label})` : ''}</span>
                             </td>
                             <td className="px-4 py-3 text-center">
                               <span className="font-semibold text-[#111]">{data.somatic_anxiety}</span>
-                              <span className="text-[11px] text-[#888] ml-1">{data.somatic_anxiety > 17 ? '(Tinggi)' : data.somatic_anxiety > 10 ? '(Sederhana)' : '(Rendah)'}</span>
+                              <span className="text-[11px] text-[#888] ml-1">{getScoreInsight('somatic', data.somatic_anxiety).label !== '-' ? `(${getScoreInsight('somatic', data.somatic_anxiety).label})` : ''}</span>
                             </td>
                             <td className="px-4 py-3 text-center">
                               <span className="font-semibold text-[#111]">{data.confidence}</span>
-                              <span className="text-[11px] text-[#888] ml-1">{data.confidence >= 15 ? '(Tinggi)' : data.confidence >= 10 ? '(Sederhana)' : '(Rendah)'}</span>
+                              <span className="text-[11px] text-[#888] ml-1">{getScoreInsight('confidence', data.confidence).label !== '-' ? `(${getScoreInsight('confidence', data.confidence).label})` : ''}</span>
                             </td>
                           </tr>
                         ))}

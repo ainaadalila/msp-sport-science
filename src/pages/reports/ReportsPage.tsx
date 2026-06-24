@@ -5,6 +5,7 @@ import { ReportSkeleton } from '../../components/Skeleton'
 type ReportType = 'fitness' | 'inbody' | 'attendance' | 'supplement' | 'physio' | 'psychology'
 type PhysioMode = 'ringkasan' | 'terperinci'
 type LatihkanMode = 'jadual' | 'program' | 'kehadiran'
+type SupplementMode = 'permohonan' | 'stok'
 
 interface ReportConfig {
   key: ReportType
@@ -111,7 +112,7 @@ function getCellStyle(reportType: ReportType, col: string, value: unknown): stri
     return 'bg-red-50 text-[#D44040]'
   }
 
-  if (reportType === 'physio' && col === 'Skala Kesakitan Terkini') {
+  if (reportType === 'physio' && (col === 'Skala Kesakitan Terkini' || col === 'Skala Kesakitan')) {
     const match = strVal.match(/\d+/)
     if (match) {
       const num = parseFloat(match[0])
@@ -122,17 +123,23 @@ function getCellStyle(reportType: ReportType, col: string, value: unknown): stri
   }
 
   if (reportType === 'psychology') {
-    if (col === 'Kebimbangan Kognitif' || col === 'Kebimbangan Somatik') {
+    if (col === 'Kebimbangan Kognitif') {
       const num = parseFloat(strVal)
-      if (num <= 10) return 'bg-green-50 text-[#3A9E6A]'
-      if (num <= 15) return 'bg-orange-50 text-[#F56A00]'
-      return 'bg-red-50 text-[#D44040]'
+      if (num >= 5 && num <= 10) return 'bg-green-50 text-[#3A9E6A]'
+      if (num >= 11 && num <= 15) return 'bg-orange-50 text-[#F56A00]'
+      if (num >= 16) return 'bg-red-50 text-[#D44040]'
+    }
+    if (col === 'Kebimbangan Somatik') {
+      const num = parseFloat(strVal)
+      if (num >= 8 && num <= 14) return 'bg-green-50 text-[#3A9E6A]'
+      if (num >= 15 && num <= 21) return 'bg-orange-50 text-[#F56A00]'
+      if (num >= 22) return 'bg-red-50 text-[#D44040]'
     }
     if (col === 'Kepercayaan Diri') {
       const num = parseFloat(strVal)
       if (num >= 16) return 'bg-green-50 text-[#3A9E6A]'
-      if (num >= 12) return 'bg-orange-50 text-[#F56A00]'
-      return 'bg-red-50 text-[#D44040]'
+      if (num >= 11 && num <= 15) return 'bg-orange-50 text-[#F56A00]'
+      if (num >= 5 && num <= 10) return 'bg-red-50 text-[#D44040]'
     }
   }
 
@@ -163,13 +170,18 @@ function computeSummaryRow(reportType: ReportType, data: Record<string, unknown>
       const hadirPct = Math.round((hadir / data.length) * 100)
       return `Hadir: ${hadir} (${hadirPct}%) · Tidak Hadir: ${tidakHadir} · MC: ${mc}`
     } else if (latihkanMode === 'jadual') {
-      return `Jumlah ${data.length} jadual latihan`
+      const jurulatihCount = new Set(data.map(r => r['Jurulatih'])).size
+      return `Jumlah ${data.length} sesi daripada ${jurulatihCount} jurulatih`
     } else if (latihkanMode === 'program') {
       return `Jumlah ${data.length} program latihan`
     }
   }
 
   if (reportType === 'supplement') {
+    if (data.length > 0 && 'Stok Semasa' in data[0]) {
+      const low = data.filter(r => (r['Stok Semasa'] as number) < 10).length
+      return `Jumlah ${data.length} suplemen · ${low} stok rendah (<10)`
+    }
     const approved = data.filter(r => String(r['Status'] ?? '').includes('Diluluskan')).length
     const rejected = data.filter(r => String(r['Status'] ?? '').includes('Ditolak')).length
     const pending = data.filter(r => String(r['Status'] ?? '').includes('Menunggu')).length
@@ -178,8 +190,11 @@ function computeSummaryRow(reportType: ReportType, data: Record<string, unknown>
 
   if (reportType === 'physio') {
     const athletes = new Set(data.map(r => r['Nama Atlet']))
-    const totalSessions = (data as any[]).reduce((sum, r) => sum + ((r['Bilangan Sesi'] as number) || 0), 0)
-    return `Jumlah ${totalSessions} sesi · ${athletes.size} atlet unik`
+    if ('Bilangan Sesi' in data[0]) {
+      const totalSessions = (data as any[]).reduce((sum, r) => sum + ((r['Bilangan Sesi'] as number) || 0), 0)
+      return `Jumlah ${totalSessions} sesi · ${athletes.size} atlet`
+    }
+    return `Jumlah ${data.length} rekod sesi · ${athletes.size} atlet`
   }
 
   if (reportType === 'psychology') {
@@ -217,6 +232,8 @@ export default function ReportsPage() {
   const [showColumnPicker, setShowColumnPicker] = useState(false)
   const [physioMode, setPhysioMode] = useState<PhysioMode>('ringkasan')
   const [latihkanMode, setLatihkanMode] = useState<LatihkanMode>('kehadiran')
+  const [supplementMode, setSupplementMode] = useState<SupplementMode>('permohonan')
+  const [dateColumnFilters, setDateColumnFilters] = useState<Record<string, { from: string; to: string }>>({})
   const [columnFilters, setColumnFilters] = useState<Record<string, string | string[]>>({})
   const [openDropdowns, setOpenDropdowns] = useState<Record<string, boolean>>({})
   const [dropdownSearches, setDropdownSearches] = useState<Record<string, string>>({})
@@ -312,22 +329,30 @@ export default function ReportsPage() {
           } else if (latihkanMode === 'jadual') {
             const { data: schedules, error } = await supabase
               .from('coach_schedules')
-              .select('id, coach_id, sport, schedule_name, valid_from, coach:profiles(full_name), slots:coach_schedule_slots(id)')
+              .select('id, sport, repeats, repeat_pattern, coach:profiles(full_name), slots:coach_schedule_slots(slot_date, start_time, end_time)')
               .order('valid_from', { ascending: false }).limit(5000) as any
             if (error) throw error
-            setData((schedules ?? [])
-              .filter((s: any) => !filterSport || s.sport === filterSport)
-              .map((s: any) => ({
-                'Jadual': s.schedule_name,
+            const repeatPatternMap: Record<string, string> = { weekly: 'Mingguan', 'bi-weekly': 'Dua Minggu Sekali', custom: 'Kustom' }
+            const rows: Record<string, unknown>[] = []
+            for (const s of (schedules ?? [])) {
+              if (filterSport && s.sport !== filterSport) continue
+              const slots = ((s.slots ?? []) as any[]).sort((a: any, b: any) => a.slot_date.localeCompare(b.slot_date))
+              const base = {
                 'Sukan': s.sport ?? '—',
-                'Jurulatih': (s.coach as any)?.full_name ?? '—',
-                'Bermula': s.valid_from,
-                'Bilangan Slot': (s.slots?.length ?? 0),
-              }))
-            )
+                'Jurulatih': s.coach?.full_name ?? '—',
+                'Berulang': s.repeats ? 'Ya' : 'Tidak',
+                'Corak Ulangan': repeatPatternMap[s.repeat_pattern] ?? '—',
+              }
+              if (slots.length === 0) {
+                rows.push({ ...base, 'Tarikh Sesi': '—', 'Masa Mula': '—', 'Masa Tamat': '—' })
+              } else {
+                slots.forEach((slot: any) => rows.push({ ...base, 'Tarikh Sesi': slot.slot_date, 'Masa Mula': slot.start_time, 'Masa Tamat': slot.end_time }))
+              }
+            }
+            setData(rows)
           } else if (latihkanMode === 'program') {
             const { data: programs, error } = await supabase
-              .from('strength_conditioning_programs')
+              .from('sc_programs')
               .select('id, sport, month, year, start_date, end_date, structured_data, coach_id, coach:profiles(full_name)')
               .order('year', { ascending: false })
               .order('month', { ascending: false }).limit(5000) as any
@@ -351,66 +376,98 @@ export default function ReportsPage() {
             )
           }
         } else if (active === 'supplement') {
-          let q = supabase.from('supplement_requests')
-            .select('*, supplement:supplements(name, unit)')
-            .order('created_at', { ascending: false }).limit(5000)
-          if (filterStatus) q = q.eq('status', filterStatus)
-          if (filterFrom) q = q.gte('request_date', filterFrom)
-          if (filterTo) q = q.lte('request_date', filterTo)
-          const { data: rows, error } = await q
-          if (error) throw error
-          const statusMap: Record<string, string> = {
-            pending: 'Menunggu Semakan',
-            semakan_lulus: 'Menunggu Sokongan',
-            semakan_tolak: 'Ditolak (Penyelaras)',
-            approved: 'Diluluskan',
-            partial: 'Diluluskan Sebahagian',
-            rejected: 'Ditolak',
-          }
-          setData((rows ?? []).map(r => ({
-            'Tarikh Permohonan': r.request_date,
-            'Sukan': r.sport ?? '—',
-            'Suplemen': (r.supplement as any)?.name ?? '—',
-            'Kuantiti': r.quantity,
-            'Unit': (r.supplement as any)?.unit ?? '',
-            'Status': statusMap[r.status] ?? r.status,
-          })))
-        } else if (active === 'physio') {
-          const startDate = `${filterYear}-${String(filterMonth).padStart(2, '0')}-01`
-          const endDate = new Date(filterYear, filterMonth, 0).toISOString().slice(0, 10)
-          const { data: rows } = await (supabase
-            .from('physio_slots')
-            .select('athlete_id, slot_date, pain_scale, case_id, athlete:athletes(name, sport_id, sport:sport_id(name)), physio_case:physio_cases(referred_to_doctor)')
-            .gte('slot_date', startDate)
-            .lte('slot_date', endDate)
-            .not('athlete_id', 'is', null)
-            .order('slot_date', { ascending: true }).limit(5000) as any)
-
-          const grouped = new Map<string, Record<string, unknown>>()
-          ;(rows ?? []).forEach((s: any) => {
-            const athleteName = Array.isArray(s.athlete) ? s.athlete[0]?.name : s.athlete?.name
-            const athleteSport = Array.isArray(s.athlete) ? s.athlete[0]?.sport?.name : s.athlete?.sport?.name
-            const isReferred = Array.isArray(s.physio_case) ? s.physio_case[0]?.referred_to_doctor : s.physio_case?.referred_to_doctor
-            if (filterSport && athleteSport !== filterSport) return
-            if (!grouped.has(s.athlete_id)) {
-              grouped.set(s.athlete_id, {
-                'Nama Atlet': athleteName ?? '—',
-                'Sukan': athleteSport ?? '—',
-                'Bilangan Sesi': 0,
-                'Tarikh Sesi': '',
-                'Skala Kesakitan Terkini': '—',
-                'Dirujuk Doktor': isReferred ? 'Ya' : 'Tidak',
-              })
+          if (supplementMode === 'stok') {
+            const { data: rows, error } = await supabase.from('supplements').select('name, stock, unit, expiry_date').order('name')
+            if (error) throw error
+            setData((rows ?? []).map(r => ({
+              'Nama Suplemen': r.name,
+              'Stok Semasa': r.stock ?? 0,
+              'Unit': r.unit ?? '—',
+              'Tarikh Luput': r.expiry_date ?? '—',
+            })))
+          } else {
+            let q = supabase.from('supplement_requests')
+              .select('*, supplement:supplements(name, unit)')
+              .order('created_at', { ascending: false }).limit(5000)
+            if (filterStatus) q = q.eq('status', filterStatus)
+            if (filterFrom) q = q.gte('request_date', filterFrom)
+            if (filterTo) q = q.lte('request_date', filterTo)
+            const { data: rows, error } = await q
+            if (error) throw error
+            const statusMap: Record<string, string> = {
+              pending: 'Menunggu Semakan',
+              semakan_lulus: 'Menunggu Sokongan',
+              semakan_tolak: 'Ditolak (Penyelaras)',
+              approved: 'Diluluskan',
+              partial: 'Diluluskan Sebahagian',
+              rejected: 'Ditolak',
             }
-            const row = grouped.get(s.athlete_id)!
-            const count = (row['Bilangan Sesi'] as number) + 1
-            const dates = (row['Tarikh Sesi'] as string).split(', ').filter(Boolean)
-            if (!dates.includes(s.slot_date)) dates.push(s.slot_date)
-            row['Bilangan Sesi'] = count
-            row['Tarikh Sesi'] = dates.map(d => new Date(d + 'T00:00:00').toLocaleDateString('ms-MY', { day: '2-digit', month: 'short' })).join(', ')
-            if (s.pain_scale !== null) row['Skala Kesakitan Terkini'] = `${s.pain_scale} / 10`
-          })
-          setData([...grouped.values()].sort((a, b) => (a['Sukan'] as string).localeCompare(b['Sukan'] as string) || (a['Nama Atlet'] as string).localeCompare(b['Nama Atlet'] as string)))
+            setData((rows ?? []).map(r => ({
+              'Tarikh Permohonan': r.request_date,
+              'Sukan': r.sport ?? '—',
+              'Suplemen': (r.supplement as any)?.name ?? '—',
+              'Kuantiti': r.quantity,
+              'Unit': (r.supplement as any)?.unit ?? '',
+              'Status': statusMap[r.status] ?? r.status,
+            })))
+          }
+        } else if (active === 'physio') {
+          if (physioMode === 'terperinci') {
+            const { data: rows } = await (supabase
+              .from('physio_slots')
+              .select('slot_date, diagnosis, chief_complaint, injury_type, session_type, treatment_type, target_muscle, pain_scale, duration_minutes, assessment_notes, rehab_plan, progress_notes, referred_by, date_of_injury, athlete_id, athlete:athletes(name, sport_id, sport:sport_id(name)), physio_case:physio_cases(status)')
+              .not('athlete_id', 'is', null)
+              .order('slot_date', { ascending: false }).limit(5000) as any)
+            setData((rows ?? [])
+              .filter((s: any) => !filterSport || (Array.isArray(s.athlete) ? s.athlete[0]?.sport?.name : s.athlete?.sport?.name) === filterSport)
+              .map((s: any) => ({
+                'Nama Atlet': (Array.isArray(s.athlete) ? s.athlete[0]?.name : s.athlete?.name) ?? '—',
+                'Sukan': (Array.isArray(s.athlete) ? s.athlete[0]?.sport?.name : s.athlete?.sport?.name) ?? '—',
+                'Tarikh Sesi': s.slot_date,
+                'Diagnosis': s.diagnosis ?? '—',
+                'Aduan Utama': s.chief_complaint ?? '—',
+                'Jenis Kecederaan': s.injury_type ?? '—',
+                'Jenis Sesi': s.session_type ?? '—',
+                'Jenis Rawatan': s.treatment_type ?? '—',
+                'Otot Sasaran': s.target_muscle ?? '—',
+                'Skala Kesakitan': s.pain_scale !== null ? `${s.pain_scale} / 10` : '—',
+                'Tempoh (min)': s.duration_minutes ?? '—',
+                'Dirujuk Oleh': s.referred_by ?? '—',
+                'Tarikh Kecederaan': s.date_of_injury ?? '—',
+                'Status Kes': (Array.isArray(s.physio_case) ? s.physio_case[0]?.status : s.physio_case?.status) ?? '—',
+                'Catatan Penilaian': s.assessment_notes ?? '—',
+                'Pelan Pemulihan': s.rehab_plan ?? '—',
+                'Catatan Kemajuan': s.progress_notes ?? '—',
+              }))
+            )
+          } else {
+            const startDate = `${filterYear}-${String(filterMonth).padStart(2, '0')}-01`
+            const endDate = new Date(filterYear, filterMonth, 0).toISOString().slice(0, 10)
+            const { data: rows } = await (supabase
+              .from('physio_slots')
+              .select('athlete_id, slot_date, pain_scale, case_id, athlete:athletes(name, sport_id, sport:sport_id(name)), physio_case:physio_cases(referred_to_doctor)')
+              .gte('slot_date', startDate)
+              .lte('slot_date', endDate)
+              .not('athlete_id', 'is', null)
+              .order('slot_date', { ascending: true }).limit(5000) as any)
+            const grouped = new Map<string, Record<string, unknown>>()
+            ;(rows ?? []).forEach((s: any) => {
+              const athleteName = Array.isArray(s.athlete) ? s.athlete[0]?.name : s.athlete?.name
+              const athleteSport = Array.isArray(s.athlete) ? s.athlete[0]?.sport?.name : s.athlete?.sport?.name
+              const isReferred = Array.isArray(s.physio_case) ? s.physio_case[0]?.referred_to_doctor : s.physio_case?.referred_to_doctor
+              if (filterSport && athleteSport !== filterSport) return
+              if (!grouped.has(s.athlete_id)) {
+                grouped.set(s.athlete_id, { 'Nama Atlet': athleteName ?? '—', 'Sukan': athleteSport ?? '—', 'Bilangan Sesi': 0, 'Tarikh Sesi': '', 'Skala Kesakitan Terkini': '—', 'Dirujuk Doktor': isReferred ? 'Ya' : 'Tidak' })
+              }
+              const row = grouped.get(s.athlete_id)!
+              row['Bilangan Sesi'] = (row['Bilangan Sesi'] as number) + 1
+              const dates = (row['Tarikh Sesi'] as string).split(', ').filter(Boolean)
+              if (!dates.includes(s.slot_date)) dates.push(s.slot_date)
+              row['Tarikh Sesi'] = dates.map(d => new Date(d + 'T00:00:00').toLocaleDateString('ms-MY', { day: '2-digit', month: 'short' })).join(', ')
+              if (s.pain_scale !== null) row['Skala Kesakitan Terkini'] = `${s.pain_scale} / 10`
+            })
+            setData([...grouped.values()].sort((a, b) => (a['Sukan'] as string).localeCompare(b['Sukan'] as string) || (a['Nama Atlet'] as string).localeCompare(b['Nama Atlet'] as string)))
+          }
         } else if (active === 'psychology') {
           let q = supabase
             .from('psychology_ratings')
@@ -453,7 +510,7 @@ export default function ReportsPage() {
       }
     }
     autoGenerate()
-  }, [active, latihkanMode])
+  }, [active, latihkanMode, supplementMode, physioMode])
 
   function resetFilters() {
     setFilterFrom('')
@@ -472,6 +529,8 @@ export default function ReportsPage() {
     setShowColumnPicker(false)
     setPhysioMode('ringkasan')
     setLatihkanMode('kehadiran')
+    setSupplementMode('permohonan')
+    setDateColumnFilters({})
     setColumnFilters({})
     setOpenDropdowns({})
     setDropdownSearches({})
@@ -571,29 +630,36 @@ export default function ReportsPage() {
             }))
           )
         } else if (latihkanMode === 'jadual') {
-          // Coach schedules
           const { data: schedules, error } = await supabase
             .from('coach_schedules')
-            .select('id, coach_id, sport, schedule_name, valid_from, coach:profiles(full_name), slots:coach_schedule_slots(id)')
+            .select('id, sport, repeats, repeat_pattern, coach:profiles(full_name), slots:coach_schedule_slots(slot_date, start_time, end_time)')
             .order('valid_from', { ascending: false }).limit(5000) as any
-          if (error) {
-            console.error('Coach schedules error:', error)
-            throw error
-          }
-          setData((schedules ?? [])
-            .filter((s: any) => !filterSport || s.sport === filterSport)
-            .map((s: any) => ({
+          if (error) throw error
+          const repeatPatternMap: Record<string, string> = { weekly: 'Mingguan', 'bi-weekly': 'Dua Minggu Sekali', custom: 'Kustom' }
+          const rows: Record<string, unknown>[] = []
+          for (const s of (schedules ?? [])) {
+            if (filterSport && s.sport !== filterSport) continue
+            const slots = ((s.slots ?? []) as any[]).sort((a: any, b: any) => a.slot_date.localeCompare(b.slot_date))
+            const base = {
               'Jadual': s.schedule_name,
               'Sukan': s.sport ?? '—',
-              'Jurulatih': (s.coach as any)?.full_name ?? '—',
+              'Jurulatih': s.coach?.full_name ?? '—',
               'Bermula': s.valid_from,
-              'Bilangan Slot': (s.slots?.length ?? 0),
-            }))
-          )
+              'Berulang': s.repeats ? 'Ya' : 'Tidak',
+              'Corak Ulangan': repeatPatternMap[s.repeat_pattern] ?? '—',
+              'Sehingga': s.repeat_until ?? '—',
+            }
+            if (slots.length === 0) {
+              rows.push({ ...base, 'Tarikh Sesi': '—', 'Masa Mula': '—', 'Masa Tamat': '—' })
+            } else {
+              slots.forEach((slot: any) => rows.push({ ...base, 'Tarikh Sesi': slot.slot_date, 'Masa Mula': slot.start_time, 'Masa Tamat': slot.end_time }))
+            }
+          }
+          setData(rows)
         } else if (latihkanMode === 'program') {
           // Training programs
           const { data: programs, error } = await supabase
-            .from('strength_conditioning_programs')
+            .from('sc_programs')
             .select('id, sport, month, year, start_date, end_date, structured_data, coach_id, coach:profiles(full_name)')
             .order('year', { ascending: false })
             .order('month', { ascending: false }).limit(5000) as any
@@ -620,74 +686,71 @@ export default function ReportsPage() {
           )
         }
       } else if (active === 'supplement') {
-        let q = supabase.from('supplement_requests')
-          .select('*, supplement:supplements(name, unit)')
-          .order('created_at', { ascending: false }).limit(5000)
-        if (filterStatus) q = q.eq('status', filterStatus)
-        if (filterFrom) q = q.gte('request_date', filterFrom)
-        if (filterTo) q = q.lte('request_date', filterTo)
-        const { data: rows, error } = await q
-        if (error) {
-          console.error('Supplement report error:', error)
-          throw error
+        if (supplementMode === 'stok') {
+          const { data: rows, error } = await supabase.from('supplements').select('name, stock, unit, expiry_date').order('name')
+          if (error) throw error
+          setData((rows ?? []).map(r => ({
+            'Nama Suplemen': r.name,
+            'Stok Semasa': r.stock ?? 0,
+            'Unit': r.unit ?? '—',
+            'Tarikh Luput': r.expiry_date ?? '—',
+          })))
+        } else {
+          let q = supabase.from('supplement_requests')
+            .select('*, supplement:supplements(name, unit)')
+            .order('created_at', { ascending: false }).limit(5000)
+          if (filterStatus) q = q.eq('status', filterStatus)
+          if (filterFrom) q = q.gte('request_date', filterFrom)
+          if (filterTo) q = q.lte('request_date', filterTo)
+          const { data: rows, error } = await q
+          if (error) throw error
+          const statusMap: Record<string, string> = {
+            pending: 'Menunggu Semakan',
+            semakan_lulus: 'Menunggu Sokongan',
+            semakan_tolak: 'Ditolak (Penyelaras)',
+            approved: 'Diluluskan',
+            partial: 'Diluluskan Sebahagian',
+            rejected: 'Ditolak',
+          }
+          setData((rows ?? []).map(r => ({
+            'Tarikh Permohonan': r.request_date,
+            'Sukan': r.sport ?? '—',
+            'Suplemen': (r.supplement as any)?.name ?? '—',
+            'Kuantiti': r.quantity,
+            'Unit': (r.supplement as any)?.unit ?? '',
+            'Status': statusMap[r.status] ?? r.status,
+          })))
         }
-        console.log('Supplement requests fetched:', rows?.length ?? 0, 'records')
-        const statusMap: Record<string, string> = {
-          pending: 'Menunggu Semakan',
-          semakan_lulus: 'Menunggu Sokongan',
-          semakan_tolak: 'Ditolak (Penyelaras)',
-          approved: 'Diluluskan',
-          partial: 'Diluluskan Sebahagian',
-          rejected: 'Ditolak',
-        }
-        setData((rows ?? []).map(r => ({
-          'Tarikh Permohonan': r.request_date,
-          'Sukan': r.sport ?? '—',
-          'Suplemen': (r.supplement as any)?.name ?? '—',
-          'Kuantiti': r.quantity,
-          'Unit': (r.supplement as any)?.unit ?? '',
-          'Status': statusMap[r.status] ?? r.status,
-        })))
       } else if (active === 'physio') {
         if (physioMode === 'terperinci') {
-          // Detail mode: per-session clinical data
-          const startDate = filterFrom || `${filterYear}-${String(filterMonth).padStart(2, '0')}-01`
-          const endDate = filterTo || new Date(filterYear, filterMonth, 0).toISOString().slice(0, 10)
           const { data: rows } = await (supabase
             .from('physio_slots')
-            .select(`slot_date, diagnosis, chief_complaint, treatment_type, pain_scale, referred_by, date_of_injury, attendance_status, athlete_id, athlete:athletes(name, sport_id, sport:sport_id(name)), physio_case:physio_cases(referred_to_doctor, referred_date, status)`)
-            .gte('slot_date', startDate)
-            .lte('slot_date', endDate)
+            .select('slot_date, diagnosis, chief_complaint, injury_type, session_type, treatment_type, target_muscle, pain_scale, duration_minutes, assessment_notes, rehab_plan, progress_notes, referred_by, date_of_injury, athlete_id, athlete:athletes(name, sport_id, sport:sport_id(name)), physio_case:physio_cases(status)')
             .not('athlete_id', 'is', null)
-            .order('slot_date', { ascending: true }).limit(5000) as any)
-
-          const grouped = new Map<string, Record<string, unknown>>()
-          ;(rows ?? []).forEach((s: any) => {
-            const athleteName = Array.isArray(s.athlete) ? s.athlete[0]?.name : s.athlete?.name
-            const athleteSport = Array.isArray(s.athlete) ? s.athlete[0]?.sport?.name : s.athlete?.sport?.name
-            if (filterSport && athleteSport !== filterSport) return
-            const key = `${s.athlete_id}`
-            if (!grouped.has(key)) {
-              grouped.set(key, {
-                'Nama': athleteName ?? '—',
-                'Sukan': athleteSport ?? '—',
-                'Diagnosis': s.diagnosis ?? '—',
-                'Aduan Utama': s.chief_complaint ?? '—',
-                'Tarikh Rawatan': '',
-                'Dirujuk Oleh': s.referred_by ?? '—',
-                'Tarikh Kecederaan': s.date_of_injury ?? '—',
-                'Skala Kesakitan': s.pain_scale ?? '—',
-                'Status Kes': (Array.isArray(s.physio_case) ? s.physio_case[0]?.status : s.physio_case?.status) ?? '—',
-              })
-            }
-            const row = grouped.get(key)!
-            const dates = (row['Tarikh Rawatan'] as string).split(', ').filter(Boolean)
-            if (!dates.includes(s.slot_date)) dates.push(s.slot_date)
-            row['Tarikh Rawatan'] = dates.map(d => new Date(d + 'T00:00:00').toLocaleDateString('ms-MY', { day: '2-digit', month: 'short' })).join(', ')
-          })
-          setData([...grouped.values()].sort((a, b) => (a['Sukan'] as string).localeCompare(b['Sukan'] as string) || (a['Nama'] as string).localeCompare(b['Nama'] as string)))
+            .order('slot_date', { ascending: false }).limit(5000) as any)
+          setData((rows ?? [])
+            .filter((s: any) => !filterSport || (Array.isArray(s.athlete) ? s.athlete[0]?.sport?.name : s.athlete?.sport?.name) === filterSport)
+            .map((s: any) => ({
+              'Nama Atlet': (Array.isArray(s.athlete) ? s.athlete[0]?.name : s.athlete?.name) ?? '—',
+              'Sukan': (Array.isArray(s.athlete) ? s.athlete[0]?.sport?.name : s.athlete?.sport?.name) ?? '—',
+              'Tarikh Sesi': s.slot_date,
+              'Diagnosis': s.diagnosis ?? '—',
+              'Aduan Utama': s.chief_complaint ?? '—',
+              'Jenis Kecederaan': s.injury_type ?? '—',
+              'Jenis Sesi': s.session_type ?? '—',
+              'Jenis Rawatan': s.treatment_type ?? '—',
+              'Otot Sasaran': s.target_muscle ?? '—',
+              'Skala Kesakitan': s.pain_scale !== null ? `${s.pain_scale} / 10` : '—',
+              'Tempoh (min)': s.duration_minutes ?? '—',
+              'Dirujuk Oleh': s.referred_by ?? '—',
+              'Tarikh Kecederaan': s.date_of_injury ?? '—',
+              'Status Kes': (Array.isArray(s.physio_case) ? s.physio_case[0]?.status : s.physio_case?.status) ?? '—',
+              'Catatan Penilaian': s.assessment_notes ?? '—',
+              'Pelan Pemulihan': s.rehab_plan ?? '—',
+              'Catatan Kemajuan': s.progress_notes ?? '—',
+            }))
+          )
         } else {
-          // Summary mode: monthly by athlete (original)
           const startDate = `${filterYear}-${String(filterMonth).padStart(2, '0')}-01`
           const endDate = new Date(filterYear, filterMonth, 0).toISOString().slice(0, 10)
           const { data: rows } = await (supabase
@@ -697,7 +760,6 @@ export default function ReportsPage() {
             .lte('slot_date', endDate)
             .not('athlete_id', 'is', null)
             .order('slot_date', { ascending: true }).limit(5000) as any)
-
           const grouped = new Map<string, Record<string, unknown>>()
           ;(rows ?? []).forEach((s: any) => {
             const athleteName = Array.isArray(s.athlete) ? s.athlete[0]?.name : s.athlete?.name
@@ -705,20 +767,12 @@ export default function ReportsPage() {
             const isReferred = Array.isArray(s.physio_case) ? s.physio_case[0]?.referred_to_doctor : s.physio_case?.referred_to_doctor
             if (filterSport && athleteSport !== filterSport) return
             if (!grouped.has(s.athlete_id)) {
-              grouped.set(s.athlete_id, {
-                'Nama Atlet': athleteName ?? '—',
-                'Sukan': athleteSport ?? '—',
-                'Bilangan Sesi': 0,
-                'Tarikh Sesi': '',
-                'Skala Kesakitan Terkini': '—',
-                'Dirujuk Doktor': isReferred ? 'Ya' : 'Tidak',
-              })
+              grouped.set(s.athlete_id, { 'Nama Atlet': athleteName ?? '—', 'Sukan': athleteSport ?? '—', 'Bilangan Sesi': 0, 'Tarikh Sesi': '', 'Skala Kesakitan Terkini': '—', 'Dirujuk Doktor': isReferred ? 'Ya' : 'Tidak' })
             }
             const row = grouped.get(s.athlete_id)!
-            const count = (row['Bilangan Sesi'] as number) + 1
+            row['Bilangan Sesi'] = (row['Bilangan Sesi'] as number) + 1
             const dates = (row['Tarikh Sesi'] as string).split(', ').filter(Boolean)
             if (!dates.includes(s.slot_date)) dates.push(s.slot_date)
-            row['Bilangan Sesi'] = count
             row['Tarikh Sesi'] = dates.map(d => new Date(d + 'T00:00:00').toLocaleDateString('ms-MY', { day: '2-digit', month: 'short' })).join(', ')
             if (s.pain_scale !== null) row['Skala Kesakitan Terkini'] = `${s.pain_scale} / 10`
           })
@@ -772,6 +826,19 @@ export default function ReportsPage() {
   const displayData = useMemo(() => {
     let d = data
 
+    // Apply date column filters
+    const activeDateFilters = Object.entries(dateColumnFilters).filter(([, v]) => v.from || v.to)
+    if (activeDateFilters.length > 0) {
+      d = d.filter(row =>
+        activeDateFilters.every(([col, { from, to }]) => {
+          const val = String(row[col] ?? '')
+          if (!val || val === '—') return true
+          const effectiveTo = to || from
+          return val >= from && val <= effectiveTo
+        })
+      )
+    }
+
     // Apply column filters
     if (Object.keys(columnFilters).length > 0) {
       d = d.filter(row => {
@@ -780,10 +847,8 @@ export default function ReportsPage() {
           const val = String(row[col] ?? '').toLowerCase()
 
           if (Array.isArray(filterVal)) {
-            // Multi-value filter (e.g., multiple status values)
             return filterVal.some(f => val.includes(f.toLowerCase()))
           } else {
-            // Single value filter
             return val.includes(String(filterVal).toLowerCase())
           }
         })
@@ -807,7 +872,7 @@ export default function ReportsPage() {
       })
     }
     return d
-  }, [data, previewSearch, sortCol, sortDir, columnFilters])
+  }, [data, previewSearch, sortCol, sortDir, columnFilters, dateColumnFilters])
 
   const config = REPORTS.find(r => r.key === active)!
   const columns = useMemo(() => {
@@ -896,6 +961,15 @@ export default function ReportsPage() {
               </div>
             )}
 
+            {active === 'supplement' && (
+              <div>
+                <select value={supplementMode} onChange={e => { setSupplementMode(e.target.value as SupplementMode); setData([]); setGenerated(false) }} className={inputCls}>
+                  <option value="permohonan">Permohonan Suplemen</option>
+                  <option value="stok">Stok Suplemen</option>
+                </select>
+              </div>
+            )}
+
             <div className="flex gap-3 flex-wrap">
               <button onClick={generate} disabled={loading} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
                 {loading ? 'Menjana...' : 'Jana Laporan'}
@@ -944,7 +1018,44 @@ export default function ReportsPage() {
                   </div>
                 )}
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                  {columns.filter(col => visibleColumns[col] !== false).map(col => {
+                  {columns.filter(col => visibleColumns[col] !== false).sort((a, b) => {
+                    const aIsDate = /tarikh/i.test(a)
+                    const bIsDate = /tarikh/i.test(b)
+                    return aIsDate === bIsDate ? 0 : aIsDate ? 1 : -1
+                  }).map(col => {
+                    const isDateCol = /tarikh/i.test(col)
+
+                    if (isDateCol) {
+                      const { from = '', to = '' } = dateColumnFilters[col] || {}
+                      return (
+                        <div key={col} className="col-span-2">
+                          <label className="block text-[10px] font-bold uppercase tracking-widest text-[#888] mb-1">{col}</label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="date"
+                              value={from}
+                              onChange={e => setDateColumnFilters({ ...dateColumnFilters, [col]: { from: e.target.value, to } })}
+                              className="bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2 text-sm text-[#111] outline-none focus:border-[#F56A00] focus:bg-white"
+                            />
+                            <span className="text-xs text-[#999]">—</span>
+                            <input
+                              type="date"
+                              value={to}
+                              placeholder="Hingga"
+                              onChange={e => setDateColumnFilters({ ...dateColumnFilters, [col]: { from, to: e.target.value } })}
+                              className="bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2 text-sm text-[#111] outline-none focus:border-[#F56A00] focus:bg-white"
+                            />
+                            {(from || to) && (
+                              <button
+                                onClick={() => setDateColumnFilters({ ...dateColumnFilters, [col]: { from: '', to: '' } })}
+                                className="text-xs text-[#999] hover:text-[#F56A00] transition"
+                              >✕</button>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    }
+
                     const filterValue = columnFilters[col] || ''
                     const uniqueValues = [...new Set(data.map(r => String(r[col] ?? '').trim()).filter(Boolean))].sort()
                     const isOpen = openDropdowns[col] || false
@@ -1016,9 +1127,9 @@ export default function ReportsPage() {
                     )
                   })}
                 </div>
-                {Object.values(columnFilters).some(v => v !== '' && v.length > 0) && (
+                {(Object.values(columnFilters).some(v => v !== '' && v.length > 0) || Object.values(dateColumnFilters).some(v => v.from || v.to)) && (
                   <button
-                    onClick={() => setColumnFilters({})}
+                    onClick={() => { setColumnFilters({}); setDateColumnFilters({}) }}
                     className="text-xs text-[#F56A00] hover:underline font-semibold"
                   >
                     Kosongkan Penapis Lajur

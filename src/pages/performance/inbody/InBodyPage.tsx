@@ -1,7 +1,6 @@
 import { useEffect, useState, useRef, useMemo, Fragment } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { jsPDF } from 'jspdf'
-import html2canvas from 'html2canvas'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
 import { usePermissions } from '../../../hooks/usePermissions'
@@ -372,35 +371,220 @@ export default function InBodyPage() {
     }
   }
 
-  async function handlePrint() {
-    if (!profilRef.current) return
-    try {
-      const canvas = await html2canvas(profilRef.current, {
-        scale: 3,
-        backgroundColor: '#ffffff',
-        allowTaint: true,
-      })
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-      const imgData = canvas.toDataURL('image/png')
-      const pdfWidth = pdf.internal.pageSize.getWidth()
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width
-      let heightLeft = pdfHeight
-      let position = 0
+  function handlePrint() {
+    if (!latestRecord || !profilAthlete) return
+    const athlete = athletes.find(a => a.id === profilAthlete)
+    if (!athlete) return
 
-      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight)
-      heightLeft -= pdf.internal.pageSize.getHeight()
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+    const PW = pdf.internal.pageSize.getWidth()
+    const PH = pdf.internal.pageSize.getHeight()
+    const M = 14
+    const CW = PW - M * 2
+    let y = M
 
-      while (heightLeft >= 0) {
-        position = heightLeft - pdfHeight
-        pdf.addPage()
-        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight)
-        heightLeft -= pdf.internal.pageSize.getHeight()
-      }
-
-      pdf.save(`Profil_InBody_${new Date().toISOString().split('T')[0]}.pdf`)
-    } catch (err) {
-      console.error('PDF generation failed:', err)
+    const checkPage = (needed: number) => {
+      if (y + needed > PH - M) { pdf.addPage(); y = M }
     }
+
+    function normPdfColors(style: string): { fill: [number,number,number]; text: [number,number,number] } {
+      if (style.includes('green')) return { fill: [220, 252, 231], text: [22, 163, 74] }
+      if (style.includes('F56A00') || style.includes('rgba(245')) return { fill: [255, 237, 213], text: [245, 106, 0] }
+      if (style.includes('red')) return { fill: [254, 226, 226], text: [220, 38, 38] }
+      return { fill: [229, 231, 235], text: [136, 136, 136] }
+    }
+
+    // HEADER
+    pdf.setFontSize(8); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(245, 106, 0)
+    pdf.text('LAPORAN PROFIL INBODY', M, y)
+    y += 7
+    pdf.setFontSize(18); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(17, 17, 17)
+    pdf.text(athlete.name, M, y)
+    y += 7
+    pdf.setFontSize(10); pdf.setFont('helvetica', 'normal'); pdf.setTextColor(136, 136, 136)
+    const hDate = new Date().toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric' })
+    pdf.text(`${athlete.sport?.name || ''}   ${hDate}`, M, y)
+    y += 5
+    pdf.setDrawColor(220, 220, 220); pdf.setLineWidth(0.4); pdf.line(M, y, PW - M, y)
+    y += 9
+
+    // 4 METRIC CARDS
+    const cardW = (CW - 9) / 4
+    const cardH = 18
+    const metricCards = [
+      { label: 'Berat Badan',      val: n(latestRecord.weight, ' kg'), rgb: [17, 17, 17]   as [number,number,number] },
+      { label: 'Jisim Otot (SMM)', val: n(latestRecord.smm, ' kg'),   rgb: [245, 106, 0]  as [number,number,number] },
+      { label: 'BMI',              val: n(latestRecord.bmi),           rgb: [58, 126, 200] as [number,number,number] },
+      { label: 'Lemak Badan',      val: n(latestRecord.fat_pct, '%'),  rgb: [212, 64, 64]  as [number,number,number] },
+    ]
+    metricCards.forEach(({ label, val, rgb }, i) => {
+      const cx = M + i * (cardW + 3)
+      pdf.setDrawColor(229, 231, 235); pdf.setLineWidth(0.3); pdf.roundedRect(cx, y, cardW, cardH, 1.5, 1.5)
+      pdf.setFillColor(245, 106, 0); pdf.rect(cx, y, cardW, 1.5, 'F')
+      pdf.setFontSize(6.5); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(136, 136, 136)
+      pdf.text(label.toUpperCase(), cx + 3, y + 7)
+      pdf.setFontSize(13); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(rgb[0], rgb[1], rgb[2])
+      pdf.text(val, cx + 3, y + 15.5)
+    })
+    y += cardH + 8
+
+    // BODY COMPOSITION CHART (left) + INBODY SCORE (right)
+    const halfW = (CW - 5) / 2
+    const PANEL_H = 78
+
+    // Left: stacked bar chart
+    pdf.setDrawColor(229, 231, 235); pdf.setLineWidth(0.3); pdf.roundedRect(M, y, halfW, PANEL_H, 2, 2)
+    pdf.setFillColor(249, 250, 251); pdf.rect(M + 0.3, y + 0.3, halfW - 0.6, 9, 'F')
+    pdf.setDrawColor(229, 231, 235); pdf.line(M, y + 9, M + halfW, y + 9)
+    pdf.setFontSize(7.5); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(136, 136, 136)
+    pdf.text('KOMPOSISI BADAN (TREND)', M + 3, y + 6.5)
+    const legY = y + 13
+    pdf.setFillColor(245, 106, 0); pdf.rect(M + 3, legY - 2.5, 5, 3, 'F')
+    pdf.setFontSize(7); pdf.setFont('helvetica', 'normal'); pdf.setTextColor(68, 68, 68)
+    pdf.text('Jisim Otot', M + 9.5, legY)
+    pdf.setFillColor(255, 179, 167); pdf.rect(M + 30, legY - 2.5, 5, 3, 'F')
+    pdf.text('Lemak Badan', M + 36.5, legY)
+    const barAreaX = M + 5, barAreaY = y + 18, barAreaW = halfW - 10, barAreaH = PANEL_H - 30, baseY = barAreaY + barAreaH
+    const maxBarVal = Math.max(...chartData.map(d => (d.smm ?? 0) + (d.fatMass ?? 0))) * 1.1 || 1
+    const slotW = barAreaW / Math.max(chartData.length, 1)
+    const barW2 = Math.min(slotW - 4, 12)
+    chartData.forEach((d, idx) => {
+      const sH = ((d.smm ?? 0) / maxBarVal) * barAreaH
+      const fH = ((d.fatMass ?? 0) / maxBarVal) * barAreaH
+      const bx = barAreaX + idx * slotW + (slotW - barW2) / 2
+      pdf.setFillColor(245, 106, 0); pdf.rect(bx, baseY - sH, barW2, Math.max(sH, 0.5), 'F')
+      pdf.setFillColor(255, 179, 167); pdf.rect(bx, baseY - sH - fH, barW2, Math.max(fH, 0.5), 'F')
+      pdf.setFontSize(6); pdf.setFont('helvetica', 'normal'); pdf.setTextColor(136, 136, 136)
+      pdf.text(d.date, bx + barW2 / 2, baseY + 5, { align: 'center' })
+    })
+
+    // Right: InBody score + SUKMA norms
+    const rx = M + halfW + 5
+    pdf.setDrawColor(229, 231, 235); pdf.setLineWidth(0.3); pdf.roundedRect(rx, y, halfW, PANEL_H, 2, 2)
+    let sy = y + 6
+    pdf.setFontSize(7.5); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(136, 136, 136)
+    pdf.text('SKOR INBODY', rx + 3, sy); sy += 7
+    const score = latestRecord.inbody_score ?? null
+    const sRGB: [number,number,number] = score == null ? [136,136,136] : score >= 80 ? [58,158,106] : score >= 60 ? [245,106,0] : [212,64,64]
+    pdf.setFontSize(22); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(sRGB[0], sRGB[1], sRGB[2])
+    pdf.text(score != null ? String(score) : '-', rx + 3, sy)
+    const snw = pdf.getTextWidth(score != null ? String(score) : '-')
+    pdf.setFontSize(9); pdf.setFont('helvetica', 'normal'); pdf.setTextColor(136, 136, 136)
+    pdf.text('/ 100', rx + 4 + snw, sy); sy += 5
+    const sbX = rx + 3, sbW = halfW - 6, sbH = 3.5
+    pdf.setFillColor(212, 64, 64);  pdf.rect(sbX,                sy, sbW * 0.4, sbH, 'F')
+    pdf.setFillColor(245, 106, 0);  pdf.rect(sbX + sbW * 0.4,   sy, sbW * 0.3, sbH, 'F')
+    pdf.setFillColor(58, 158, 106); pdf.rect(sbX + sbW * 0.7,   sy, sbW * 0.3, sbH, 'F')
+    if (score != null) {
+      const dotX = sbX + (score / 100) * sbW
+      pdf.setFillColor(255, 255, 255); pdf.circle(dotX, sy + sbH / 2, 2, 'F')
+      pdf.setDrawColor(17, 17, 17); pdf.setLineWidth(0.5); pdf.circle(dotX, sy + sbH / 2, 2, 'S')
+    }
+    sy += sbH + 2.5
+    pdf.setFontSize(6.5); pdf.setFont('helvetica', 'normal'); pdf.setTextColor(136, 136, 136)
+    pdf.text('0 Lemah', sbX, sy)
+    pdf.text('40 Sederhana', sbX + sbW * 0.4, sy, { align: 'center' })
+    pdf.text('Baik 100', sbX + sbW, sy, { align: 'right' })
+    sy += 7
+    pdf.setFontSize(7.5); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(136, 136, 136)
+    pdf.text('PIAWAIAN SUKMA', rx + 3, sy); sy += 5.5
+    const sukmaRows: [string, NormResult, string][] = [
+      ['SMM',               sukmaSMM(latestRecord.smm),              n(latestRecord.smm, ' kg')],
+      ['Lemak Badan (kg)',  sukmaFatMass(latestRecord.body_fat_mass), n(latestRecord.body_fat_mass, ' kg')],
+      ['BMI',               sukmaBMI(latestRecord.bmi),              n(latestRecord.bmi)],
+      ['Lemak Badan %',     sukmaFat(latestRecord.fat_pct),          n(latestRecord.fat_pct, '%')],
+      ['Skor InBody',       sukmaScore(latestRecord.inbody_score ?? null), n(latestRecord.inbody_score, '', 0)],
+    ]
+    const badgeW = 22
+    sukmaRows.forEach(([metric, norm, val]) => {
+      const { fill, text } = normPdfColors(norm.style)
+      pdf.setFontSize(8.5); pdf.setFont('helvetica', 'normal'); pdf.setTextColor(68, 68, 68)
+      pdf.text(metric, rx + 3, sy)
+      pdf.setTextColor(136, 136, 136)
+      pdf.text(val, rx + halfW - badgeW - 4, sy, { align: 'right' })
+      const bx = rx + halfW - badgeW - 1
+      pdf.setFillColor(fill[0], fill[1], fill[2]); pdf.roundedRect(bx, sy - 3.5, badgeW, 5, 1.2, 1.2, 'F')
+      pdf.setFontSize(6.5); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(text[0], text[1], text[2])
+      pdf.text(norm.label, bx + badgeW / 2, sy - 0.3, { align: 'center' })
+      sy += 6.5
+    })
+
+    y += PANEL_H + 8
+    checkPage(28)
+
+    // LATEST RECORD DETAILS
+    pdf.setFontSize(8); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(136, 136, 136)
+    pdf.text('REKOD TERKINI', M, y)
+    const rDateStr = new Date(latestRecord.recorded_date + 'T00:00:00').toLocaleDateString('ms-MY', { day: '2-digit', month: 'long', year: 'numeric' })
+    pdf.setFont('helvetica', 'normal'); pdf.setTextColor(17, 17, 17)
+    pdf.text(`  -  ${rDateStr}`, M + pdf.getTextWidth('REKOD TERKINI'), y)
+    y += 5
+    const detailItems: [string, string][] = [
+      ['Berat Badan', n(latestRecord.weight, ' kg')],
+      ['Jisim Otot (SMM)', n(latestRecord.smm, ' kg')],
+      ['Lemak Badan (kg)', n(latestRecord.body_fat_mass, ' kg')],
+      ['BMI', n(latestRecord.bmi)],
+      ['% Lemak', n(latestRecord.fat_pct, '%')],
+      ['BMR', n(latestRecord.bmr, ' kcal', 0)],
+      ['Skor InBody', n(latestRecord.inbody_score, '', 0)],
+      ['Skor SUKMA', latestSkor != null ? `${latestSkor}/5 - ${latestUlasan}` : '-'],
+    ]
+    const dCols = 4, dW = (CW - (dCols - 1) * 3) / dCols, dH = 13
+    detailItems.forEach(([label, val], i) => {
+      const dx = M + (i % dCols) * (dW + 3), dy = y + Math.floor(i / dCols) * (dH + 2)
+      pdf.setFillColor(245, 245, 247); pdf.roundedRect(dx, dy, dW, dH, 1.5, 1.5, 'F')
+      pdf.setFontSize(7); pdf.setFont('helvetica', 'normal'); pdf.setTextColor(136, 136, 136)
+      pdf.text(label, dx + 3, dy + 5.5)
+      pdf.setFontSize(10); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(17, 17, 17)
+      pdf.text(val, dx + 3, dy + 11)
+    })
+    y += Math.ceil(detailItems.length / dCols) * (dH + 2) + 8
+    checkPage(25)
+
+    // HISTORY TABLE
+    pdf.setFontSize(8); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(136, 136, 136)
+    pdf.text('SEJARAH REKOD', M, y); y += 5
+    const hCols = [
+      { label: 'Tarikh',      w: CW * 0.18 },
+      { label: 'Berat (kg)',  w: CW * 0.13 },
+      { label: 'BMI',         w: CW * 0.11 },
+      { label: 'Lemak %',     w: CW * 0.12 },
+      { label: 'SMM (kg)',    w: CW * 0.13 },
+      { label: 'Skor InBody', w: CW * 0.16 },
+      { label: 'Skor SUKMA',  w: CW * 0.17 },
+    ]
+    const hX: number[] = [M]
+    for (let i = 0; i < hCols.length - 1; i++) hX.push(hX[i] + hCols[i].w)
+    pdf.setFillColor(249, 250, 251); pdf.rect(M, y, CW, 6, 'F')
+    pdf.setDrawColor(229, 231, 235); pdf.setLineWidth(0.3); pdf.line(M, y + 6, M + CW, y + 6)
+    pdf.setFontSize(7); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(85, 85, 85)
+    hCols.forEach((col, i) => pdf.text(col.label, i === 0 ? hX[i] + 2 : hX[i] + col.w - 2, y + 4.5, { align: i === 0 ? 'left' : 'right' }))
+    y += 6
+    const HROW = 9
+    ;[...profilRecords].reverse().forEach(r => {
+      checkPage(HROW + 2)
+      const rS = computeSkor(r), rU = computeUlasan(rS)
+      pdf.setFontSize(8.5); pdf.setFont('helvetica', 'normal'); pdf.setTextColor(68, 68, 68)
+      pdf.text(fmtDate(r.recorded_date), hX[0] + 2, y + 6)
+      pdf.text(n(r.weight), hX[1] + hCols[1].w - 2, y + 6, { align: 'right' })
+      pdf.text(n(r.bmi), hX[2] + hCols[2].w - 2, y + 6, { align: 'right' })
+      pdf.text(n(r.fat_pct, '%'), hX[3] + hCols[3].w - 2, y + 6, { align: 'right' })
+      pdf.text(n(r.smm, ' kg'), hX[4] + hCols[4].w - 2, y + 6, { align: 'right' })
+      if (r.inbody_score != null) {
+        const sb = scoreBadge(r.inbody_score)
+        const sr: [number,number,number] = sb.style.includes('green') ? [58,158,106] : sb.style.includes('F56A00') ? [245,106,0] : [212,64,64]
+        pdf.setFont('helvetica', 'bold'); pdf.setTextColor(sr[0], sr[1], sr[2])
+        pdf.text(String(r.inbody_score), hX[5] + hCols[5].w - 2, y + 6, { align: 'right' })
+      } else {
+        pdf.setTextColor(136, 136, 136); pdf.text('-', hX[5] + hCols[5].w - 2, y + 6, { align: 'right' })
+      }
+      pdf.setFont('helvetica', 'normal'); pdf.setTextColor(68, 68, 68)
+      pdf.text(`${rS}/5 - ${rU}`, hX[6] + hCols[6].w - 2, y + 6, { align: 'right' })
+      pdf.setDrawColor(243, 244, 246); pdf.setLineWidth(0.2); pdf.line(M, y + HROW, M + CW, y + HROW)
+      y += HROW
+    })
+
+    pdf.save(`Profil_InBody_${athlete.name}_${new Date().toISOString().slice(0, 10)}.pdf`)
   }
 
   // Compute latest record and count per athlete from fetched records
