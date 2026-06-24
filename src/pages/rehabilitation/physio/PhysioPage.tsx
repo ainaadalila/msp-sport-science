@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo, Fragment } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { jsPDF } from 'jspdf'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
 import { usePermissions } from '../../../hooks/usePermissions'
@@ -80,6 +81,87 @@ const attendanceStyle: Record<string, string> = {
 
 function fmtDate(d: string) {
   return new Date(d + 'T00:00:00').toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+function handlePrintCatatan(slot: PhysioSlot) {
+  const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  const PW = pdf.internal.pageSize.getWidth()
+  const M = 16
+  const CW = PW - M * 2
+  let y = M
+
+  // Header
+  pdf.setFontSize(8); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(245, 106, 0)
+  pdf.text('CATATAN SESI FISIOTERAPI', M, y); y += 7
+
+  pdf.setFontSize(18); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(17, 17, 17)
+  pdf.text(slot.athlete?.name ?? 'Tiada Atlet', M, y); y += 7
+
+  pdf.setFontSize(10); pdf.setFont('helvetica', 'normal'); pdf.setTextColor(136, 136, 136)
+  const sportName = slot.athlete?.sport?.name ?? ''
+  const slotDate = fmtDate(slot.slot_date)
+  pdf.text(`${sportName}   ${slotDate}`, M, y); y += 5
+
+  pdf.setDrawColor(220, 220, 220); pdf.setLineWidth(0.4); pdf.line(M, y, PW - M, y); y += 8
+
+  // Helper: section label
+  function sectionLabel(text: string) {
+    pdf.setFontSize(7.5); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(136, 136, 136)
+    pdf.text(text, M, y); y += 5
+  }
+
+  // Helper: field row
+  function fieldRow(label: string, value: string | null | undefined, multiline = false) {
+    if (!value && value !== '0') return
+    pdf.setFontSize(7.5); pdf.setFont('helvetica', 'normal'); pdf.setTextColor(136, 136, 136)
+    pdf.text(label.toUpperCase(), M, y); y += 4
+    pdf.setFontSize(10); pdf.setFont('helvetica', 'normal'); pdf.setTextColor(34, 34, 34)
+    if (multiline) {
+      const lines = pdf.splitTextToSize(value, CW)
+      pdf.text(lines, M, y); y += lines.length * 5 + 3
+    } else {
+      pdf.text(value, M, y); y += 7
+    }
+  }
+
+  // Maklumat Sesi
+  sectionLabel('MAKLUMAT SESI')
+  fieldRow('Diagnosis', slot.diagnosis)
+  fieldRow('Tarikh Kecederaan', slot.date_of_injury ? fmtDate(slot.date_of_injury) : null)
+  fieldRow('Dirujuk Oleh', slot.referred_by)
+  y += 2
+
+  // Catatan Sesi
+  pdf.setDrawColor(240, 240, 240); pdf.setLineWidth(0.3); pdf.line(M, y, PW - M, y); y += 6
+  sectionLabel('CATATAN SESI')
+  fieldRow('Keluhan Utama (COC)', slot.chief_complaint, true)
+  fieldRow('Jenis Kecederaan', slot.injury_type, true)
+  fieldRow('Nota Penilaian', slot.assessment_notes, true)
+  fieldRow('Pelan Rehabilitasi', slot.rehab_plan, true)
+  fieldRow('Nota Kemajuan', slot.progress_notes, true)
+
+  // Stats row
+  const hasScale = slot.pain_scale !== null
+  const statusLabel: Record<string, string> = { scheduled: 'Dijadual', arrived: 'Hadir', completed: 'Selesai', no_show: 'Tidak Hadir' }
+  const colW = (CW - 4) / 2
+  if (hasScale) {
+    pdf.setFillColor(245, 245, 247); pdf.roundedRect(M, y, colW, 14, 1.5, 1.5, 'F')
+    pdf.setFontSize(7.5); pdf.setFont('helvetica', 'normal'); pdf.setTextColor(136, 136, 136)
+    pdf.text('SKALA KESAKITAN', M + 3, y + 5.5)
+    pdf.setFontSize(12); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(17, 17, 17)
+    pdf.text(`${slot.pain_scale} / 10`, M + 3, y + 12)
+  }
+  pdf.setFillColor(245, 245, 247); pdf.roundedRect(M + colW + 4, y, colW, 14, 1.5, 1.5, 'F')
+  pdf.setFontSize(7.5); pdf.setFont('helvetica', 'normal'); pdf.setTextColor(136, 136, 136)
+  pdf.text('STATUS KEHADIRAN', M + colW + 7, y + 5.5)
+  pdf.setFontSize(12); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(17, 17, 17)
+  pdf.text(statusLabel[slot.attendance_status ?? 'scheduled'], M + colW + 7, y + 12)
+  y += 20
+
+  fieldRow('Otot Sasaran', slot.target_muscle, true)
+  fieldRow('Jenis Rawatan', slot.treatment_type, true)
+
+  pdf.save(`Catatan_Fisioterapi_${slot.athlete?.name ?? 'Atlet'}_${slot.slot_date}.pdf`)
 }
 
 const emptyBookingForm: BookingFormState = {
@@ -787,6 +869,9 @@ export default function PhysioPage() {
                 <>
                   <button onClick={() => setDetailView('booking')} className="px-4 py-2 text-sm font-semibold bg-[#F5F5F7] text-[#111] hover:bg-gray-100 rounded-lg transition">
                     Kembali
+                  </button>
+                  <button onClick={() => handlePrintCatatan(detailSlot)} className="px-4 py-2 text-sm font-semibold border border-gray-200 text-[#444] hover:bg-gray-50 rounded-lg transition">
+                    Cetak
                   </button>
                   {can('physio', 'update') && (
                     <button onClick={() => { openAssessmentEdit(detailSlot); setDetailSlot(null) }} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold rounded-lg transition">Edit Catatan</button>

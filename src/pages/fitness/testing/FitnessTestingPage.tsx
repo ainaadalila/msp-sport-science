@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import { useSearchParams, Navigate } from 'react-router-dom'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
@@ -6,7 +6,6 @@ import { usePermissions } from '../../../hooks/usePermissions'
 import { useSports } from '../../../hooks/useSports'
 import { useAthletes } from '../../../hooks/useAthletes'
 import { logAction } from '../../../lib/audit'
-import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
 import type { Athlete, FitnessTestSession, SportFitnessTest, FitnessTestNorm } from '../../../types'
 
@@ -75,48 +74,241 @@ export default function FitnessTestingPage() {
   const [selectedTestId, setSelectedTestId] = useState<string | null>(null)
   const [selectedAthletesGender, setSelectedAthletesGender] = useState<'M' | 'F' | null>(null)
 
-  async function handlePrint() {
-    if (!chartRef.current) return
-    try {
-      const canvas = await html2canvas(chartRef.current, {
-        scale: 3,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-        allowTaint: true
+  const allTestsForPrint = useMemo(() => {
+    const map = new Map<string, { test_id: string; test_name: string; unit: string }>()
+    sessionsWithResults.forEach(s => {
+      s.results.forEach(r => {
+        if (!map.has(r.test_id)) map.set(r.test_id, { test_id: r.test_id, test_name: r.test_name, unit: r.unit })
       })
-      const imgData = canvas.toDataURL('image/png', 1.0)
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+    })
+    return Array.from(map.values())
+  }, [sessionsWithResults])
 
-      const pageWidth = pdf.internal.pageSize.getWidth()
-      const pageHeight = pdf.internal.pageSize.getHeight()
-      const margin = 15
-      const contentWidth = pageWidth - margin * 2
-      const imgHeight = (canvas.height * contentWidth) / canvas.width
+  function handlePrint() {
+    if (!selectedAthlete || allTestsForPrint.length === 0) return
 
-      let yPos = margin
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+    const PW = pdf.internal.pageSize.getWidth()
+    const PH = pdf.internal.pageSize.getHeight()
+    const M = 14
+    const CW = PW - M * 2
+    let y = M
 
-      pdf.setFontSize(16)
-      pdf.text(`Ujian Kecergasan - ${selectedAthlete?.name}`, margin, yPos)
-      yPos += 8
+    const checkPage = (needed: number) => {
+      if (y + needed > PH - M) { pdf.addPage(); y = M }
+    }
 
-      pdf.setFontSize(11)
-      pdf.setTextColor(100)
-      pdf.text(`${selectedAthlete?.sport?.name}`, margin, yPos)
-      pdf.text(`${new Date().toLocaleDateString('ms-MY')}`, pageWidth - margin - 50, yPos)
-      yPos += 15
-      pdf.setTextColor(0)
+    // ── HEADER ──────────────────────────────────────────────
+    pdf.setFontSize(8)
+    pdf.setFont('helvetica', 'bold')
+    pdf.setTextColor(245, 106, 0)
+    pdf.text('LAPORAN UJIAN KECERGASAN FIZIKAL', M, y)
+    y += 7
 
-      if (yPos + imgHeight > pageHeight - margin) {
-        pdf.addPage()
-        yPos = margin
+    pdf.setFontSize(18)
+    pdf.setFont('helvetica', 'bold')
+    pdf.setTextColor(17, 17, 17)
+    pdf.text(selectedAthlete.name, M, y)
+    y += 7
+
+    pdf.setFontSize(10)
+    pdf.setFont('helvetica', 'normal')
+    pdf.setTextColor(136, 136, 136)
+    const dateStr = new Date().toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric' })
+    pdf.text(`${selectedAthlete.sport?.name || ''}   ${dateStr}`, M, y)
+    y += 5
+
+    pdf.setDrawColor(220, 220, 220)
+    pdf.setLineWidth(0.4)
+    pdf.line(M, y, PW - M, y)
+    y += 9
+
+    // ── COMPARISON TABLE ────────────────────────────────────
+    pdf.setFontSize(8)
+    pdf.setFont('helvetica', 'bold')
+    pdf.setTextColor(136, 136, 136)
+    pdf.text('PERBANDINGAN SEMUA UJIAN', M, y)
+    y += 5
+
+    const cols = [
+      { label: 'UJIAN', w: CW * 0.30 },
+      { label: 'SESI LEPAS', w: CW * 0.13 },
+      { label: 'SESI TERKINI', w: CW * 0.16 },
+      { label: 'PERUBAHAN', w: CW * 0.15 },
+      { label: 'UNIT', w: CW * 0.09 },
+      { label: 'TAHAP', w: CW * 0.17 },
+    ]
+    const colX: number[] = [M]
+    for (let i = 0; i < cols.length - 1; i++) colX.push(colX[i] + cols[i].w)
+
+    // Header row
+    pdf.setFillColor(249, 250, 251)
+    pdf.rect(M, y, CW, 7, 'F')
+    pdf.setDrawColor(229, 231, 235)
+    pdf.setLineWidth(0.3)
+    pdf.line(M, y + 7, M + CW, y + 7)
+    pdf.setFontSize(7)
+    pdf.setFont('helvetica', 'bold')
+    pdf.setTextColor(85, 85, 85)
+    cols.forEach((col, i) => {
+      const tx = i === 0 ? colX[i] + 2 : colX[i] + col.w - 2
+      pdf.text(col.label, tx, y + 5, { align: i === 0 ? 'left' : 'right' })
+    })
+    y += 7
+
+    const ROW_H = 11
+    allTestsForPrint.forEach(test => {
+      const hist = sessionsWithResults
+        .map(s => { const r = s.results.find(x => x.test_id === test.test_id); return r ? { session: s.session, result: r } : null })
+        .filter((x): x is { session: FitnessTestSession; result: SessionResult } => x !== null)
+        .reverse()
+      const latest = hist[hist.length - 1]?.result
+      const prev = hist[hist.length - 2]?.result
+      const change = latest && prev ? latest.result_value - prev.result_value : null
+
+      checkPage(ROW_H + 2)
+
+      pdf.setFontSize(10)
+      pdf.setFont('helvetica', 'bold')
+      pdf.setTextColor(17, 17, 17)
+      pdf.text(formatTestName(test.test_name), colX[0] + 2, y + 7.5)
+
+      pdf.setFont('helvetica', 'normal')
+      pdf.setFontSize(10)
+      pdf.setTextColor(136, 136, 136)
+      pdf.text(prev ? String(prev.result_value) : '-', colX[1] + cols[1].w - 2, y + 7.5, { align: 'right' })
+
+      pdf.setFont('helvetica', 'bold')
+      pdf.setTextColor(17, 17, 17)
+      pdf.text(latest ? String(latest.result_value) : '-', colX[2] + cols[2].w - 2, y + 7.5, { align: 'right' })
+
+      if (change !== null && change !== 0) {
+        const isPos = change > 0
+        pdf.setTextColor(isPos ? 22 : 220, isPos ? 163 : 38, isPos ? 74 : 38)
+        pdf.text(`${isPos ? '+ ' : '- '}${Math.abs(change).toFixed(2)}`, colX[3] + cols[3].w - 2, y + 7.5, { align: 'right' })
+      } else {
+        pdf.setFont('helvetica', 'normal')
+        pdf.setTextColor(136, 136, 136)
+        pdf.text(change === 0 ? '0.00' : '-', colX[3] + cols[3].w - 2, y + 7.5, { align: 'right' })
       }
 
-      pdf.addImage(imgData, 'PNG', margin, yPos, contentWidth, imgHeight)
-      pdf.save(`Ujian_Kecergasan_${selectedAthlete?.name}_${new Date().toISOString().slice(0, 10)}.pdf`)
-    } catch (error) {
-      console.error('Export PDF failed:', error)
+      pdf.setFont('helvetica', 'normal')
+      pdf.setFontSize(9)
+      pdf.setTextColor(136, 136, 136)
+      pdf.text(test.unit, colX[4] + cols[4].w - 2, y + 7.5, { align: 'right' })
+
+      const rating = latest?.rating
+      if (rating && rating !== 'tidak_dinilai') {
+        const label = rating === 'baik' ? 'BAIK' : rating === 'sederhana' ? 'SEDERHANA' : 'LEMAH'
+        const bw = 24
+        const bx = colX[5] + cols[5].w - bw
+        const by = y + 3
+        if (rating === 'baik') pdf.setFillColor(220, 252, 231)
+        else if (rating === 'sederhana') pdf.setFillColor(254, 249, 195)
+        else pdf.setFillColor(254, 226, 226)
+        pdf.roundedRect(bx, by, bw, 7, 1.5, 1.5, 'F')
+        pdf.setFontSize(7)
+        pdf.setFont('helvetica', 'bold')
+        if (rating === 'baik') pdf.setTextColor(22, 163, 74)
+        else if (rating === 'sederhana') pdf.setTextColor(202, 138, 4)
+        else pdf.setTextColor(220, 38, 38)
+        pdf.text(label, bx + bw / 2, by + 5, { align: 'center' })
+      }
+
+      pdf.setDrawColor(243, 244, 246)
+      pdf.setLineWidth(0.2)
+      pdf.line(M, y + ROW_H, M + CW, y + ROW_H)
+      y += ROW_H
+    })
+
+    y += 10
+    checkPage(25)
+
+    // ── BAR CHARTS ──────────────────────────────────────────
+    pdf.setFontSize(8)
+    pdf.setFont('helvetica', 'bold')
+    pdf.setTextColor(136, 136, 136)
+    pdf.text('GRAF PERKEMBANGAN UJIAN', M, y)
+    y += 6
+
+    const CHART_W = (CW - 6) / 2
+    const CHART_H = 56
+    const BAR_AREA_H = 36
+    const BAR_TOP_OFFSET = 13
+
+    for (let i = 0; i < allTestsForPrint.length; i++) {
+      const test = allTestsForPrint[i]
+      const hist = sessionsWithResults
+        .map(s => { const r = s.results.find(x => x.test_id === test.test_id); return r ? { session: s.session, result: r } : null })
+        .filter((x): x is { session: FitnessTestSession; result: SessionResult } => x !== null)
+        .reverse()
+      if (hist.length === 0) continue
+
+      const isLeft = i % 2 === 0
+      if (isLeft && i > 0) {
+        y += CHART_H + 5
+        checkPage(CHART_H + 10)
+      }
+      if (i === 0) checkPage(CHART_H + 10)
+
+      const cx = M + (isLeft ? 0 : CHART_W + 6)
+      const cy = y
+
+      // Border
+      pdf.setDrawColor(229, 231, 235)
+      pdf.setLineWidth(0.3)
+      pdf.roundedRect(cx, cy, CHART_W, CHART_H, 2, 2)
+
+      // Header background
+      pdf.setFillColor(249, 250, 251)
+      pdf.rect(cx + 0.3, cy + 0.3, CHART_W - 0.6, 9, 'F')
+      pdf.setDrawColor(229, 231, 235)
+      pdf.setLineWidth(0.3)
+      pdf.line(cx, cy + 9, cx + CHART_W, cy + 9)
+
+      // Title
+      const testLabel = formatTestName(test.test_name)
+      const sesLabel = ` (${hist.length} sesi)`
+      pdf.setFontSize(9)
+      pdf.setFont('helvetica', 'bold')
+      pdf.setTextColor(17, 17, 17)
+      pdf.text(testLabel, cx + 3, cy + 6.5)
+      const nw = pdf.getTextWidth(testLabel)
+      pdf.setFont('helvetica', 'normal')
+      pdf.setFontSize(8)
+      pdf.setTextColor(136, 136, 136)
+      pdf.text(sesLabel, cx + 3 + nw, cy + 6.5)
+
+      // Bars
+      const maxVal = Math.max(...hist.map(h => h.result.result_value))
+      const barAreaX = cx + 5
+      const barAreaW = CHART_W - 10
+      const slotW = barAreaW / hist.length
+      const barW = Math.min(slotW - 3, 14)
+      const baseY = cy + BAR_TOP_OFFSET + BAR_AREA_H
+
+      hist.forEach((h, idx) => {
+        const bh = maxVal > 0 ? (h.result.result_value / maxVal) * BAR_AREA_H : 2
+        const bx = barAreaX + idx * slotW + (slotW - barW) / 2
+        const by = baseY - bh
+        const isLatest = idx === hist.length - 1
+
+        pdf.setFillColor(isLatest ? 249 : 253, isLatest ? 115 : 186, isLatest ? 22 : 116)
+        pdf.roundedRect(bx, by, barW, bh, 1, 0, 'F')
+
+        pdf.setFontSize(6.5)
+        pdf.setFont('helvetica', isLatest ? 'bold' : 'normal')
+        pdf.setTextColor(isLatest ? 17 : 136, isLatest ? 17 : 136, isLatest ? 17 : 136)
+        pdf.text(String(h.result.result_value), bx + barW / 2, by - 1.5, { align: 'center' })
+
+        pdf.setFontSize(6.5)
+        pdf.setFont('helvetica', 'normal')
+        pdf.setTextColor(136, 136, 136)
+        pdf.text(h.session.session, bx + barW / 2, baseY + 5.5, { align: 'center' })
+      })
     }
+
+    pdf.save(`Ujian_Kecergasan_${selectedAthlete.name}_${new Date().toISOString().slice(0, 10)}.pdf`)
   }
 
 
@@ -532,7 +724,7 @@ export default function FitnessTestingPage() {
 
           {/* Dashboard View */}
           {viewMode === 'view_dashboard' && sessionsWithResults.length > 0 && (
-            <div className="space-y-4">
+            <div className="space-y-4" ref={chartRef}>
               {(() => {
                 // Get all unique tests across all sessions
                 const allTests = new Map<string, { test_id: string; test_name: string; unit: string }>()
@@ -643,7 +835,7 @@ export default function FitnessTestingPage() {
                     </div>
 
                     {/* Test Selector */}
-                    <div className="bg-white rounded-xl border border-gray-200 p-4">
+                    <div className="bg-white rounded-xl border border-gray-200 p-4" data-html2canvas-ignore="true">
                       <label className="block text-[10px] font-bold uppercase tracking-widest text-[#888] mb-2">Pilih Ujian</label>
                       <select
                         value={currentTestId || ''}
@@ -661,7 +853,7 @@ export default function FitnessTestingPage() {
                     {currentTest && testHistory.length > 0 && (
                       <>
                         {/* Detailed Test View with Tahap Pencapaian */}
-                        <div className="grid grid-cols-3 gap-4" ref={chartRef}>
+                        <div className="grid grid-cols-3 gap-4">
                           {/* Chart Section */}
                           <div className="col-span-2 bg-white rounded-xl border border-gray-200 overflow-hidden">
                             <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
@@ -787,6 +979,7 @@ export default function FitnessTestingPage() {
                     {/* Record New Test Button */}
                     <button
                       onClick={() => setViewMode('record_tests')}
+                      data-html2canvas-ignore="true"
                       className="w-full px-4 py-3 bg-[#F56A00] text-white font-semibold rounded-lg hover:bg-[#D45A00] transition"
                     >
                       Rekod Ujian Baru
@@ -1174,6 +1367,116 @@ export default function FitnessTestingPage() {
           )}
         </div>
       )}
+
+      {/* (print view removed — PDF is now generated programmatically via jsPDF) */}
+      <div style={{ display: 'none' }}>
+        {/* Header */}
+        <div style={{ marginBottom: '20px', paddingBottom: '14px', borderBottom: '2px solid #f0f0f0' }}>
+          <p style={{ fontSize: '11px', color: '#F56A00', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '4px' }}>Laporan Ujian Kecergasan Fizikal</p>
+          <h1 style={{ fontSize: '20px', fontWeight: 700, color: '#111', margin: '0 0 4px 0' }}>{selectedAthlete?.name}</h1>
+          <p style={{ fontSize: '12px', color: '#888', margin: 0 }}>{selectedAthlete?.sport?.name} &nbsp;·&nbsp; {new Date().toLocaleDateString('ms-MY', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
+        </div>
+
+        {/* Comparison Table */}
+        {allTestsForPrint.length > 0 && (
+          <div style={{ marginBottom: '24px' }}>
+            <p style={{ fontSize: '11px', fontWeight: 700, color: '#888', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '10px' }}>Perbandingan Semua Ujian</p>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+              <thead>
+                <tr style={{ background: '#f9fafb', borderBottom: '2px solid #e5e7eb' }}>
+                  {['Ujian', 'Sesi Lepas', 'Sesi Terkini', 'Perubahan', 'Unit', 'Tahap'].map(h => (
+                    <th key={h} style={{ padding: '8px 12px', textAlign: h === 'Ujian' ? 'left' : 'right', fontSize: '11px', fontWeight: 700, color: '#555', letterSpacing: '0.5px' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {allTestsForPrint.map(test => {
+                  const hist = sessionsWithResults
+                    .map(s => { const r = s.results.find(x => x.test_id === test.test_id); return r ? { session: s.session, result: r } : null })
+                    .filter((x): x is { session: FitnessTestSession; result: SessionResult } => x !== null)
+                    .reverse()
+                  const latest = hist[hist.length - 1]?.result
+                  const prev = hist[hist.length - 2]?.result
+                  const change = latest && prev ? latest.result_value - prev.result_value : null
+                  const rating = latest?.rating
+                  return (
+                    <tr key={test.test_id} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                      <td style={{ padding: '9px 12px', fontWeight: 600, color: '#111' }}>{formatTestName(test.test_name)}</td>
+                      <td style={{ padding: '9px 12px', textAlign: 'right', color: '#888' }}>{prev ? prev.result_value : '—'}</td>
+                      <td style={{ padding: '9px 12px', textAlign: 'right', fontWeight: 700, color: '#111' }}>{latest ? latest.result_value : '—'}</td>
+                      <td style={{ padding: '9px 12px', textAlign: 'right', fontWeight: 600, color: change === null ? '#888' : change > 0 ? '#16a34a' : change < 0 ? '#dc2626' : '#888' }}>
+                        {change === null ? '—' : `${change > 0 ? '▲' : change < 0 ? '▼' : '—'} ${Math.abs(change).toFixed(2)}`}
+                      </td>
+                      <td style={{ padding: '9px 12px', textAlign: 'right', color: '#888' }}>{test.unit}</td>
+                      <td style={{ padding: '9px 12px', textAlign: 'right' }}>
+                        {rating && rating !== 'tidak_dinilai' ? (
+                          <span style={{
+                            display: 'inline-block', padding: '2px 10px', borderRadius: '999px', fontSize: '11px', fontWeight: 700,
+                            background: rating === 'baik' ? '#dcfce7' : rating === 'sederhana' ? '#fef9c3' : '#fee2e2',
+                            color: rating === 'baik' ? '#16a34a' : rating === 'sederhana' ? '#ca8a04' : '#dc2626',
+                          }}>
+                            {rating === 'baik' ? 'BAIK' : rating === 'sederhana' ? 'SEDERHANA' : 'LEMAH'}
+                          </span>
+                        ) : <span style={{ color: '#ccc' }}>—</span>}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Per-test bar charts — 2 columns */}
+        {allTestsForPrint.length > 0 && (
+          <div>
+            <p style={{ fontSize: '11px', fontWeight: 700, color: '#888', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '12px' }}>Graf Perkembangan Ujian</p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0' }}>
+              {allTestsForPrint.map((test, i) => {
+                const hist = sessionsWithResults
+                  .map(s => { const r = s.results.find(x => x.test_id === test.test_id); return r ? { session: s.session, result: r } : null })
+                  .filter((x): x is { session: FitnessTestSession; result: SessionResult } => x !== null)
+                  .reverse()
+                if (hist.length === 0) return null
+                const maxVal = Math.max(...hist.map(h => h.result.result_value)) * 1.1
+                const CHART_H = 110
+                const isLeft = i % 2 === 0
+                return (
+                  <div key={test.test_id} style={{ width: '50%', boxSizing: 'border-box', paddingRight: isLeft ? '8px' : '0', paddingLeft: isLeft ? '0' : '8px', marginBottom: '16px' }}>
+                    <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', overflow: 'hidden' }}>
+                      <div style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb', padding: '7px 12px' }}>
+                        <p style={{ margin: 0, fontSize: '12px', fontWeight: 700, color: '#111' }}>
+                          {formatTestName(test.test_name)}
+                          <span style={{ fontWeight: 400, color: '#888', marginLeft: '6px' }}>({hist.length} sesi)</span>
+                        </p>
+                      </div>
+                      <div style={{ padding: '12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-end', height: `${CHART_H}px`, marginBottom: '6px' }}>
+                          {hist.map((h, idx) => {
+                            const barH = maxVal > 0 ? (h.result.result_value / maxVal) * CHART_H : 0
+                            const isLatest = idx === hist.length - 1
+                            return (
+                              <div key={idx} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', marginRight: idx < hist.length - 1 ? '4px' : '0' }}>
+                                <span style={{ fontSize: '10px', fontWeight: isLatest ? 700 : 400, color: isLatest ? '#111' : '#888', marginBottom: '3px' }}>{h.result.result_value}</span>
+                                <div style={{ width: '100%', height: `${barH}px`, background: isLatest ? 'linear-gradient(to top, #f97316, #fdba74)' : 'linear-gradient(to top, #fb923c99, #fed7aa99)', borderRadius: '3px 3px 0 0' }} />
+                              </div>
+                            )
+                          })}
+                        </div>
+                        <div style={{ display: 'flex', borderTop: '1px solid #f0f0f0', paddingTop: '4px' }}>
+                          {hist.map((h, idx) => (
+                            <span key={idx} style={{ flex: 1, fontSize: '10px', color: '#888', textAlign: 'center', marginRight: idx < hist.length - 1 ? '4px' : '0' }}>{h.session.session}</span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
