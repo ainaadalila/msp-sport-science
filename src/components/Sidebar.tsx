@@ -37,7 +37,6 @@ export default function Sidebar({ onSignOut }: { onSignOut?: () => void }) {
   const { profile, signOut } = useAuth()
   const navigate = useNavigate()
   const { pathname } = useLocation()
-  const isAdmin = profile?.role === 'superadmin' || profile?.role === 'admin'
   const isSuperAdmin = profile?.role === 'superadmin'
 
   const can = (mod: keyof ModulePermissions) => {
@@ -212,8 +211,8 @@ export default function Sidebar({ onSignOut }: { onSignOut?: () => void }) {
           </div>
         )}
 
-        {/* Pentadbiran */}
-        {isAdmin && (
+        {/* Pentadbiran — superadmin sahaja */}
+        {isSuperAdmin && (
           <div>
             <p className={groupLabelCls}>Pentadbiran</p>
             <NavLink to="/admin/users" className={({ isActive }) => navItemCls(isActive)}>Pengurusan Pengguna</NavLink>

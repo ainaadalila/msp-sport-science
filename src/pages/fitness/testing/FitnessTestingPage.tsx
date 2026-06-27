@@ -507,7 +507,7 @@ export default function FitnessTestingPage() {
       })) as SessionResult[]
 
       setViewedSession({ session: sessionData, results: savedResults })
-      setViewMode('view_results')
+      setViewMode('view_dashboard')
 
       // Update sessions list
       setSessions([sessionData, ...sessions])
