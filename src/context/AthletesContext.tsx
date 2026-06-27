@@ -51,7 +51,7 @@ export function AthletesProvider({ children }: { children: React.ReactNode }) {
       else setLoading(false)
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, _session) => {
       if (event === 'SIGNED_IN') load()
       if (event === 'SIGNED_OUT') { setAthletes([]); setLoading(false) }
     })
