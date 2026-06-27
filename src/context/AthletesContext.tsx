@@ -44,7 +44,20 @@ export function AthletesProvider({ children }: { children: React.ReactNode }) {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    // Only load after a session is confirmed — avoids empty fetch before login
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) load()
+      else setLoading(false)
+    })
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, _session) => {
+      if (event === 'SIGNED_IN') load()
+      if (event === 'SIGNED_OUT') { setAthletes([]); setLoading(false) }
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
 
   return (
     <AthletesContext.Provider value={{ athletes, loading, refresh: load }}>
