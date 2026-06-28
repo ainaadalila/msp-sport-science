@@ -6,6 +6,7 @@ import { usePermissions } from '../../../hooks/usePermissions'
 import { useSports } from '../../../hooks/useSports'
 import { useAthletes } from '../../../hooks/useAthletes'
 import { logAction } from '../../../lib/audit'
+import { normDisplayValues } from '../../../lib/fitnessNorms'
 import jsPDF from 'jspdf'
 import type { Athlete, FitnessTestSession, SportFitnessTest, FitnessTestNorm } from '../../../types'
 
@@ -554,33 +555,6 @@ export default function FitnessTestingPage() {
     martial_arts: 'Martial Arts (Power Kube)',
   }
 
-  const normDisplayValues: Record<string, Record<string, { good: string; average: string; poor: string; unit: string }>> = {
-    'Push Up': { M: { good: '>40', average: '21-39', poor: '<20', unit: 'reps' }, F: { good: '>36', average: '12-35', poor: '<11', unit: 'reps' } },
-    'Squat': { M: { good: '>45', average: '29-44', poor: '<28', unit: 'reps' }, F: { good: '>39', average: '21-38', poor: '<20', unit: 'reps' } },
-    'Sit Up': { M: { good: '>40', average: '21-39', poor: '<20', unit: 'reps' }, F: { good: '>40', average: '21-39', poor: '<20', unit: 'reps' } },
-    'Plank': { both: { good: '>360', average: '120-360', poor: '<120', unit: 'seconds' } },
-    'Pull Up': { M: { good: '>13', average: '7-12', poor: '<6', unit: 'reps' }, F: { good: '>9', average: '4-8', poor: '<3', unit: 'reps' } },
-    'Standing Broad Jump': { M: { good: '>250', average: '210-249', poor: '<209', unit: 'cm' }, F: { good: '>200', average: '161-199', poor: '<160', unit: 'cm' } },
-    'Counter Movement Jump': { M: { good: '>42', average: '38-41', poor: '<37', unit: 'cm' }, F: { good: '>41', average: '37-40', poor: '<36', unit: 'cm' } },
-    'Seated Medicine Ball Throw': { M: { good: '>3.25', average: '1.76-3.24', poor: '<1.75', unit: 'm' }, F: { good: '>3.75', average: '1.86-3.74', poor: '<1.85', unit: 'm' } },
-    'Back Strength': { M: { good: '>170', average: '135-169', poor: '<134', unit: 'kg' }, F: { good: '>150', average: '120-149', poor: '<119', unit: 'kg' } },
-    'Handgrip Strength': { M: { good: '>55.5', average: '35.7-55.4', poor: '<35.6', unit: 'kg' }, F: { good: '>31', average: '19.2-30.9', poor: '<19.1', unit: 'kg' } },
-    'Sit and Reach': { M: { good: '>39', average: '25-38', poor: '<24', unit: 'cm' }, F: { good: '>41', average: '28-40', poor: '<27', unit: 'cm' } },
-    'T-Test': { M: { good: '<9.50', average: '9.51-10.52', poor: '>10.52', unit: 'seconds' }, F: { good: '<10.50', average: '10.51-11.50', poor: '>11.50', unit: 'seconds' } },
-    'Hexagon Agility': { M: { good: '<11.2', average: '11.3-17.7', poor: '>17.8', unit: 'seconds' }, F: { good: '<12.2', average: '12.3-21.7', poor: '>21.8', unit: 'seconds' } },
-    'Change of Direction Dribble': { M: { good: '<10.00', average: '10.10-11.00', poor: '>11.10', unit: 'seconds' }, F: { good: '<11.00', average: '11.10-12.00', poor: '>12.10', unit: 'seconds' } },
-    'Illinois Test': { M: { good: '<15.2', average: '15.3-18.1', poor: '>18.2', unit: 'seconds' }, F: { good: '<17.0', average: '17.1-22.9', poor: '>23.0', unit: 'seconds' } },
-    '20m Sprint': { M: { good: '<2.7', average: '2.7-3.1', poor: '>3.1', unit: 'seconds' }, F: { good: '<3.2', average: '3.1-3.5', poor: '>3.5', unit: 'seconds' } },
-    '40m Sprint': { M: { good: '<4.0', average: '4.1-4.5', poor: '>4.6', unit: 'seconds' }, F: { good: '<4.5', average: '4.6-4.9', poor: '>5.0', unit: 'seconds' } },
-    'Bleep Test': { M: { good: '>2620', average: '1022-2600', poor: '<1020', unit: 'm' }, F: { good: '>2260', average: '820-2240', poor: '<800', unit: 'm' } },
-    'Intermittent Recovery Test Level 2': { M: { good: '>21.6', average: '20.1-21.6', poor: '<20.1', unit: 'level' }, F: { good: '>21.1', average: '19.2-20.1', poor: '<19.2', unit: 'level' } },
-    '24km Run Test': { M: { good: '<9m45s', average: '9m46s-14m', poor: '>14m01s', unit: 'minutes' }, F: { good: '<12m30s', average: '12m31s-18m30s', poor: '>18m31s', unit: 'minutes' } },
-    'Alternate Hand Wall Toss': { both: { good: '>35', average: '16-34', poor: '<15', unit: 'reps' } },
-    'Stock Balance Test': { both: { good: '>50', average: '25-49', poor: '<24', unit: 'seconds' } },
-    'Cross Punch Power': { M: { good: '>9500', average: '1500-9500', poor: '<1500', unit: 'average' }, F: { good: '>7500', average: '1200-7500', poor: '<1200', unit: 'average' } },
-    'Cross Punch Speed': { M: { good: '<0.50', average: '0.51-0.74', poor: '>0.75', unit: 'seconds' }, F: { good: '<0.65', average: '0.66-0.84', poor: '>0.85', unit: 'seconds' } },
-    'Roundhouse Kick Speed': { M: { good: '<0.55', average: '0.56-0.78', poor: '>0.79', unit: 'seconds' }, F: { good: '<0.68', average: '0.69-0.86', poor: '>0.87', unit: 'seconds' } },
-  }
 
   if (!canRecord) {
     return <Navigate to="/" replace />

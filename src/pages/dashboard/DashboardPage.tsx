@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
+import { formatAction } from '../../lib/auditLabels'
 
 interface Stats {
   totalAthletes: number
@@ -65,27 +66,6 @@ const quickLinks = [
   },
 ]
 
-function formatAction(action: string) {
-  const map: Record<string, string> = {
-    create_athlete: 'Daftar atlet',
-    update_athlete: 'Kemaskini atlet',
-    delete_athlete: 'Padam atlet',
-    create_sc_session: 'Rekod sesi S&C',
-    update_sc_session: 'Kemaskini sesi S&C',
-    create_fitness_test: 'Rekod ujian kecergasan',
-    update_fitness_test: 'Kemaskini ujian kecergasan',
-    create_inbody: 'Rekod InBody',
-    update_inbody: 'Kemaskini InBody',
-    create_supplement: 'Tambah suplemen',
-    update_supplement: 'Kemaskini suplemen',
-    submit_supplement_request: 'Mohon suplemen',
-    approve_supplement: 'Luluskan suplemen',
-    reject_supplement: 'Tolak suplemen',
-    create_physio_slot: 'Rekod slot fisioterapi',
-    update_physio_slot: 'Kemaskini slot fisioterapi',
-  }
-  return map[action] ?? action
-}
 
 export default function DashboardPage() {
   const { session, profile } = useAuth()

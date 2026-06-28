@@ -5,6 +5,7 @@ import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
 import { usePermissions } from '../../../hooks/usePermissions'
 import { logAction } from '../../../lib/audit'
+import { BADGE_GREEN, BADGE_ORANGE, BADGE_RED, type NormResult, sukmaSMM, sukmaBMI, sukmaFat, sukmaScore, sukmaFatMass, computeSkor, computeUlasan } from '../../../lib/inbodyNorms'
 import { useSports } from '../../../hooks/useSports'
 import { useAthletes } from '../../../hooks/useAthletes'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
@@ -67,57 +68,6 @@ function n(val: number | null, unit = '', decimals = 1) {
   return val != null ? `${Number(val).toFixed(decimals)}${unit}` : '—'
 }
 
-const BADGE_GREEN  = 'bg-green-50 text-[#3A9E6A] border border-green-200'
-const BADGE_ORANGE = 'bg-[rgba(245,106,0,0.08)] text-[#F56A00] border border-[rgba(245,106,0,0.2)]'
-const BADGE_RED    = 'bg-red-50 text-[#D44040] border border-red-200'
-const BADGE_GRAY   = 'bg-gray-100 text-[#888] border border-gray-200'
-
-type NormResult = { label: string; style: string }
-
-function sukmaSMM(v: number | null): NormResult {
-  if (v == null) return { label: '—', style: BADGE_GRAY }
-  return v >= 30 ? { label: 'BAIK', style: BADGE_GREEN } : { label: 'LEMAH', style: BADGE_RED }
-}
-
-function sukmaBMI(v: number | null): NormResult {
-  if (v == null) return { label: '—', style: BADGE_GRAY }
-  if (v < 18) return { label: 'RENDAH', style: BADGE_ORANGE }
-  if (v <= 24) return { label: 'NORMAL', style: BADGE_GREEN }
-  return { label: 'TINGGI', style: BADGE_RED }
-}
-
-function sukmaFat(v: number | null): NormResult {
-  if (v == null) return { label: '—', style: BADGE_GRAY }
-  return v <= 15 ? { label: 'BAIK', style: BADGE_GREEN } : { label: 'MELEBIHI', style: BADGE_RED }
-}
-
-function sukmaScore(v: number | null): NormResult {
-  if (v == null) return { label: '—', style: BADGE_GRAY }
-  if (v >= 80) return { label: 'BAIK', style: BADGE_GREEN }
-  if (v >= 60) return { label: 'SEDERHANA', style: BADGE_ORANGE }
-  return { label: 'LEMAH', style: BADGE_RED }
-}
-
-function sukmaFatMass(v: number | null): NormResult {
-  if (v == null) return { label: '—', style: BADGE_GRAY }
-  return v <= 5 ? { label: 'BAIK', style: BADGE_GREEN } : { label: 'MELEBIHI', style: BADGE_RED }
-}
-
-function computeSkor(r: Pick<FormState, 'smm' | 'body_fat_mass' | 'bmi' | 'fat_pct' | 'inbody_score'>): number {
-  let s = 0
-  if (r.smm != null && r.smm >= 30) s++
-  if (r.body_fat_mass != null && r.body_fat_mass <= 5) s++
-  if (r.bmi != null && r.bmi >= 18 && r.bmi <= 24) s++
-  if (r.fat_pct != null && r.fat_pct <= 15) s++
-  if (r.inbody_score != null && r.inbody_score >= 80) s++
-  return s
-}
-
-function computeUlasan(skor: number): string {
-  if (skor >= 4) return 'BAIK'
-  if (skor === 3) return 'SEDERHANA'
-  return 'LEMAH'
-}
 
 function InBodyScoreGauge({ score }: { score: number | null }) {
   const pct = score != null ? Math.min(Math.max(score, 0), 100) : null
