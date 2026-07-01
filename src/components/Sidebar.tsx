@@ -33,7 +33,7 @@ const expandableGroupPaths: Record<string, string[]> = Object.fromEntries(
   Object.entries(expandableGroups).map(([key, items]) => [key, items.map(i => i.path)])
 )
 
-export default function Sidebar({ onSignOut }: { onSignOut?: () => void }) {
+export default function Sidebar({ onSignOut, isOpen, onClose }: { onSignOut?: () => void; isOpen?: boolean; onClose?: () => void }) {
   const { profile, signOut } = useAuth()
   const navigate = useNavigate()
   const { pathname } = useLocation()
@@ -58,7 +58,7 @@ export default function Sidebar({ onSignOut }: { onSignOut?: () => void }) {
     psikologi: isGroupActive('psikologi'),
   })
 
-  // Re-evaluate on route change
+  // Re-evaluate on route change; also close sidebar on tablet when navigating
   useEffect(() => {
     setOpen(prev => ({
       kecergasan: prev.kecergasan || isGroupActive('kecergasan'),
@@ -66,6 +66,7 @@ export default function Sidebar({ onSignOut }: { onSignOut?: () => void }) {
       fisioterapi: prev.fisioterapi || isGroupActive('fisioterapi'),
       psikologi: prev.psikologi || isGroupActive('psikologi'),
     }))
+    onClose?.()
   }, [pathname])
 
   function toggle(key: string) {
@@ -79,15 +80,23 @@ export default function Sidebar({ onSignOut }: { onSignOut?: () => void }) {
   }
 
   return (
-    <aside className="w-[280px] bg-white border-r border-gray-200 flex flex-col h-full shrink-0 no-print">
+    <aside className={`w-[280px] bg-white border-r border-gray-200 flex flex-col h-full shrink-0 no-print fixed inset-y-0 left-0 z-50 transition-transform duration-300 lg:relative lg:inset-auto lg:z-auto lg:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
 
       {/* Logo */}
       <div className="flex items-center gap-4 py-4 px-4 border-b border-gray-200 shrink-0">
         <img src="/logo_msp.png" alt="MSP" className="w-14 h-14 rounded-full object-cover shrink-0" />
-        <div>
+        <div className="flex-1 min-w-0">
           <span className="block font-bold text-[#F56A00] text-[11px] tracking-widest uppercase whitespace-nowrap">Majlis Sukan Pahang</span>
           <span className="block text-[9px] text-[#888] tracking-wide mt-0.5 whitespace-nowrap">Sport Science Department</span>
         </div>
+        <button
+          onClick={onClose}
+          className="lg:hidden w-7 h-7 flex items-center justify-center rounded-md text-[#888] hover:text-[#111] hover:bg-gray-100 transition shrink-0"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
       </div>
 
       {/* Nav */}

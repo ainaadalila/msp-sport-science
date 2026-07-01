@@ -444,7 +444,7 @@ export default function AthletesPage() {
                       </div>
                     </td>
                     <td className="px-5 py-3 font-mono text-[12px] text-[#444]">{formatIC(a.ic_number)}</td>
-                    <td className="px-5 py-3 text-[#444]">{a.gender ?? '—'}</td>
+                    <td className="px-5 py-3 text-[#444]">{a.gender === 'M' ? 'L' : a.gender === 'F' ? 'P' : '—'}</td>
                     <td className="px-5 py-3 text-[#444]">{a.sport?.name ?? '—'}</td>
                     <td className="px-5 py-3 text-[#888]">{a.category ?? '—'}</td>
                     <td className="px-5 py-3">

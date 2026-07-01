@@ -32,6 +32,7 @@ export default function Layout() {
   const navigate = useNavigate()
   const { profile, signOut } = useAuth()
   const [alerts, setAlerts] = useState<AlertCounts>({ injured: 0, pendingSupplements: 0 })
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
   const [userOpen, setUserOpen] = useState(false)
   const [changePasswordOpen, setChangePasswordOpen] = useState(false)
@@ -116,12 +117,28 @@ export default function Layout() {
 
   return (
     <div className="flex h-screen bg-[#F2F4F7]">
-      <Sidebar onSignOut={handleSignOut} />
+      {/* Overlay for tablet/mobile when sidebar is open */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/30 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+      <Sidebar onSignOut={handleSignOut} isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div className="flex-1 flex flex-col overflow-hidden">
         <header className="h-[60px] bg-white border-b border-gray-200 flex items-center justify-between px-6 shrink-0">
 
           {/* Breadcrumb */}
           <div className="flex items-center gap-1.5 min-w-0">
+            {/* Hamburger — visible only on tablet/mobile */}
+            <button
+              onClick={() => setSidebarOpen(o => !o)}
+              className="lg:hidden mr-2 w-9 h-9 flex items-center justify-center rounded-lg hover:bg-gray-100 transition text-[#888] shrink-0"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+              </svg>
+            </button>
             {meta.parent && (
               <>
                 <span
