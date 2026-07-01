@@ -220,9 +220,6 @@ export default function ReportsPage() {
   const [filterStatus, setFilterStatus] = useState('')
   const [filterSession, setFilterSession] = useState('')
 
-  const currentDate = new Date()
-  const [filterYear, setFilterYear] = useState(currentDate.getFullYear())
-  const [filterMonth, setFilterMonth] = useState(currentDate.getMonth() + 1)
 
   const [sortCol, setSortCol] = useState<string | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
@@ -441,13 +438,9 @@ export default function ReportsPage() {
               }))
             )
           } else {
-            const startDate = `${filterYear}-${String(filterMonth).padStart(2, '0')}-01`
-            const endDate = new Date(filterYear, filterMonth, 0).toISOString().slice(0, 10)
             const { data: rows } = await (supabase
               .from('physio_slots')
               .select('athlete_id, slot_date, pain_scale, case_id, athlete:athletes(name, sport_id, sport:sport_id(name)), physio_case:physio_cases(referred_to_doctor)')
-              .gte('slot_date', startDate)
-              .lte('slot_date', endDate)
               .not('athlete_id', 'is', null)
               .order('slot_date', { ascending: true }).limit(5000) as any)
             const grouped = new Map<string, Record<string, unknown>>()
@@ -518,8 +511,6 @@ export default function ReportsPage() {
     setFilterSport('')
     setFilterStatus('')
     setFilterSession('')
-    setFilterYear(currentDate.getFullYear())
-    setFilterMonth(currentDate.getMonth() + 1)
     setPreviewSearch('')
     setSortCol(null)
     setSortDir('asc')
@@ -751,13 +742,9 @@ export default function ReportsPage() {
             }))
           )
         } else {
-          const startDate = `${filterYear}-${String(filterMonth).padStart(2, '0')}-01`
-          const endDate = new Date(filterYear, filterMonth, 0).toISOString().slice(0, 10)
           const { data: rows } = await (supabase
             .from('physio_slots')
             .select('athlete_id, slot_date, pain_scale, case_id, athlete:athletes(name, sport_id, sport:sport_id(name)), physio_case:physio_cases(referred_to_doctor)')
-            .gte('slot_date', startDate)
-            .lte('slot_date', endDate)
             .not('athlete_id', 'is', null)
             .order('slot_date', { ascending: true }).limit(5000) as any)
           const grouped = new Map<string, Record<string, unknown>>()
@@ -971,9 +958,6 @@ export default function ReportsPage() {
             )}
 
             <div className="flex gap-3 flex-wrap">
-              <button onClick={generate} disabled={loading} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
-                {loading ? 'Menjana...' : 'Jana Laporan'}
-              </button>
               {data.length > 0 && (
                 <>
                   <button

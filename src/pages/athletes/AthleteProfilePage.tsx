@@ -248,7 +248,7 @@ export default function AthleteProfilePage() {
               { label: 'No. KP', value: athlete.ic_number ? formatIC(athlete.ic_number) : '—' },
               { label: 'Tarikh Lahir', value: athlete.date_of_birth ? fmtDate(athlete.date_of_birth) : '—' },
               { label: 'Umur', value: athlete.date_of_birth ? `${calcAge(athlete.date_of_birth)} tahun` : '—' },
-              { label: 'Jantina', value: athlete.gender ?? '—' },
+              { label: 'Jantina', value: athlete.gender === 'M' ? 'L' : athlete.gender === 'F' ? 'P' : '—' },
               { label: 'Berat', value: athlete.weight ? `${athlete.weight} kg` : '—' },
               { label: 'Tinggi', value: athlete.height ? `${athlete.height} cm` : '—' },
               { label: 'BMI', value: bmi ?? '—' },
