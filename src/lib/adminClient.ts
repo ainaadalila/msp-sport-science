@@ -1,91 +1,77 @@
-import { createClient } from '@supabase/supabase-js'
+import { supabase } from './supabase'
+import type { ModulePermissions, UserRole } from '../types'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY
+interface NewUserData {
+  full_name: string
+  role: UserRole
+}
 
-console.log('[adminClient] URL loaded:', !!supabaseUrl)
-console.log('[adminClient] Service role key loaded:', !!serviceRoleKey)
-console.log('[adminClient] Key length:', serviceRoleKey?.length ?? 0)
-
-// Client for inserting into profiles table
-const adminDb = createClient(supabaseUrl!, serviceRoleKey!, {
-  auth: { autoRefreshToken: false, persistSession: false },
-})
+// This file used to hold a Supabase client built with
+// VITE_SUPABASE_SERVICE_ROLE_KEY, calling the Auth admin API directly from
+// the browser. That key gets inlined into the Vite bundle for ANY VITE_-
+// prefixed env var, which meant the full-admin service role key shipped to
+// every visitor's browser — bypassing RLS entirely for anyone who opened
+// dev tools. See supabase/functions/create-user and delete-user, which now
+// do this work server-side instead. This file is just a thin wrapper so
+// callers (UserManagementPage.tsx) don't need to change.
 
 export async function createUserAdmin(
   email: string,
   password: string,
-  userData: Record<string, any>,
-  modulePermissions: Record<string, any>
+  userData: NewUserData,
+  modulePermissions: ModulePermissions
 ) {
-  try {
-    console.log('1. Creating auth user...')
-    console.log('[createUserAdmin] Using key length:', serviceRoleKey?.length ?? 0)
-    const authResponse = await fetch(`${supabaseUrl}/auth/v1/admin/users`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': serviceRoleKey || '',
-        'Authorization': `Bearer ${serviceRoleKey || ''}`,
-      },
-      body: JSON.stringify({
-        email,
-        password,
-        email_confirm: true,
-        user_metadata: userData,
-      }),
-    })
-    console.log('[createUserAdmin] Response status:', authResponse.status)
-
-    if (!authResponse.ok) {
-      const error = await authResponse.json()
-      console.error('Auth API error response:', error)
-      throw new Error(error.message || `Failed to create auth user: ${authResponse.statusText}`)
-    }
-
-    const authUser = await authResponse.json()
-    console.log('2. Auth user response:', authUser)
-    const userId = authUser.user?.id || authUser.id
-    console.log('3. User ID:', userId)
-
-    // Create profile row
-    console.log('4. Creating profile...')
-    const { error: profileError } = await adminDb.from('profiles').insert({
-      id: userId,
-      full_name: userData.full_name || 'User',
+  const { data, error } = await supabase.functions.invoke('create-user', {
+    body: {
+      email,
+      password,
+      full_name: userData.full_name,
       role: userData.role,
       module_permissions: modulePermissions,
-      created_at: new Date().toISOString(),
-    })
-
-    if (profileError) {
-      throw new Error(`Failed to create profile: ${profileError.message}`)
-    }
-
-    console.log('5. Profile created successfully')
-    return authUser
-  } catch (err) {
-    console.error('Error in createUserAdmin:', err)
-    throw err
-  }
-}
-
-export async function deleteUserAdmin(userId: string) {
-  // Deleting the auth user triggers:
-  // 1. Profile auto-deleted (profiles_id_fkey ON DELETE CASCADE)
-  // 2. All recorded_by/created_by references nullified (ON DELETE SET NULL via migration)
-  const response = await fetch(`${supabaseUrl}/auth/v1/admin/users/${userId}`, {
-    method: 'DELETE',
-    headers: {
-      'apikey': serviceRoleKey || '',
-      'Authorization': `Bearer ${serviceRoleKey || ''}`,
     },
   })
 
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.message || `Failed to delete user: ${response.statusText}`)
+  if (error) {
+    // supabase-js wraps non-2xx responses in a FunctionsHttpError; the actual
+    // { error: string } body from the function is on error.context.
+    const message = await extractFunctionErrorMessage(error) ?? error.message
+    throw new Error(message)
+  }
+  if (data?.error) {
+    throw new Error(data.error)
+  }
+
+  return data as { user: { id: string; email: string } }
+}
+
+export async function deleteUserAdmin(userId: string) {
+  const { data, error } = await supabase.functions.invoke('delete-user', {
+    body: { userId },
+  })
+
+  if (error) {
+    const message = await extractFunctionErrorMessage(error) ?? error.message
+    throw new Error(message)
+  }
+  if (data?.error) {
+    throw new Error(data.error)
   }
 
   return true
+}
+
+// supabase-js (FunctionsHttpError) puts the raw Response on `error.context`
+// for non-2xx replies — read the JSON body we returned from the function so
+// the UI shows our actual message instead of a generic "non-2xx" error.
+async function extractFunctionErrorMessage(error: unknown): Promise<string | null> {
+  try {
+    const context = (error as { context?: Response }).context
+    if (context && typeof context.json === 'function') {
+      const parsed = await context.json()
+      return parsed?.error ?? null
+    }
+  } catch {
+    // fall through to generic message
+  }
+  return null
 }

@@ -221,7 +221,7 @@ export default function UserManagementPage() {
         },
         finalModulePermissions
       )
-      const userId = newUser.user?.id || newUser.id
+      const userId = newUser.user.id
       await logAction(currentUser?.id || '', 'create_user', 'profiles', userId)
       setCreating(false)
       setCreateSuccess(true)
