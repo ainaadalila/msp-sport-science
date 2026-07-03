@@ -58,8 +58,8 @@ function getPainColor(score: number): string {
 export default function PhysioCasePage() {
   const { profile } = useAuth()
   const { can } = usePermissions()
-  const isAdmin = profile?.role === 'superadmin' || profile?.role === 'admin'
   const canEdit = can('physio_cases', 'update')
+  const canDelete = can('physio_cases', 'delete')
 
   const CASES_PER_PAGE = 25
   const [tab, setTab] = useState<Tab>('active')
@@ -427,7 +427,7 @@ export default function PhysioCasePage() {
                     <td className="px-4 py-3">
                       <div className="flex gap-2 justify-end flex-wrap">
                         <button onClick={() => { setDetailCase(c); fetchCaseSlots(c.id) }} className="text-xs text-[#3A7EC8] hover:underline font-medium">Lihat</button>
-                        {tab === 'active' && (
+                        {tab === 'active' && canEdit && (
                           <>
                             {!c.referred_to_doctor && (
                               <button onClick={() => setConfirmCaseAction({ case: c, action: 'refer' })} className="text-xs text-orange-600 hover:underline font-medium">Rujuk Doktor</button>
@@ -647,7 +647,7 @@ export default function PhysioCasePage() {
 
             <div className="px-6 py-4 border-t border-gray-100 flex justify-between gap-3 shrink-0 flex-wrap">
               <div className="flex gap-3">
-                {isAdmin && (
+                {canDelete && (
                   <button
                     onClick={() => { handleDeleteCase(detailCase); setDetailCase(null) }}
                     className="px-4 py-2 text-sm text-[#D44040] border border-red-200 rounded-lg hover:bg-red-50 transition"

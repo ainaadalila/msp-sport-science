@@ -64,6 +64,7 @@ export default function FitnessTestingPage() {
   const [year, setYear] = useState(new Date().getFullYear())
   const [results, setResults] = useState<TestResultInput[]>([])
   const [saving, setSaving] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [filterSport, setFilterSport] = useState('')
   const [search, setSearch] = useState('')
@@ -370,6 +371,7 @@ export default function FitnessTestingPage() {
           .select('id, athlete_id, session, year, recorded_date, recorded_by, created_at')
           .eq('athlete_id', athlete.id)
           .order('recorded_date', { ascending: false })
+          .order('created_at', { ascending: false })
       ])
 
       const normsMap = new Map<string, FitnessTestNorm>()
@@ -394,6 +396,7 @@ export default function FitnessTestingPage() {
       .select('id, athlete_id, session, year, recorded_date, recorded_by, created_at')
       .eq('athlete_id', athleteId)
       .order('recorded_date', { ascending: false })
+      .order('created_at', { ascending: false })
 
     const sessionsList = sessionsRes.data ?? []
 
@@ -510,9 +513,17 @@ export default function FitnessTestingPage() {
       setViewedSession({ session: sessionData, results: savedResults })
       setViewMode('view_dashboard')
 
-      // Update sessions list
-      setSessions([sessionData, ...sessions])
-      setSessionsWithResults([{ session: sessionData, results: savedResults }, ...sessionsWithResults])
+      // Update sessions list — replace in place if editing, prepend if new
+      if (isEditing) {
+        setSessions(sessions.map(s => s.id === sessionData.id ? sessionData : s))
+        setSessionsWithResults(sessionsWithResults.map(s =>
+          s.session.id === sessionData.id ? { session: sessionData, results: savedResults } : s
+        ))
+      } else {
+        setSessions([sessionData, ...sessions])
+        setSessionsWithResults([{ session: sessionData, results: savedResults }, ...sessionsWithResults])
+      }
+      setIsEditing(false)
       setResults([])
       setError(null)
     } catch (err) {
@@ -769,6 +780,9 @@ export default function FitnessTestingPage() {
                               const latest = history[history.length - 1]?.result
                               const previous = history[history.length - 2]?.result
                               const change = latest && previous ? latest.result_value - previous.result_value : null
+                              const testNormDir = norms.get(test.test_id)?.rating_direction
+                              const isGoodChange = change === null || change === 0 ? null
+                                : testNormDir === 'lower_is_better' ? change < 0 : change > 0
 
                               return (
                                 <tr key={test.test_id} className="border-b border-gray-100 hover:bg-gray-50 transition">
@@ -777,7 +791,7 @@ export default function FitnessTestingPage() {
                                   <td className="px-4 py-3 text-right font-semibold text-[#111]">{latest?.result_value || '-'}</td>
                                   <td className="px-4 py-3 text-right">
                                     {change !== null ? (
-                                      <span className={change > 0 ? 'text-green-600' : change < 0 ? 'text-red-600' : 'text-gray-600'}>
+                                      <span className={isGoodChange === null ? 'text-gray-600' : isGoodChange ? 'text-green-600' : 'text-red-600'}>
                                         {change > 0 ? '↑' : change < 0 ? '↓' : '—'} {Math.abs(change).toFixed(2)}
                                       </span>
                                     ) : (
@@ -875,9 +889,15 @@ export default function FitnessTestingPage() {
                                   <div>
                                     <p className="text-[11px] font-bold uppercase tracking-widest text-[#888] mb-1">Perubahan</p>
                                     <div className="flex items-center gap-1">
-                                      <span className={`text-lg font-bold ${improvement > 0 ? 'text-green-600' : improvement < 0 ? 'text-red-600' : 'text-gray-600'}`}>
-                                        {improvement > 0 ? '↑' : improvement < 0 ? '↓' : '—'} {Math.abs(improvement).toFixed(2)}
-                                      </span>
+                                      {(() => {
+                                        const isGood = improvement === 0 ? null
+                                          : testNorm?.rating_direction === 'lower_is_better' ? improvement < 0 : improvement > 0
+                                        return (
+                                          <span className={`text-lg font-bold ${isGood === null ? 'text-gray-600' : isGood ? 'text-green-600' : 'text-red-600'}`}>
+                                            {improvement > 0 ? '↑' : improvement < 0 ? '↓' : '—'} {Math.abs(improvement).toFixed(2)}
+                                          </span>
+                                        )
+                                      })()}
                                       {improvement !== 0 && (
                                         <span className="text-xs text-[#888]">
                                           ({((improvement / previousResult.result_value) * 100).toFixed(1)}%)
@@ -952,7 +972,7 @@ export default function FitnessTestingPage() {
 
                     {/* Record New Test Button */}
                     <button
-                      onClick={() => setViewMode('record_tests')}
+                      onClick={() => { setIsEditing(false); setViewMode('record_tests') }}
                       data-html2canvas-ignore="true"
                       className="w-full px-4 py-3 bg-[#F56A00] text-white font-semibold rounded-lg hover:bg-[#D45A00] transition"
                     >
@@ -971,7 +991,7 @@ export default function FitnessTestingPage() {
                 <p className="text-sm text-blue-700">Tiada sejarah ujian. Mulakan dengan merekod ujian baru.</p>
               </div>
               <button
-                onClick={() => setViewMode('record_tests')}
+                onClick={() => { setIsEditing(false); setViewMode('record_tests') }}
                 className="w-full px-4 py-3 bg-[#F56A00] text-white font-semibold rounded-lg hover:bg-[#D45A00] transition"
               >
                 Rekod Ujian Baru
@@ -1017,7 +1037,7 @@ export default function FitnessTestingPage() {
                     </span>
                   </div>
                 </div>
-                {sessionsWithResults.some(s => s.session.session === session && s.session.year === year) && (
+                {!isEditing && sessionsWithResults.some(s => s.session.session === session && s.session.year === year) && (
                   <div className="flex items-center gap-2 px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-lg text-[13px] text-amber-700">
                     <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
@@ -1166,7 +1186,7 @@ export default function FitnessTestingPage() {
                 </button>
                 <button
                   onClick={() => handleSave()}
-                  disabled={saving || results.every(r => !r.result_value) || sessionsWithResults.some(s => s.session.session === session && s.session.year === year)}
+                  disabled={saving || results.every(r => !r.result_value) || (!isEditing && sessionsWithResults.some(s => s.session.session === session && s.session.year === year))}
                   className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition"
                 >
                   {saving ? 'Menyimpan...' : 'Simpan'}
@@ -1219,6 +1239,7 @@ export default function FitnessTestingPage() {
                 {can('fitness', 'update') && (
                   <button
                     onClick={() => {
+                      setIsEditing(true)
                       setViewMode('record_tests')
                       if (viewedSession?.results) {
                         setResults(viewedSession.results.map(r => ({
@@ -1238,6 +1259,7 @@ export default function FitnessTestingPage() {
                 )}
                 <button
                   onClick={() => {
+                    setIsEditing(false)
                     setViewMode('record_tests')
                     setResults([])
                     setSession('Fasa 1')
@@ -1264,7 +1286,7 @@ export default function FitnessTestingPage() {
                   </div>
                 ) : (
                   <div className="divide-y divide-gray-100">
-                    {sessionsWithResults.map(sessionResult => (
+                    {[...sessionsWithResults].reverse().map(sessionResult => (
                       <div key={sessionResult.session.id} className="p-4 hover:bg-gray-50 transition">
                         <div className="flex items-center justify-between mb-3">
                           <div className="flex-1 cursor-pointer" onClick={() => {
@@ -1283,6 +1305,7 @@ export default function FitnessTestingPage() {
                             {can('fitness', 'update') && (
                               <button
                                 onClick={() => {
+                                  setIsEditing(true)
                                   setViewMode('record_tests')
                                   setResults(sessionResult.results.map(r => ({
                                     test_id: r.test_id,
@@ -1331,7 +1354,7 @@ export default function FitnessTestingPage() {
 
               <div className="flex gap-3 justify-end">
                 <button
-                  onClick={() => setViewMode('record_tests')}
+                  onClick={() => { setIsEditing(false); setViewMode('record_tests') }}
                   className="px-4 py-2 text-sm bg-[#F56A00] text-white rounded-lg hover:bg-[#D45A00] transition"
                 >
                   Rekod Ujian Baru
