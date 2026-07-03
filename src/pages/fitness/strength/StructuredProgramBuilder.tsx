@@ -90,12 +90,18 @@ export default function StructuredProgramBuilder({ value, onChange }: Props) {
       {/* Phase */}
       <div>
         <label className={labelCls}>Fasa Program</label>
-        <input
+        <select
           value={value.phase}
-          onChange={e => set({ phase: e.target.value.toUpperCase() })}
-          placeholder="cth. PRE-COMP"
+          onChange={e => set({ phase: e.target.value })}
           className={inputCls}
-        />
+        >
+          <option value="">-- Pilih Fasa --</option>
+          <option value="GENERAL">GENERAL</option>
+          <option value="SPECIFIC PREPARATION">SPECIFIC PREPARATION</option>
+          <option value="PRE COMPETITION">PRE COMPETITION</option>
+          <option value="COMPETITION">COMPETITION</option>
+          <option value="TRANSITION">TRANSITION</option>
+        </select>
       </div>
 
       {/* Training Goals */}

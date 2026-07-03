@@ -16,7 +16,7 @@ interface Athlete {
   gender: 'M' | 'F' | null
   sport_id: string
   category: string | null
-  status: 'active' | 'rest' | 'injured' | 'not_active'
+  status: string
   weight: number | null
   height: number | null
   photo_url: string | null
@@ -32,7 +32,7 @@ interface FormState {
   gender: 'M' | 'F' | ''
   sport_id: string
   category: string
-  status: 'active' | 'rest' | 'injured' | 'not_active'
+  status: string
   weight: number | null
   height: number | null
   photo_url: string | null
@@ -82,10 +82,20 @@ const statusConfig: Record<string, { label: string; cls: string; icon: React.Rea
       </svg>
     ),
   },
+  not_active: {
+    label: 'TIDAK AKTIF',
+    cls: 'bg-slate-100 text-[#666] border border-slate-300',
+    icon: (
+      <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5">
+        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+      </svg>
+    ),
+  },
 }
 
-function StatusBadge({ status }: { status: 'active' | 'rest' | 'injured' | 'not_active' }) {
+function StatusBadge({ status }: { status: string }) {
   const cfg = statusConfig[status]
+  if (!cfg) return null
   return (
     <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${cfg.cls}`}>
       {cfg.icon}

@@ -116,6 +116,7 @@ export default function AthleteProfilePage() {
   const [physio, setPhysio] = useState<PhysioSlot | null>(null)
   const [loading, setLoading] = useState(true)
   const [updatingStatus, setUpdatingStatus] = useState(false)
+  const [statusError, setStatusError] = useState<string | null>(null)
 
   useEffect(() => {
     if (id) fetchAll(id)
@@ -172,6 +173,7 @@ export default function AthleteProfilePage() {
   const updateStatus = async (newStatus: Athlete['status']) => {
     if (!athlete) return
     setUpdatingStatus(true)
+    setStatusError(null)
     try {
       const { error } = await supabase
         .from('athletes')
@@ -180,8 +182,8 @@ export default function AthleteProfilePage() {
 
       if (error) throw error
       setAthlete({ ...athlete, status: newStatus })
-    } catch (err) {
-      console.error('Failed to update status:', err)
+    } catch (err: any) {
+      setStatusError(err?.message ?? 'Gagal kemaskini status.')
     } finally {
       setUpdatingStatus(false)
     }
@@ -218,28 +220,33 @@ export default function AthleteProfilePage() {
               <h2 className="text-xl font-bold text-[#111]">{athlete.name}</h2>
               <p className="text-sm text-[#888] mt-0.5">{athlete.sport?.name}{athlete.category ? ` · ${athlete.category}` : ''}</p>
             </div>
-            <div className="flex gap-2 flex-wrap items-start">
-              {can('athletes', 'update') ? (
-                <select
-                  value={athlete.status}
-                  onChange={(e) => updateStatus(e.target.value as Athlete['status'])}
-                  disabled={updatingStatus}
-                  className={`text-[11px] font-semibold px-3 py-1 rounded-full border-0 cursor-pointer disabled:opacity-50 ${statusStyle[athlete.status]}`}
-                >
-                  <option value="active">Aktif</option>
-                  <option value="rest">Rehat</option>
-                  <option value="injured">Cedera</option>
-                  <option value="not_active">Tidak Aktif</option>
-                </select>
-              ) : (
-                <span className={`text-[11px] font-semibold px-3 py-1 rounded-full border ${statusStyle[athlete.status]}`}>
-                  {{ active: 'Aktif', rest: 'Rehat', injured: 'Cedera', not_active: 'Tidak Aktif' }[athlete.status]}
-                </span>
-              )}
-              {athlete.is_elite && (
-                <span className="inline-block text-[11px] font-bold px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-600 border border-yellow-200">
-                  ATLET ELIT
-                </span>
+            <div className="flex flex-col gap-1 items-start">
+              <div className="flex gap-2 flex-wrap items-center">
+                {can('athletes', 'update') ? (
+                  <select
+                    value={athlete.status}
+                    onChange={(e) => updateStatus(e.target.value as Athlete['status'])}
+                    disabled={updatingStatus}
+                    className={`text-[11px] font-semibold px-3 py-1 rounded-full border-0 cursor-pointer disabled:opacity-50 ${statusStyle[athlete.status]}`}
+                  >
+                    <option value="active">Aktif</option>
+                    <option value="rest">Rehat</option>
+                    <option value="injured">Cedera</option>
+                    <option value="not_active">Tidak Aktif</option>
+                  </select>
+                ) : (
+                  <span className={`text-[11px] font-semibold px-3 py-1 rounded-full border ${statusStyle[athlete.status]}`}>
+                    {{ active: 'Aktif', rest: 'Rehat', injured: 'Cedera', not_active: 'Tidak Aktif' }[athlete.status]}
+                  </span>
+                )}
+                {athlete.is_elite && (
+                  <span className="inline-block text-[11px] font-bold px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-600 border border-yellow-200">
+                    ATLET ELIT
+                  </span>
+                )}
+              </div>
+              {statusError && (
+                <p className="text-[11px] text-red-600">{statusError}</p>
               )}
             </div>
           </div>
