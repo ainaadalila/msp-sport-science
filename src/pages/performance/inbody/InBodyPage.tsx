@@ -8,7 +8,7 @@ import { logAction } from '../../../lib/audit'
 import { BADGE_GREEN, BADGE_ORANGE, BADGE_RED, type NormResult, sukmaSMM, sukmaBMI, sukmaFat, sukmaScore, sukmaFatMass, computeSkor, computeUlasan } from '../../../lib/inbodyNorms'
 import { useSports } from '../../../hooks/useSports'
 import { useAthletes } from '../../../hooks/useAthletes'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 
 interface Athlete {
   id: string
@@ -35,6 +35,7 @@ interface InBodyRecord {
   ulasan: string | null
   diet_plan_url: string | null
   diet_plan_name: string | null
+  catatan: string | null
   created_at: string
   athlete?: { name: string; sport?: { name: string } }
 }
@@ -55,6 +56,7 @@ const emptyForm: FormState = {
   ulasan: null,
   diet_plan_url: null,
   diet_plan_name: null,
+  catatan: null,
 }
 
 function scoreBadge(score: number | null) {
@@ -133,6 +135,14 @@ export default function InBodyPage() {
   const [uploadingDietPlan, setUploadingDietPlan] = useState(false)
   const [dietPlanError, setDietPlanError] = useState<string | null>(null)
 
+  async function openDietPlan(url: string) {
+    const match = url.match(/inbody_diet_plans\/(.+)$/)
+    if (!match) { window.open(url, '_blank'); return }
+    const { data, error } = await supabase.storage.from('inbody_diet_plans').createSignedUrl(match[1], 120)
+    if (!error && data) window.open(data.signedUrl, '_blank')
+    else window.open(url, '_blank')
+  }
+
   useEffect(() => {
     fetchAll()
   }, [])
@@ -161,7 +171,7 @@ export default function InBodyPage() {
     const [recRes] = await Promise.all([
       supabase
         .from('inbody_records')
-        .select('id, athlete_id, recorded_date, weight, smm, body_fat_mass, bmi, fat_pct, bmr, inbody_score, skor, diet_plan_url, diet_plan_name, athlete:athletes(name, sport_id, sport:sport_id(name))')
+        .select('id, athlete_id, recorded_date, weight, smm, body_fat_mass, bmi, fat_pct, bmr, inbody_score, skor, diet_plan_url, diet_plan_name, catatan, athlete:athletes(name, sport_id, sport:sport_id(name))')
         .order('recorded_date', { ascending: false }).limit(5000),
     ]) as any
     setRecords(recRes.data ?? [])
@@ -173,7 +183,7 @@ export default function InBodyPage() {
     setProfilLoading(true)
     const { data } = await supabase
       .from('inbody_records')
-      .select('id, athlete_id, recorded_date, weight, smm, body_fat_mass, bmi, fat_pct, bmr, inbody_score, skor, diet_plan_url, diet_plan_name, athlete:athletes(name, sport_id, sport:sport_id(name))')
+      .select('id, athlete_id, recorded_date, weight, smm, body_fat_mass, bmi, fat_pct, bmr, inbody_score, skor, diet_plan_url, diet_plan_name, catatan, athlete:athletes(name, sport_id, sport:sport_id(name))')
       .eq('athlete_id', athleteId)
       .order('recorded_date', { ascending: true }) as any
     setProfilRecords(data ?? [])
@@ -382,30 +392,64 @@ export default function InBodyPage() {
     const halfW = (CW - 5) / 2
     const PANEL_H = 78
 
-    // Left: stacked bar chart
+    // Left: 5 mini line charts
     pdf.setDrawColor(229, 231, 235); pdf.setLineWidth(0.3); pdf.roundedRect(M, y, halfW, PANEL_H, 2, 2)
     pdf.setFillColor(249, 250, 251); pdf.rect(M + 0.3, y + 0.3, halfW - 0.6, 9, 'F')
     pdf.setDrawColor(229, 231, 235); pdf.line(M, y + 9, M + halfW, y + 9)
     pdf.setFontSize(7.5); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(136, 136, 136)
     pdf.text('KOMPOSISI BADAN (TREND)', M + 3, y + 6.5)
-    const legY = y + 13
-    pdf.setFillColor(245, 106, 0); pdf.rect(M + 3, legY - 2.5, 5, 3, 'F')
-    pdf.setFontSize(7); pdf.setFont('helvetica', 'normal'); pdf.setTextColor(68, 68, 68)
-    pdf.text('Jisim Otot', M + 9.5, legY)
-    pdf.setFillColor(255, 179, 167); pdf.rect(M + 30, legY - 2.5, 5, 3, 'F')
-    pdf.text('Lemak Badan', M + 36.5, legY)
-    const barAreaX = M + 5, barAreaY = y + 18, barAreaW = halfW - 10, barAreaH = PANEL_H - 30, baseY = barAreaY + barAreaH
-    const maxBarVal = Math.max(...chartData.map(d => (d.smm ?? 0) + (d.fatMass ?? 0))) * 1.1 || 1
-    const slotW = barAreaW / Math.max(chartData.length, 1)
-    const barW2 = Math.min(slotW - 4, 12)
-    chartData.forEach((d, idx) => {
-      const sH = ((d.smm ?? 0) / maxBarVal) * barAreaH
-      const fH = ((d.fatMass ?? 0) / maxBarVal) * barAreaH
-      const bx = barAreaX + idx * slotW + (slotW - barW2) / 2
-      pdf.setFillColor(245, 106, 0); pdf.rect(bx, baseY - sH, barW2, Math.max(sH, 0.5), 'F')
-      pdf.setFillColor(255, 179, 167); pdf.rect(bx, baseY - sH - fH, barW2, Math.max(fH, 0.5), 'F')
-      pdf.setFontSize(6); pdf.setFont('helvetica', 'normal'); pdf.setTextColor(136, 136, 136)
-      pdf.text(d.date, bx + barW2 / 2, baseY + 5, { align: 'center' })
+
+    const miniMetrics: { key: keyof typeof chartData[0]; label: string; unit: string; rgb: [number,number,number] }[] = [
+      { key: 'weight',  label: 'Berat',         unit: ' kg', rgb: [99, 102, 241]  },
+      { key: 'smm',     label: 'Jisim Otot',    unit: ' kg', rgb: [245, 106, 0]   },
+      { key: 'fatMass', label: 'Lemak Badan',   unit: ' kg', rgb: [212, 64, 64]   },
+      { key: 'bmi',     label: 'BMI',           unit: '',    rgb: [58, 126, 200]  },
+      { key: 'fatPct',  label: 'Lemak Badan %', unit: '%',   rgb: [58, 158, 106]  },
+    ]
+    const miniRowH = (PANEL_H - 11) / 5
+    const labelColW = 28
+    const chartColX = M + 3 + labelColW
+    const chartColW = halfW - labelColW - 6
+    miniMetrics.forEach(({ key, label, unit, rgb }, mi) => {
+      const rowY = y + 10 + mi * miniRowH
+      if (mi > 0) {
+        pdf.setDrawColor(235, 235, 235); pdf.setLineWidth(0.2); pdf.line(M + 3, rowY, M + halfW - 3, rowY)
+      }
+      const vals = chartData.map(d => d[key] as number | null)
+      const validVals = vals.filter((v): v is number => v != null)
+      const latestVal = validVals.length > 0 ? validVals[validVals.length - 1] : null
+      pdf.setFontSize(6.5); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(136, 136, 136)
+      pdf.text(label.toUpperCase(), M + 3, rowY + 4.5)
+      pdf.setFontSize(8.5); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(rgb[0], rgb[1], rgb[2])
+      pdf.text(latestVal != null ? `${Number(latestVal).toFixed(1)}${unit}` : '—', M + 3, rowY + miniRowH - 2.5)
+      if (validVals.length > 1) {
+        const minV = Math.min(...validVals)
+        const maxV = Math.max(...validVals)
+        const range = maxV - minV || 1
+        const lineH = miniRowH - 5
+        const lineY = rowY + 2.5
+        const pts = chartData.map((d, i) => {
+          const v = d[key] as number | null
+          const px = chartColX + (i / (chartData.length - 1)) * chartColW
+          const py = v != null ? lineY + lineH - ((v - minV) / range) * lineH : null
+          return { px, py }
+        })
+        pdf.setDrawColor(rgb[0], rgb[1], rgb[2]); pdf.setLineWidth(0.7)
+        let drawing = false
+        pts.forEach((pt, i) => {
+          if (pt.py == null) { drawing = false; return }
+          if (!drawing || pts[i - 1]?.py == null) {
+            pdf.moveTo(pt.px, pt.py); drawing = true
+          } else {
+            pdf.lineTo(pt.px, pt.py)
+          }
+        })
+        pdf.stroke()
+        pts.forEach(pt => {
+          if (pt.py == null) return
+          pdf.setFillColor(rgb[0], rgb[1], rgb[2]); pdf.circle(pt.px, pt.py, 0.8, 'F')
+        })
+      }
     })
 
     // Right: InBody score + SUKMA norms
@@ -580,8 +624,11 @@ export default function InBodyPage() {
 
   const chartData = profilRecords.slice(-10).map(r => ({
     date: new Date(r.recorded_date + 'T00:00:00').toLocaleDateString('ms-MY', { day: '2-digit', month: 'short' }),
-    smm: r.smm ?? 0,
-    fatMass: r.body_fat_mass ?? 0,
+    weight:  r.weight ?? null,
+    smm:     r.smm ?? null,
+    fatMass: r.body_fat_mass ?? null,
+    bmi:     r.bmi ?? null,
+    fatPct:  r.fat_pct ?? null,
   }))
 
   return (
@@ -599,7 +646,7 @@ export default function InBodyPage() {
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                 <path d="M9 12h6m-6 4h6M9 8h.01M15 8h.01M7 5h10a2 2 0 012 2v10a2 2 0 01-2 2H7a2 2 0 01-2-2V7a2 2 0 012-2z"/>
               </svg>
-              Cetak
+              Muat Turun
             </button>
           )}
           {activeTab === 'jadual' && can('inbody', 'create') && (
@@ -737,7 +784,7 @@ export default function InBodyPage() {
                                         <table className="w-full text-xs">
                                           <thead>
                                             <tr className="border-b border-orange-100">
-                                              {['Tarikh', 'Berat (kg)', 'BMI', 'Lemak (%)', 'SMM (kg)', 'Skor InBody', 'Pelan Diet', ''].map(h => (
+                                              {['Tarikh', 'Berat (kg)', 'BMI', 'Lemak (%)', 'SMM (kg)', 'Skor InBody', 'Pelan Diet', 'Catatan', ''].map(h => (
                                                 <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-wider text-[#888] px-3 py-2">{h}</th>
                                               ))}
                                             </tr>
@@ -757,6 +804,9 @@ export default function InBodyPage() {
                                                   </td>
                                                   <td className="px-3 py-2 text-center">
                                                     {r.diet_plan_url ? <span className="text-green-600 font-bold">✓</span> : <span className="text-[#888]">—</span>}
+                                                  </td>
+                                                  <td className="px-3 py-2 text-[#444] max-w-[160px]">
+                                                    <span className="uppercase text-xs">{r.catatan || '—'}</span>
                                                   </td>
                                                   <td className="px-3 py-2">
                                                     <div className="flex gap-3 justify-end">
@@ -855,17 +905,36 @@ export default function InBodyPage() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                 <div className="bg-white rounded-xl border border-gray-200 border-t-4 border-t-[#F56A00] p-5">
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-[#888] mb-4">Komposisi Badan (Trend)</p>
-                  <ResponsiveContainer width="100%" height={220}>
-                    <BarChart data={chartData} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F0" vertical={false} />
-                      <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#888' }} tickLine={false} axisLine={false} />
-                      <YAxis tick={{ fontSize: 10, fill: '#888' }} tickLine={false} axisLine={false} unit=" kg" />
-                      <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #eee' }} />
-                      <Legend formatter={(v: string) => v === 'smm' ? 'Jisim Otot' : 'Lemak Badan'} iconType="square" iconSize={10} wrapperStyle={{ fontSize: 11 }} />
-                      <Bar dataKey="smm"     stackId="a" fill="#F56A00" radius={[0,0,0,0]} name="smm" />
-                      <Bar dataKey="fatMass" stackId="a" fill="#FFB3A7" radius={[4,4,0,0]} name="fatMass" />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <div className="divide-y divide-gray-100">
+                    {([
+                      { key: 'weight',  label: 'Berat',         unit: ' kg', color: '#6366f1', val: latestRecord.weight },
+                      { key: 'smm',     label: 'Jisim Otot',    unit: ' kg', color: '#F56A00', val: latestRecord.smm },
+                      { key: 'fatMass', label: 'Lemak Badan',   unit: ' kg', color: '#D44040', val: latestRecord.body_fat_mass },
+                      { key: 'bmi',     label: 'BMI',           unit: '',    color: '#3A7EC8', val: latestRecord.bmi },
+                      { key: 'fatPct',  label: 'Lemak Badan %', unit: '%',   color: '#3A9E6A', val: latestRecord.fat_pct },
+                    ] as { key: string; label: string; unit: string; color: string; val: number | null }[]).map(({ key, label, unit, color, val }) => (
+                      <div key={key} className="flex items-center gap-3 py-2">
+                        <div className="w-28 shrink-0">
+                          <p className="text-[10px] font-semibold text-[#888] uppercase tracking-widest leading-tight">{label}</p>
+                          <p className="text-sm font-bold mt-0.5" style={{ color }}>{val != null ? `${Number(val).toFixed(1)}${unit}` : '—'}</p>
+                        </div>
+                        <div className="flex-1 h-14">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 4 }}>
+                              <XAxis dataKey="date" hide />
+                              <YAxis domain={['auto', 'auto']} hide />
+                              <Tooltip
+                                contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #eee', padding: '4px 8px' }}
+                                formatter={(v) => [`${Number(v as number ?? 0).toFixed(1)}${unit}`, label] as [string, string]}
+                                labelStyle={{ fontSize: 10, color: '#888' }}
+                              />
+                              <Line type="monotone" dataKey={key} stroke={color} strokeWidth={2} dot={{ r: 2, fill: color }} activeDot={{ r: 4 }} connectNulls />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-5">
@@ -931,14 +1000,12 @@ export default function InBodyPage() {
                         <p className="text-sm font-medium text-[#111] truncate">{latestRecord.diet_plan_name || 'Diet Plan File'}</p>
                       </div>
                       <div className="flex gap-2">
-                        <a
-                          href={latestRecord.diet_plan_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                        <button
+                          onClick={() => openDietPlan(latestRecord.diet_plan_url!)}
                           className="flex-1 px-3 py-2 text-xs font-semibold text-[#3A7EC8] border border-[#3A7EC8] rounded-lg hover:bg-blue-50 transition text-center"
                         >
-                          Muat Turun
-                        </a>
+                          Lihat / Muat Turun
+                        </button>
                         <button
                           onClick={() => { setViewRecord(latestRecord); fileInputRef.current?.click() }}
                           disabled={uploadingDietPlan}
@@ -981,12 +1048,12 @@ export default function InBodyPage() {
       {/* Add / Edit Modal */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm md:max-w-lg mx-4">
-            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm md:max-w-lg mx-4 flex flex-col max-h-[90vh]">
+            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
               <h3 className="font-bold text-[#111]">{editing ? 'Edit Rekod InBody' : 'Rekod InBody Baharu'}</h3>
               <button onClick={() => setModalOpen(false)} className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
             </div>
-            <div className="px-6 py-5 space-y-4">
+            <div className="px-6 py-5 space-y-4 overflow-y-auto">
               {error && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-600">{error}</div>}
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
@@ -1027,6 +1094,17 @@ export default function InBodyPage() {
                     }`}>{computeUlasan(computeSkor(form))}</span>
                   </div>
                 )}
+                <div className="col-span-2">
+                  <Field label="Catatan">
+                    <textarea
+                      value={form.catatan ?? ''}
+                      onChange={e => setField('catatan', e.target.value.toUpperCase() || null)}
+                      rows={3}
+                      placeholder="CATATAN..."
+                      className={`${inputCls} resize-none`}
+                    />
+                  </Field>
+                </div>
               </div>
             </div>
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">

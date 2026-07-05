@@ -1,11 +1,17 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 
 export default function LoginPage() {
-  const { signIn, loading: authLoading } = useAuth()
+  const { signOut, signIn, loading: authLoading } = useAuth()
   const navigate = useNavigate()
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) signOut()
+    })
+  }, [])
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')

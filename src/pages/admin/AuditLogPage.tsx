@@ -64,11 +64,12 @@ export default function AuditLogPage() {
   const [logs, setLogs] = useState<AuditLogWithProfile[]>([])
   const [loading, setLoading] = useState(true)
   const [currentPage, setCurrentPage] = useState(1)
-  const [filterDateRange, setFilterDateRange] = useState('all')
+  const [filterDateFrom, setFilterDateFrom] = useState('')
+  const [filterDateTo, setFilterDateTo] = useState('')
   const [filterCategory, setFilterCategory] = useState('all')
   const [filterUser, setFilterUser] = useState('all')
 
-  useEffect(() => { setCurrentPage(1) }, [filterDateRange, filterCategory, filterUser])
+  useEffect(() => { setCurrentPage(1) }, [filterDateFrom, filterDateTo, filterCategory, filterUser])
 
   useEffect(() => {
     async function fetchLogs() {
@@ -87,30 +88,10 @@ export default function AuditLogPage() {
     fetchLogs()
   }, [])
 
-  const getDateRange = () => {
-    const now = new Date()
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-
-    switch (filterDateRange) {
-      case 'today':
-        return today
-      case '7days':
-        const sevenDaysAgo = new Date(today)
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-        return sevenDaysAgo
-      case '30days':
-        const thirtyDaysAgo = new Date(today)
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-        return thirtyDaysAgo
-      default:
-        return new Date(0)
-    }
-  }
-
   const filtered = logs.filter(log => {
-    const logDate = new Date(log.created_at)
-    const minDate = getDateRange()
-    if (logDate < minDate) return false
+    const logDate = log.created_at.slice(0, 10)
+    if (filterDateFrom && logDate < filterDateFrom) return false
+    if (filterDateTo && logDate > filterDateTo) return false
 
     if (filterCategory !== 'all') {
       const categoryActions = ACTION_CATEGORIES[filterCategory]
@@ -164,12 +145,21 @@ export default function AuditLogPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-xs font-semibold text-[#888] uppercase tracking-wider mb-2">Julat Tarikh</label>
-            <select value={filterDateRange} onChange={e => setFilterDateRange(e.target.value)} className="w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2 text-sm text-[#111] outline-none focus:border-[#F56A00]">
-              <option value="all">Semua</option>
-              <option value="today">Hari Ini</option>
-              <option value="7days">7 Hari Lalu</option>
-              <option value="30days">30 Hari Lalu</option>
-            </select>
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={filterDateFrom}
+                onChange={e => setFilterDateFrom(e.target.value)}
+                className="flex-1 bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2 text-sm text-[#111] outline-none focus:border-[#F56A00]"
+              />
+              <span className="text-[#888] text-xs">—</span>
+              <input
+                type="date"
+                value={filterDateTo}
+                onChange={e => setFilterDateTo(e.target.value)}
+                className="flex-1 bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2 text-sm text-[#111] outline-none focus:border-[#F56A00]"
+              />
+            </div>
           </div>
           <div>
             <label className="block text-xs font-semibold text-[#888] uppercase tracking-wider mb-2">Kategori</label>

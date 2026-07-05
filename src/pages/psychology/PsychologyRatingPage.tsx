@@ -572,11 +572,6 @@ export default function PsychologyRatingPage() {
   return (
     <div className="space-y-4">
 
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <p className="text-[12px] text-[#888]">{athletes.length} atlet • {ratings.length} rekod penilaian</p>
-      </div>
-
       {/* Stats Section */}
       {!loading && (
         <div className="grid grid-cols-3 gap-3">
@@ -856,7 +851,7 @@ export default function PsychologyRatingPage() {
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                     <path d="M9 12h6m-6 4h6M9 8h.01M15 8h.01M7 5h10a2 2 0 012 2v10a2 2 0 01-2 2H7a2 2 0 01-2-2V7a2 2 0 012-2z"/>
                   </svg>
-                  Cetak
+                  Muat Turun
                 </button>
                 <button onClick={() => setSelectedAthleteId(null)} className="text-[#888] hover:text-[#111] text-2xl leading-none">×</button>
               </div>
