@@ -166,6 +166,52 @@ export default function StrengthPage() {
     }
   }, [tabParam])
 
+  const dayLayouts = useMemo(() => {
+    const layouts: Record<string, Array<{
+      schedule: CoachSchedule; slot: CoachScheduleSlot
+      allSlots: Array<{ schedule: CoachSchedule; slot: CoachScheduleSlot }>
+      sports: string[]
+      colIndex: number; totalCols: number
+    }>> = {}
+    for (let d = 0; d < 7; d++) {
+      const date = new Date(weekStartDate)
+      date.setDate(date.getDate() + d)
+      const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+      const slotsForDay = schedules.flatMap(s =>
+        (s.slots ?? []).filter(sl => sl.slot_date === dateStr).map(sl => ({ schedule: s, slot: sl }))
+      )
+
+      // Merge slots that share the same coach + exact same time into one card
+      const groupMap = new Map<string, typeof slotsForDay>()
+      slotsForDay.forEach(item => {
+        const key = `${item.schedule.coach_id}|${item.slot.start_time}|${item.slot.end_time}`
+        if (!groupMap.has(key)) groupMap.set(key, [])
+        groupMap.get(key)!.push(item)
+      })
+      const merged = Array.from(groupMap.values()).map(group => ({
+        schedule: group[0].schedule,
+        slot: group[0].slot,
+        allSlots: group,
+        sports: group.map(g => g.schedule.sport),
+      })).sort((a, b) => a.slot.start_time.localeCompare(b.slot.start_time))
+
+      const colEnds: string[] = []
+      const colIdx: number[] = merged.map(item => {
+        const c = colEnds.findIndex(end => end <= item.slot.start_time)
+        if (c !== -1) { colEnds[c] = item.slot.end_time; return c }
+        colEnds.push(item.slot.end_time); return colEnds.length - 1
+      })
+
+      layouts[dateStr] = merged.map((item, i) => {
+        const overlapMaxCol = merged.reduce((max, other, j) =>
+          item.slot.start_time < other.slot.end_time && other.slot.start_time < item.slot.end_time
+            ? Math.max(max, colIdx[j]) : max, 0)
+        return { ...item, colIndex: colIdx[i], totalCols: overlapMaxCol + 1 }
+      })
+    }
+    return layouts
+  }, [schedules, weekStartDate])
+
   async function fetchSchedules() {
     const { data, error } = await supabase
       .from('coach_schedules')
@@ -349,40 +395,6 @@ export default function StrengthPage() {
     setScheduleModalOpen(true)
   }
 
-  const busyCoachIds = useMemo(() => {
-    const busy = new Set<string>()
-    const slot = scheduleSlots[0]
-    if (!slot?.start_time || !slot?.end_time) return busy
-
-    const timesOverlap = (s1: string, e1: string, s2: string, e2: string) => s1 < e2 && s2 < e1
-
-    const DAY_MAP: Record<string, number> = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 }
-
-    for (const schedule of schedules) {
-      if (editingSchedule && schedule.id === editingSchedule.id) continue
-
-      for (const existingSlot of schedule.slots ?? []) {
-        if (!timesOverlap(slot.start_time, slot.end_time, existingSlot.start_time, existingSlot.end_time)) continue
-
-        const existingDay = new Date(existingSlot.slot_date + 'T00:00:00').getDay()
-
-        const dateConflict = scheduleForm.repeat_pattern === 'custom'
-          ? scheduleSlots.some(s => s.slot_date === existingSlot.slot_date)
-          : scheduleForm.selected_days.some(d => DAY_MAP[d] === existingDay)
-
-        if (dateConflict) { busy.add(schedule.coach_id); break }
-      }
-    }
-
-    return busy
-  }, [schedules, scheduleSlots, scheduleForm.selected_days, scheduleForm.repeat_pattern, editingSchedule])
-
-  useEffect(() => {
-    if (scheduleForm.coach_id && busyCoachIds.has(scheduleForm.coach_id)) {
-      setScheduleForm(f => ({ ...f, coach_id: '' }))
-      setError('Jurulatih yang dipilih sudah mempunyai jadual pada masa yang sama.')
-    }
-  }, [busyCoachIds])
 
   async function handleSaveSchedule() {
     if (!scheduleForm.coach_id || !scheduleForm.valid_from || !scheduleForm.sport) {
@@ -391,10 +403,6 @@ export default function StrengthPage() {
     }
     if (scheduleSlots.length === 0) { setError('Sila tambah sekurang-kurangnya satu slot hari/masa.'); return }
     if (scheduleForm.repeats && scheduleForm.repeat_pattern !== 'custom' && !scheduleForm.repeat_until) { setError('Sila tentukan tarikh akhir untuk jadual berulang.'); return }
-    if (busyCoachIds.has(scheduleForm.coach_id)) {
-      setError('Jurulatih ini sudah mempunyai jadual pada masa yang sama. Sila pilih masa atau jurulatih yang berbeza.')
-      return
-    }
     setSaving(true); setError(null)
 
     const coach = coaches.find(c => c.id === scheduleForm.coach_id)
@@ -830,75 +838,59 @@ export default function StrengthPage() {
                         date.setDate(date.getDate() + dayIdx)
                         const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 
-                        // Find ALL slots for this date
-                        const slotsForDate = schedules.flatMap(s =>
-                          (s.slots ?? [])
-                            .filter(sl => sl.slot_date === dateStr)
-                            .map(sl => ({ schedule: s, slot: sl }))
-                        )
-
-                        // Filter to only slots that include this hour
-                        const slotsInHour = slotsForDate.filter(({ slot }) => {
-                          const [startHour] = slot.start_time.split(':').map(Number)
-                          const [endHour] = slot.end_time.split(':').map(Number)
-                          return startHour <= hour && endHour > hour
-                        })
-
-                        // Group slots by time
-                        const slotsByTime: { [key: string]: typeof slotsInHour } = {}
-                        slotsInHour.forEach(item => {
-                          const key = `${item.slot.start_time}-${item.slot.end_time}`
-                          if (!slotsByTime[key]) slotsByTime[key] = []
-                          slotsByTime[key].push(item)
+                        // Only render slots that START in this exact hour
+                        const startingNow = (dayLayouts[dateStr] ?? []).filter(item => {
+                          const [startHour] = item.slot.start_time.split(':').map(Number)
+                          return startHour === hour
                         })
 
                         return (
                           <td
                             key={dayIdx}
-                            style={{ height: '60px', padding: '4px 0', position: 'relative' }}
+                            style={{ height: '60px', position: 'relative' }}
                             className="border-r border-gray-100 last:border-0"
                           >
-                            {Object.entries(slotsByTime).map(([timeKey, slots], timeSlotIndex) => {
-                              const [startTime, endTime] = timeKey.split('-')
-                              const [startHour] = startTime.split(':').map(Number)
-                              const [endHour] = endTime.split(':').map(Number)
+                            {startingNow.map(item => {
+                              const [startHour] = item.slot.start_time.split(':').map(Number)
+                              const [endHour] = item.slot.end_time.split(':').map(Number)
                               const slotHeight = (endHour - startHour) * 60
-                              const topOffset = startHour === hour ? 0 : -(hour - startHour) * 60
-                              const hasMultiple = slots.length > 1
-                              const opacityValue = Math.max(0.4, 1 - timeSlotIndex * 0.25)
+                              const leftPct = (item.colIndex / item.totalCols) * 100
+                              const widthPct = 100 / item.totalCols
+                              const s12 = convert24To12(item.slot.start_time)
+                              const e12 = convert24To12(item.slot.end_time)
+                              const timeLabel = `${s12.hour}:${s12.minute}${s12.ampm}–${e12.hour}:${e12.minute}${e12.ampm}`
 
                               return (
                                 <div
-                                  key={timeKey}
-                                  onClick={() => hasMultiple && setSelectedTimeSlot({ dateStr, startTime, endTime, slots })}
+                                  key={item.slot.id}
                                   style={{
                                     position: 'absolute',
-                                    top: `${topOffset}px`,
-                                    left: '4px',
-                                    right: '4px',
+                                    top: 0,
+                                    left: `calc(${leftPct}% + 2px)`,
+                                    width: `calc(${widthPct}% - 4px)`,
                                     height: `${slotHeight}px`,
                                     zIndex: 10,
-                                    opacity: opacityValue
                                   }}
-                                  className={`border border-[rgba(245,106,0,0.3)] rounded px-1.5 py-0.5 text-[11px] transition overflow-hidden ${hasMultiple ? 'bg-[#F56A00] text-white cursor-pointer hover:bg-[#D45A00]' : 'bg-[rgba(245,106,0,0.1)] cursor-pointer hover:bg-[rgba(245,106,0,0.15)] group'}`}
+                                  className="group"
                                 >
-                                  {hasMultiple ? (
-                                    <div className="flex items-center justify-center h-full">
-                                      <span className="font-bold text-base">{slots.length} slots</span>
+                                  <div
+                                    onClick={() => setSelectedTimeSlot({ dateStr, startTime: item.slot.start_time, endTime: item.slot.end_time, slots: item.allSlots })}
+                                    className="h-full bg-[rgba(245,106,0,0.1)] border border-[rgba(245,106,0,0.3)] rounded px-1.5 py-0.5 overflow-hidden cursor-pointer hover:bg-[rgba(245,106,0,0.18)] relative transition"
+                                  >
+                                    {can('strength', 'delete') && item.allSlots.length === 1 && (
+                                      <button
+                                        onClick={e => { e.stopPropagation(); setConfirmDeleteSlot({ schedule: item.schedule, slot: item.slot }) }}
+                                        className="absolute top-0.5 right-0.5 w-4 h-4 flex items-center justify-center rounded-full bg-white/80 text-[#D44040] opacity-0 group-hover:opacity-100 transition hover:bg-red-50 z-10 text-[10px] leading-none"
+                                      >×</button>
+                                    )}
+                                    <p className="font-semibold text-[#F56A00] truncate leading-tight text-[10px] pr-4">{item.schedule.schedule_name}</p>
+                                    <div className="flex flex-wrap gap-0.5 mt-0.5">
+                                      {item.sports.map(sp => (
+                                        <span key={sp} className="text-[8px] leading-tight text-[#666] bg-[rgba(245,106,0,0.12)] rounded px-1">{sp}</span>
+                                      ))}
                                     </div>
-                                  ) : (
-                                    <>
-                                      {can('strength', 'delete') && (
-                                        <button
-                                          onClick={(e) => { e.stopPropagation(); setConfirmDeleteSlot({ schedule: slots[0].schedule, slot: slots[0].slot }) }}
-                                          className="absolute top-0.5 right-0.5 w-4 h-4 flex items-center justify-center rounded-full bg-white/80 text-[#D44040] opacity-0 group-hover:opacity-100 transition hover:bg-red-50 z-10 text-[10px] leading-none"
-                                        >×</button>
-                                      )}
-                                      <p className="font-semibold text-[#F56A00] truncate leading-tight text-xs pr-4">{slots[0].schedule.schedule_name}</p>
-                                      <p className="text-[10px] text-[#666] leading-tight">{slots[0].schedule.sport}</p>
-                                      <p className="text-[9px] text-[#888] font-mono leading-tight">{(() => { const s = convert24To12(startTime); const e = convert24To12(endTime); return `${s.hour}:${s.minute}${s.ampm}–${e.hour}:${e.minute}${e.ampm}` })()}</p>
-                                    </>
-                                  )}
+                                    <p className="text-[9px] text-[#888] font-mono leading-tight mt-0.5">{timeLabel}</p>
+                                  </div>
                                 </div>
                               )
                             })}
@@ -1025,14 +1017,9 @@ export default function StrengthPage() {
                     <Field label="Jurulatih" required>
                       <select value={scheduleForm.coach_id} onChange={e => setScheduleForm(f => ({ ...f, coach_id: e.target.value }))} className={inputCls}>
                         <option value="">— Pilih Jurulatih —</option>
-                        {coaches.map(c => {
-                          const busy = busyCoachIds.has(c.id)
-                          return (
-                            <option key={c.id} value={c.id} disabled={busy}>
-                              {c.full_name}{busy ? ' (Telah ditempah)' : ''}
-                            </option>
-                          )
-                        })}
+                        {coaches.map(c => (
+                          <option key={c.id} value={c.id}>{c.full_name}</option>
+                        ))}
                       </select>
                     </Field>
                     <Field label="Sukan" required>

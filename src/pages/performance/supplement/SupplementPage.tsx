@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
 import { usePermissions } from '../../../hooks/usePermissions'
@@ -37,14 +38,6 @@ interface SupplementRequest {
 
 type Tab = 'requests' | 'inventory'
 
-const statusLabel: Record<string, string> = {
-  pending: 'Menunggu Semakan',
-  sokongan: 'Menunggu Sokongan',
-  kelulusan: 'Menunggu Kelulusan',
-  semakan_tolak: 'Ditolak',
-  approved: 'Diluluskan',
-  partial: 'Diluluskan Sebahagian',
-}
 const statusStyle: Record<string, string> = {
   pending: 'bg-blue-50 text-blue-700 border border-blue-200',
   sokongan: 'bg-amber-50 text-amber-700 border border-amber-200',
@@ -125,9 +118,10 @@ export default function SupplementPage() {
 
   // Filters & Sorting
   const { sports } = useSports()
+  const [searchParams] = useSearchParams()
   const [search, setSearch] = useState('')
   const [filterSport, setFilterSport] = useState('')
-  const [filterStatus, setFilterStatus] = useState('')
+  const [filterStatus, setFilterStatus] = useState(() => searchParams.get('status') ?? '')
   const [sortBy, setSortBy] = useState<'date_desc' | 'date_asc'>('date_desc')
   const REQS_PER_PAGE = 25
   const [currentPage, setCurrentPage] = useState(1)
@@ -343,8 +337,33 @@ export default function SupplementPage() {
 
   const pendingCount = requests.filter(r => r.status === 'pending').length
   const getCountByStatusKey = (key: string) => requests.filter(r => getStatusKey(r) === key).length
+
+  const FINAL_STATUSES = ['semakan_tolak', 'approved', 'partial']
+  const isAdminLevel = profile?.role === 'superadmin' || profile?.role === 'admin'
+  const visibleStatuses: string[] = isAdminLevel
+    ? ['', 'pending', 'sokongan', 'kelulusan', 'selesai']
+    : [
+        '',
+        ...(isCoordinator ? ['pending'] : []),
+        ...(isSupporter ? ['sokongan'] : []),
+        ...(isApprover ? ['kelulusan'] : []),
+        'selesai',
+      ]
+  const statusButtonLabel: Record<string, string> = {
+    '': 'Semua',
+    pending: 'Menunggu Semakan',
+    sokongan: 'Menunggu Sokongan',
+    kelulusan: 'Menunggu Kelulusan',
+    selesai: 'Selesai',
+  }
+  const getCountForButton = (s: string) =>
+    s === '' ? requests.length
+    : s === 'selesai' ? requests.filter(r => FINAL_STATUSES.includes(getStatusKey(r))).length
+    : getCountByStatusKey(s)
+
   const filteredReqs = requests.filter(r => {
-    if (filterStatus && getStatusKey(r) !== filterStatus) return false
+    if (filterStatus === 'selesai' && !FINAL_STATUSES.includes(getStatusKey(r))) return false
+    if (filterStatus && filterStatus !== 'selesai' && getStatusKey(r) !== filterStatus) return false
     if (filterSport && r.sport !== filterSport) return false
     if (search) {
       const q = search.toLowerCase()
@@ -463,15 +482,15 @@ export default function SupplementPage() {
             </select>
           </div>
           <div className="flex gap-2 flex-wrap">
-            {(['', 'pending', 'sokongan', 'kelulusan', 'semakan_tolak', 'approved', 'partial'] as const).map(s => {
-              const count = s === '' ? requests.length : getCountByStatusKey(s)
+            {visibleStatuses.map(s => {
+              const count = getCountForButton(s)
               return (
                 <button
                   key={s}
                   onClick={() => setFilterStatus(s)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${filterStatus === s ? 'bg-[#F56A00] text-white border-[#F56A00]' : 'bg-white text-[#888] border-gray-200 hover:border-[#F56A00] hover:text-[#F56A00]'}`}
                 >
-                  {s === '' ? 'Semua' : statusLabel[s]}
+                  {statusButtonLabel[s] ?? s}
                   {count > 0 && ` (${count})`}
                 </button>
               )

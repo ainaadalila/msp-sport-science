@@ -587,7 +587,7 @@ export default function FitnessTestingPage() {
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
               <path d="M9 12h6m-6 4h6M9 8h.01M15 8h.01M7 5h10a2 2 0 012 2v10a2 2 0 01-2 2H7a2 2 0 01-2-2V7a2 2 0 012-2z"/>
             </svg>
-            Cetak
+            Muat Turun
           </button>
         )}
       </div>
@@ -1024,7 +1024,7 @@ export default function FitnessTestingPage() {
                       onChange={e => setYear(parseInt(e.target.value))}
                       className="w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2 text-sm"
                     >
-                      {[2024, 2025, 2026, 2027].map(y => (
+                      {[2024, 2025, 2026, 2027, 2028, 2029, 2030, 2031, 2032, 2033, 2034, 2035, 2036].map(y => (
                         <option key={y} value={y}>
                           {y}
                         </option>

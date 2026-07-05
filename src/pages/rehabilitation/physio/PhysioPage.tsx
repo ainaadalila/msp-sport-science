@@ -138,7 +138,6 @@ function handlePrintCatatan(slot: PhysioSlot) {
   fieldRow('Jenis Kecederaan', slot.injury_type, true)
   fieldRow('Nota Penilaian', slot.assessment_notes, true)
   fieldRow('Pelan Rehabilitasi', slot.rehab_plan, true)
-  fieldRow('Nota Kemajuan', slot.progress_notes, true)
 
   // Stats row
   const hasScale = slot.pain_scale !== null
@@ -159,7 +158,6 @@ function handlePrintCatatan(slot: PhysioSlot) {
   y += 20
 
   fieldRow('Otot Sasaran', slot.target_muscle, true)
-  fieldRow('Jenis Rawatan', slot.treatment_type, true)
 
   pdf.save(`Catatan_Fisioterapi_${slot.athlete?.name ?? 'Atlet'}_${slot.slot_date}.pdf`)
 }
@@ -721,27 +719,19 @@ export default function PhysioPage() {
                 <Field label="Pelan Rehabilitasi">
                   <textarea value={assessmentForm.rehab_plan} onChange={e => setAssessmentField('rehab_plan', e.target.value.toUpperCase())} className={`${inputCls} resize-none`} rows={2} placeholder="PELAN RAWATAN & LATIHAN..." />
                 </Field>
-                <Field label="Nota Kemajuan">
-                  <textarea value={assessmentForm.progress_notes} onChange={e => setAssessmentField('progress_notes', e.target.value.toUpperCase())} className={`${inputCls} resize-none`} rows={2} placeholder="PERKEMBANGAN SEMASA..." />
-                </Field>
                 <div className="grid grid-cols-2 gap-4">
                   <Field label="Skala Kesakitan (0–10)">
                     <input type="number" min={0} max={10} value={assessmentForm.pain_scale} onChange={e => setAssessmentField('pain_scale', e.target.value)} className={inputCls} placeholder="0–10" />
                   </Field>
                   <Field label="Status Kehadiran">
                     <select value={assessmentForm.attendance_status} onChange={e => setAssessmentField('attendance_status', e.target.value as AssessmentFormState['attendance_status'])} className={inputCls}>
-                      <option value="scheduled">Dijadual</option>
                       <option value="arrived">Hadir</option>
-                      <option value="completed">Selesai</option>
                       <option value="no_show">Tidak Hadir</option>
                     </select>
                   </Field>
                 </div>
                 <Field label="Otot Sasaran">
                   <input value={assessmentForm.target_muscle} onChange={e => setAssessmentField('target_muscle', e.target.value.toUpperCase())} className={inputCls} placeholder="cth. HAMSTRING, QUADRICEPS" />
-                </Field>
-                <Field label="Jenis Rawatan">
-                  <input value={assessmentForm.treatment_type} onChange={e => setAssessmentField('treatment_type', e.target.value.toUpperCase())} className={inputCls} placeholder="cth. ULTRASOUND, TENS, MANUAL THERAPY" />
                 </Field>
               </div>
             </div>
@@ -808,7 +798,6 @@ export default function PhysioPage() {
                     {[
                       ['Nota Penilaian', detailSlot.assessment_notes],
                       ['Pelan Rehabilitasi', detailSlot.rehab_plan],
-                      ['Nota Kemajuan', detailSlot.progress_notes],
                     ].map(([label, val]) => (
                       val && (
                         <div key={label as string}>
@@ -835,12 +824,6 @@ export default function PhysioPage() {
                       <div>
                         <p className="text-[10px] text-[#888] mb-1">Otot Sasaran</p>
                         <p className="text-sm text-[#444] bg-gray-50 rounded px-3 py-2">{detailSlot.target_muscle}</p>
-                      </div>
-                    )}
-                    {detailSlot.treatment_type && (
-                      <div>
-                        <p className="text-[10px] text-[#888] mb-1">Jenis Rawatan</p>
-                        <p className="text-sm text-[#444] bg-gray-50 rounded px-3 py-2">{detailSlot.treatment_type}</p>
                       </div>
                     )}
                   </div>

@@ -181,7 +181,7 @@ export default function Layout() {
                     <div>
                       {alerts.injured > 0 && (
                         <button
-                          onClick={() => { setNotifOpen(false); navigate('/rehabilitation/physio') }}
+                          onClick={() => { setNotifOpen(false); navigate('/athletes?status=injured') }}
                           className="w-full flex gap-3 items-start px-4 py-3 hover:bg-gray-50 transition border-b border-gray-50 text-left"
                         >
                           <span className="w-1.5 h-1.5 rounded-full bg-[#D44040] mt-1.5 shrink-0" />
@@ -193,7 +193,7 @@ export default function Layout() {
                       )}
                       {alerts.pendingSupplements > 0 && (
                         <button
-                          onClick={() => { setNotifOpen(false); navigate('/performance/supplement') }}
+                          onClick={() => { setNotifOpen(false); navigate('/performance/supplement?status=pending') }}
                           className="w-full flex gap-3 items-start px-4 py-3 hover:bg-gray-50 transition text-left"
                         >
                           <span className="w-1.5 h-1.5 rounded-full bg-[#F56A00] mt-1.5 shrink-0" />

@@ -574,6 +574,10 @@ export default function ReportsPage() {
         const cmp = !isNaN(an) && !isNaN(bn) ? an - bn : String(av).localeCompare(String(bv))
         return sortDir === 'asc' ? cmp : -cmp
       })
+    } else {
+      d = [...d].sort((a, b) =>
+        String(a['Nama Atlet'] ?? a['Nama'] ?? '').localeCompare(String(b['Nama Atlet'] ?? b['Nama'] ?? ''))
+      )
     }
     return d
   }, [data, previewSearch, sortCol, sortDir, columnFilters, dateColumnFilters])
@@ -735,7 +739,7 @@ export default function ReportsPage() {
                             <input
                               type="date"
                               value={from}
-                              onChange={e => setDateColumnFilters({ ...dateColumnFilters, [col]: { from: e.target.value, to } })}
+                              onChange={e => setDateColumnFilters(prev => ({ ...prev, [col]: { from: e.target.value, to } }))}
                               className="bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2 text-sm text-[#111] outline-none focus:border-[#F56A00] focus:bg-white"
                             />
                             <span className="text-xs text-[#999]">—</span>
@@ -743,12 +747,12 @@ export default function ReportsPage() {
                               type="date"
                               value={to}
                               placeholder="Hingga"
-                              onChange={e => setDateColumnFilters({ ...dateColumnFilters, [col]: { from, to: e.target.value } })}
+                              onChange={e => setDateColumnFilters(prev => ({ ...prev, [col]: { from, to: e.target.value } }))}
                               className="bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2 text-sm text-[#111] outline-none focus:border-[#F56A00] focus:bg-white"
                             />
                             {(from || to) && (
                               <button
-                                onClick={() => setDateColumnFilters({ ...dateColumnFilters, [col]: { from: '', to: '' } })}
+                                onClick={() => setDateColumnFilters(prev => ({ ...prev, [col]: { from: '', to: '' } }))}
                                 className="text-xs text-[#999] hover:text-[#F56A00] transition"
                               >✕</button>
                             )}
@@ -758,7 +762,16 @@ export default function ReportsPage() {
                     }
 
                     const filterValue = columnFilters[col] || ''
-                    const uniqueValues = [...new Set(data.map(r => String(r[col] ?? '').trim()).filter(Boolean))].sort()
+                    // Compute options from data filtered by all OTHER active column filters (cascading)
+                    const dataForCol = data.filter(row =>
+                      Object.entries(columnFilters).every(([filterCol, filterVal]) => {
+                        if (filterCol === col) return true
+                        if (!filterVal || filterVal === '' || (Array.isArray(filterVal) && filterVal.length === 0)) return true
+                        const v = String(row[filterCol] ?? '').toLowerCase()
+                        return Array.isArray(filterVal) ? filterVal.some(f => v.includes(f.toLowerCase())) : v.includes(String(filterVal).toLowerCase())
+                      })
+                    )
+                    const uniqueValues = [...new Set(dataForCol.map(r => String(r[col] ?? '').trim()).filter(Boolean))].sort()
                     const isOpen = openDropdowns[col] || false
                     const searchInput = dropdownSearches[col] || ''
                     const filteredOptions = uniqueValues.filter(val => val.toLowerCase().includes(searchInput.toLowerCase()))
@@ -767,7 +780,7 @@ export default function ReportsPage() {
                       <div key={col} className="relative">
                         <label className="block text-[10px] font-bold uppercase tracking-widest text-[#888] mb-1">{col}</label>
                         <button
-                          onClick={() => setOpenDropdowns({ ...openDropdowns, [col]: !isOpen })}
+                          onClick={() => setOpenDropdowns(prev => ({ ...prev, [col]: !isOpen }))}
                           className={`w-full px-3 py-2 text-sm rounded-lg border transition text-left flex items-center justify-between ${
                             isOpen
                               ? 'border-[#F56A00] bg-orange-50'
@@ -787,15 +800,15 @@ export default function ReportsPage() {
                               type="text"
                               placeholder="Cari..."
                               value={searchInput}
-                              onChange={e => setDropdownSearches({ ...dropdownSearches, [col]: e.target.value })}
+                              onChange={e => setDropdownSearches(prev => ({ ...prev, [col]: e.target.value }))}
                               className="w-full px-3 py-2 border-b border-gray-200 text-sm focus:outline-none"
                             />
                             <div className="max-h-48 overflow-y-auto">
                               <button
                                 onClick={() => {
-                                  setColumnFilters({ ...columnFilters, [col]: '' })
-                                  setOpenDropdowns({ ...openDropdowns, [col]: false })
-                                  setDropdownSearches({ ...dropdownSearches, [col]: '' })
+                                  setColumnFilters(prev => ({ ...prev, [col]: '' }))
+                                  setOpenDropdowns(prev => ({ ...prev, [col]: false }))
+                                  setDropdownSearches(prev => ({ ...prev, [col]: '' }))
                                 }}
                                 className="w-full text-left px-3 py-2 text-sm hover:bg-orange-50 text-[#666]"
                               >
@@ -805,9 +818,9 @@ export default function ReportsPage() {
                                 <button
                                   key={val}
                                   onClick={() => {
-                                    setColumnFilters({ ...columnFilters, [col]: val })
-                                    setOpenDropdowns({ ...openDropdowns, [col]: false })
-                                    setDropdownSearches({ ...dropdownSearches, [col]: '' })
+                                    setColumnFilters(prev => ({ ...prev, [col]: val }))
+                                    setOpenDropdowns(prev => ({ ...prev, [col]: false }))
+                                    setDropdownSearches(prev => ({ ...prev, [col]: '' }))
                                   }}
                                   className={`w-full text-left px-3 py-2 text-sm transition ${
                                     filterValue === val

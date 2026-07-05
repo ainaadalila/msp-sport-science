@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AthletesTableSkeleton } from '../../components/Skeleton'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
@@ -154,7 +154,8 @@ export default function AthletesPage() {
   const [injuredCount, setInjuredCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [filterStatus, setFilterStatus] = useState('')
+  const [searchParams] = useSearchParams()
+  const [filterStatus, setFilterStatus] = useState(() => searchParams.get('status') ?? '')
   const [filterSport, setFilterSport] = useState('')
   const [filterElite, setFilterElite] = useState(false)
 
