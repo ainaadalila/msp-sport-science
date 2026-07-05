@@ -8,7 +8,7 @@ import { logAction } from '../../../lib/audit'
 import { BADGE_GREEN, BADGE_ORANGE, BADGE_RED, type NormResult, sukmaSMM, sukmaBMI, sukmaFat, sukmaScore, sukmaFatMass, computeSkor, computeUlasan } from '../../../lib/inbodyNorms'
 import { useSports } from '../../../hooks/useSports'
 import { useAthletes } from '../../../hooks/useAthletes'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 
 interface Athlete {
   id: string
@@ -925,7 +925,7 @@ export default function InBodyPage() {
                               <YAxis domain={['auto', 'auto']} hide />
                               <Tooltip
                                 contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #eee', padding: '4px 8px' }}
-                                formatter={(v: number) => [`${Number(v).toFixed(1)}${unit}`, label]}
+                                formatter={(v: number | string | undefined) => [`${Number(v ?? 0).toFixed(1)}${unit}`, label]}
                                 labelStyle={{ fontSize: 10, color: '#888' }}
                               />
                               <Line type="monotone" dataKey={key} stroke={color} strokeWidth={2} dot={{ r: 2, fill: color }} activeDot={{ r: 4 }} connectNulls />
