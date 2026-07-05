@@ -925,7 +925,7 @@ export default function InBodyPage() {
                               <YAxis domain={['auto', 'auto']} hide />
                               <Tooltip
                                 contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #eee', padding: '4px 8px' }}
-                                formatter={(v: number | string | undefined) => [`${Number(v ?? 0).toFixed(1)}${unit}`, label]}
+                                formatter={(v) => [`${Number(v as number ?? 0).toFixed(1)}${unit}`, label] as [string, string]}
                                 labelStyle={{ fontSize: 10, color: '#888' }}
                               />
                               <Line type="monotone" dataKey={key} stroke={color} strokeWidth={2} dot={{ r: 2, fill: color }} activeDot={{ r: 4 }} connectNulls />
