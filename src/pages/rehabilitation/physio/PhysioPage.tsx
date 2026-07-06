@@ -27,11 +27,9 @@ interface PhysioSlot {
   injury_type: string | null
   assessment_notes: string | null
   rehab_plan: string | null
-  progress_notes: string | null
   physiotherapist_id: string | null
   pain_scale: number | null
   target_muscle: string | null
-  treatment_type: string | null
   attendance_status: 'scheduled' | 'arrived' | 'completed' | 'no_show'
   case_id: string | null
   created_at: string
@@ -63,10 +61,8 @@ type AssessmentFormState = {
   injury_type: string
   assessment_notes: string
   rehab_plan: string
-  progress_notes: string
   pain_scale: string
   target_muscle: string
-  treatment_type: string
   attendance_status: 'scheduled' | 'arrived' | 'completed' | 'no_show'
 }
 
@@ -136,8 +132,8 @@ function handlePrintCatatan(slot: PhysioSlot) {
   sectionLabel('CATATAN SESI')
   fieldRow('Keluhan Utama (COC)', slot.chief_complaint, true)
   fieldRow('Jenis Kecederaan', slot.injury_type, true)
-  fieldRow('Nota Penilaian', slot.assessment_notes, true)
-  fieldRow('Pelan Rehabilitasi', slot.rehab_plan, true)
+  fieldRow('Nota Penilaian / Nota Kemajuan', slot.assessment_notes, true)
+  fieldRow('Pelan Rehabilitasi / Jenis Rawatan', slot.rehab_plan, true)
 
   // Stats row
   const hasScale = slot.pain_scale !== null
@@ -176,10 +172,8 @@ const emptyAssessmentForm: AssessmentFormState = {
   injury_type: '',
   assessment_notes: '',
   rehab_plan: '',
-  progress_notes: '',
   pain_scale: '',
   target_muscle: '',
-  treatment_type: '',
   attendance_status: 'scheduled',
 }
 
@@ -239,7 +233,7 @@ export default function PhysioPage() {
     setLoading(true)
     const [slotRes, athRes, caseRes] = await Promise.all([
       supabase.from('physio_slots')
-        .select('id, athlete_id, case_id, slot_date, pain_scale, chief_complaint, injury_type, date_of_injury, diagnosis, treatment_type, referred_by, target_muscle, rehab_plan, progress_notes, assessment_notes, attendance_status, athlete:athletes(name, sport_id, sport:sport_id(name))')
+        .select('id, athlete_id, case_id, slot_date, pain_scale, chief_complaint, injury_type, date_of_injury, diagnosis, referred_by, target_muscle, rehab_plan, assessment_notes, attendance_status, athlete:athletes(name, sport_id, sport:sport_id(name))')
         .order('slot_date', { ascending: false }) as any,
       supabase.from('athletes')
         .select('id, name, ic_number, sport_id, status, sport:sport_id(name)')
@@ -300,10 +294,8 @@ export default function PhysioPage() {
       injury_type: s.injury_type ?? '',
       assessment_notes: s.assessment_notes ?? '',
       rehab_plan: s.rehab_plan ?? '',
-      progress_notes: s.progress_notes ?? '',
       pain_scale: s.pain_scale !== null ? String(s.pain_scale) : '',
       target_muscle: s.target_muscle ?? '',
-      treatment_type: s.treatment_type ?? '',
       attendance_status: s.attendance_status ?? 'scheduled',
     })
     setAssessmentError(null)
@@ -364,10 +356,8 @@ export default function PhysioPage() {
       injury_type: assessmentForm.injury_type || null,
       assessment_notes: assessmentForm.assessment_notes || null,
       rehab_plan: assessmentForm.rehab_plan || null,
-      progress_notes: assessmentForm.progress_notes || null,
       pain_scale: assessmentForm.pain_scale !== '' ? parseInt(assessmentForm.pain_scale, 10) : null,
       target_muscle: assessmentForm.target_muscle || null,
-      treatment_type: assessmentForm.treatment_type || null,
       attendance_status: assessmentForm.attendance_status || 'scheduled',
     }
 
@@ -378,7 +368,7 @@ export default function PhysioPage() {
     setAssessmentSaving(false)
     setAssessmentModalOpen(false)
     if (detailSlot?.id === assessmentEditing?.id) {
-      const updated = await (supabase.from('physio_slots').select('id, athlete_id, case_id, slot_date, pain_scale, chief_complaint, injury_type, date_of_injury, diagnosis, treatment_type, referred_by, target_muscle, rehab_plan, progress_notes, assessment_notes, attendance_status, athlete:athletes(name, sport_id, sport:sport_id(name))').eq('id', assessmentEditing!.id).single() as any)
+      const updated = await (supabase.from('physio_slots').select('id, athlete_id, case_id, slot_date, pain_scale, chief_complaint, injury_type, date_of_injury, diagnosis, referred_by, target_muscle, rehab_plan, assessment_notes, attendance_status, athlete:athletes(name, sport_id, sport:sport_id(name))').eq('id', assessmentEditing!.id).single() as any)
       if (updated.data) setDetailSlot(updated.data)
     }
     fetchAll()
@@ -401,7 +391,7 @@ export default function PhysioPage() {
     if (s.attendance_status !== 'scheduled') return
     await supabase.from('physio_slots').update({ attendance_status: 'arrived' }).eq('id', s.id)
     await logAction(profile!.id, 'mark_arrived_physio_slot', 'physio_slots', s.id)
-    const updated = await (supabase.from('physio_slots').select('id, athlete_id, case_id, slot_date, pain_scale, chief_complaint, injury_type, date_of_injury, diagnosis, treatment_type, referred_by, target_muscle, rehab_plan, progress_notes, assessment_notes, attendance_status, athlete:athletes(name, sport_id, sport:sport_id(name))').eq('id', s.id).single() as any)
+    const updated = await (supabase.from('physio_slots').select('id, athlete_id, case_id, slot_date, pain_scale, chief_complaint, injury_type, date_of_injury, diagnosis, referred_by, target_muscle, rehab_plan, assessment_notes, attendance_status, athlete:athletes(name, sport_id, sport:sport_id(name))').eq('id', s.id).single() as any)
     if (updated.data) setDetailSlot(updated.data)
     fetchAll()
   }
@@ -731,10 +721,10 @@ export default function PhysioPage() {
                 <Field label="Jenis Kecederaan">
                   <input value={assessmentForm.injury_type} onChange={e => setAssessmentField('injury_type', e.target.value.toUpperCase())} className={inputCls} placeholder="cth. LIGAMEN LUTUT" />
                 </Field>
-                <Field label="Nota Penilaian">
+                <Field label="Nota Penilaian / Nota Kemajuan">
                   <textarea value={assessmentForm.assessment_notes} onChange={e => setAssessmentField('assessment_notes', e.target.value.toUpperCase())} className={`${inputCls} resize-none`} rows={2} placeholder="DAPATAN SARINGAN..." />
                 </Field>
-                <Field label="Pelan Rehabilitasi">
+                <Field label="Pelan Rehabilitasi / Jenis Rawatan">
                   <textarea value={assessmentForm.rehab_plan} onChange={e => setAssessmentField('rehab_plan', e.target.value.toUpperCase())} className={`${inputCls} resize-none`} rows={2} placeholder="PELAN RAWATAN & LATIHAN..." />
                 </Field>
                 <div className="grid grid-cols-2 gap-4">
@@ -814,8 +804,8 @@ export default function PhysioPage() {
                       </div>
                     ))}
                     {[
-                      ['Nota Penilaian', detailSlot.assessment_notes],
-                      ['Pelan Rehabilitasi', detailSlot.rehab_plan],
+                      ['Nota Penilaian / Nota Kemajuan', detailSlot.assessment_notes],
+                      ['Pelan Rehabilitasi / Jenis Rawatan', detailSlot.rehab_plan],
                     ].map(([label, val]) => (
                       val && (
                         <div key={label as string}>

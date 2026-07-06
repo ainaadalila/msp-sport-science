@@ -125,10 +125,8 @@ export interface PhysioSlot {
   session_type: 'standard' | 'manual' | 'injury' | null
   assessment_notes: string | null
   rehab_plan: string | null
-  progress_notes: string | null
   pain_scale: number | null
   target_muscle: string | null
-  treatment_type: string | null
   attendance_status: 'scheduled' | 'arrived' | 'completed' | 'no_show'
   case_id: string | null
   physiotherapist_id: string | null
