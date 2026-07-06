@@ -1,9 +1,8 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { ReportSkeleton } from '../../components/Skeleton'
 
 type ReportType = 'fitness' | 'inbody' | 'attendance' | 'supplement' | 'physio' | 'psychology'
-type PhysioMode = 'ringkasan' | 'terperinci'
 type LatihkanMode = 'jadual' | 'program' | 'kehadiran'
 type SupplementMode = 'permohonan' | 'stok'
 
@@ -55,7 +54,7 @@ const REPORTS: ReportConfig[] = [
 
 function downloadCSV(filename: string, rows: Record<string, unknown>[]) {
   if (!rows.length) return
-  const headers = Object.keys(rows[0])
+  const headers = Array.from(new Set(rows.flatMap(r => Object.keys(r))))
   const csv = [
     headers.join(','),
     ...rows.map(row =>
@@ -227,7 +226,6 @@ export default function ReportsPage() {
 
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({})
   const [showColumnPicker, setShowColumnPicker] = useState(false)
-  const [physioMode, setPhysioMode] = useState<PhysioMode>('ringkasan')
   const [latihkanMode, setLatihkanMode] = useState<LatihkanMode>('kehadiran')
   const [supplementMode, setSupplementMode] = useState<SupplementMode>('permohonan')
   const [dateColumnFilters, setDateColumnFilters] = useState<Record<string, { from: string; to: string }>>({})
@@ -235,8 +233,14 @@ export default function ReportsPage() {
   const [openDropdowns, setOpenDropdowns] = useState<Record<string, boolean>>({})
   const [dropdownSearches, setDropdownSearches] = useState<Record<string, string>>({})
 
+  useEffect(() => {
+    const handler = () => setOpenDropdowns({})
+    document.addEventListener('click', handler)
+    return () => document.removeEventListener('click', handler)
+  }, [])
+
   // Auto-generate report when active report type changes
-  useMemo(() => {
+  useEffect(() => {
     const autoGenerate = async () => {
       setLoading(true)
       setData([])
@@ -409,58 +413,34 @@ export default function ReportsPage() {
             })))
           }
         } else if (active === 'physio') {
-          if (physioMode === 'terperinci') {
-            const { data: rows } = await (supabase
-              .from('physio_slots')
-              .select('slot_date, diagnosis, chief_complaint, injury_type, session_type, treatment_type, target_muscle, pain_scale, duration_minutes, assessment_notes, rehab_plan, progress_notes, referred_by, date_of_injury, athlete_id, athlete:athletes(name, sport_id, sport:sport_id(name)), physio_case:physio_cases(status)')
-              .not('athlete_id', 'is', null)
-              .order('slot_date', { ascending: false }).limit(5000) as any)
-            setData((rows ?? [])
-              .filter((s: any) => !filterSport || (Array.isArray(s.athlete) ? s.athlete[0]?.sport?.name : s.athlete?.sport?.name) === filterSport)
-              .map((s: any) => ({
-                'Nama Atlet': (Array.isArray(s.athlete) ? s.athlete[0]?.name : s.athlete?.name) ?? '—',
-                'Sukan': (Array.isArray(s.athlete) ? s.athlete[0]?.sport?.name : s.athlete?.sport?.name) ?? '—',
-                'Tarikh Sesi': s.slot_date,
-                'Diagnosis': s.diagnosis ?? '—',
-                'Aduan Utama': s.chief_complaint ?? '—',
-                'Jenis Kecederaan': s.injury_type ?? '—',
-                'Jenis Sesi': s.session_type ?? '—',
-                'Jenis Rawatan': s.treatment_type ?? '—',
-                'Otot Sasaran': s.target_muscle ?? '—',
-                'Skala Kesakitan': s.pain_scale !== null ? `${s.pain_scale} / 10` : '—',
-                'Tempoh (min)': s.duration_minutes ?? '—',
-                'Dirujuk Oleh': s.referred_by ?? '—',
-                'Tarikh Kecederaan': s.date_of_injury ?? '—',
-                'Status Kes': (Array.isArray(s.physio_case) ? s.physio_case[0]?.status : s.physio_case?.status) ?? '—',
-                'Catatan Penilaian': s.assessment_notes ?? '—',
-                'Pelan Pemulihan': s.rehab_plan ?? '—',
-                'Catatan Kemajuan': s.progress_notes ?? '—',
-              }))
-            )
-          } else {
-            const { data: rows } = await (supabase
-              .from('physio_slots')
-              .select('athlete_id, slot_date, pain_scale, case_id, athlete:athletes(name, sport_id, sport:sport_id(name)), physio_case:physio_cases(referred_to_doctor)')
-              .not('athlete_id', 'is', null)
-              .order('slot_date', { ascending: true }).limit(5000) as any)
-            const grouped = new Map<string, Record<string, unknown>>()
-            ;(rows ?? []).forEach((s: any) => {
-              const athleteName = Array.isArray(s.athlete) ? s.athlete[0]?.name : s.athlete?.name
-              const athleteSport = Array.isArray(s.athlete) ? s.athlete[0]?.sport?.name : s.athlete?.sport?.name
-              const isReferred = Array.isArray(s.physio_case) ? s.physio_case[0]?.referred_to_doctor : s.physio_case?.referred_to_doctor
-              if (filterSport && athleteSport !== filterSport) return
-              if (!grouped.has(s.athlete_id)) {
-                grouped.set(s.athlete_id, { 'Nama Atlet': athleteName ?? '—', 'Sukan': athleteSport ?? '—', 'Bilangan Sesi': 0, 'Tarikh Sesi': '', 'Skala Kesakitan Terkini': '—', 'Dirujuk Doktor': isReferred ? 'Ya' : 'Tidak' })
-              }
-              const row = grouped.get(s.athlete_id)!
-              row['Bilangan Sesi'] = (row['Bilangan Sesi'] as number) + 1
-              const dates = (row['Tarikh Sesi'] as string).split(', ').filter(Boolean)
-              if (!dates.includes(s.slot_date)) dates.push(s.slot_date)
-              row['Tarikh Sesi'] = dates.map(d => new Date(d + 'T00:00:00').toLocaleDateString('ms-MY', { day: '2-digit', month: 'short' })).join(', ')
-              if (s.pain_scale !== null) row['Skala Kesakitan Terkini'] = `${s.pain_scale} / 10`
-            })
-            setData([...grouped.values()].sort((a, b) => (a['Sukan'] as string).localeCompare(b['Sukan'] as string) || (a['Nama Atlet'] as string).localeCompare(b['Nama Atlet'] as string)))
-          }
+          let pq = supabase
+            .from('physio_slots')
+            .select('slot_date, diagnosis, chief_complaint, injury_type, session_type, target_muscle, pain_scale, duration_minutes, assessment_notes, rehab_plan, referred_by, date_of_injury, athlete_id, athlete:athletes(name, sport_id, sport:sport_id(name)), physio_case:physio_cases(status)')
+            .not('athlete_id', 'is', null)
+            .order('slot_date', { ascending: false }).limit(5000) as any
+          if (filterFrom) pq = pq.gte('slot_date', filterFrom)
+          if (filterTo) pq = pq.lte('slot_date', filterTo)
+          const { data: rows } = await pq
+          setData((rows ?? [])
+            .filter((s: any) => !filterSport || (Array.isArray(s.athlete) ? s.athlete[0]?.sport?.name : s.athlete?.sport?.name) === filterSport)
+            .map((s: any) => ({
+              'Nama Atlet': (Array.isArray(s.athlete) ? s.athlete[0]?.name : s.athlete?.name) ?? '—',
+              'Sukan': (Array.isArray(s.athlete) ? s.athlete[0]?.sport?.name : s.athlete?.sport?.name) ?? '—',
+              'Tarikh Sesi': s.slot_date,
+              'Diagnosis': s.diagnosis ?? '—',
+              'Aduan Utama': s.chief_complaint ?? '—',
+              'Jenis Kecederaan': s.injury_type ?? '—',
+              'Jenis Sesi': s.session_type ?? '—',
+              'Otot Sasaran': s.target_muscle ?? '—',
+              'Skala Kesakitan': s.pain_scale !== null ? `${s.pain_scale} / 10` : '—',
+              'Tempoh (min)': s.duration_minutes ?? '—',
+              'Dirujuk Oleh': s.referred_by ?? '—',
+              'Tarikh Kecederaan': s.date_of_injury ?? '—',
+              'Status Kes': (Array.isArray(s.physio_case) ? s.physio_case[0]?.status : s.physio_case?.status) ?? '—',
+              'Nota Penilaian': s.assessment_notes ?? '—',
+              'Pelan Rehabilitasi': s.rehab_plan ?? '—',
+            }))
+          )
         } else if (active === 'psychology') {
           let q = supabase
             .from('psychology_ratings')
@@ -503,7 +483,7 @@ export default function ReportsPage() {
       }
     }
     autoGenerate()
-  }, [active, latihkanMode, supplementMode, physioMode])
+  }, [active, latihkanMode, supplementMode, filterFrom, filterTo, filterSport, filterStatus, filterSession])
 
   function resetFilters() {
     setFilterFrom('')
@@ -518,7 +498,6 @@ export default function ReportsPage() {
     setGenerated(false)
     setVisibleColumns({})
     setShowColumnPicker(false)
-    setPhysioMode('ringkasan')
     setLatihkanMode('kehadiran')
     setSupplementMode('permohonan')
     setDateColumnFilters({})
@@ -551,9 +530,9 @@ export default function ReportsPage() {
           const val = String(row[col] ?? '').toLowerCase()
 
           if (Array.isArray(filterVal)) {
-            return filterVal.some(f => val.includes(f.toLowerCase()))
+            return filterVal.some(f => val === f.toLowerCase())
           } else {
-            return val.includes(String(filterVal).toLowerCase())
+            return val === String(filterVal).toLowerCase()
           }
         })
       })
@@ -634,34 +613,9 @@ export default function ReportsPage() {
               {generated && <span className="text-[11px] text-[#888]">{data.length} rekod dijana</span>}
             </div>
 
-            {active === 'physio' && (
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setPhysioMode('ringkasan')}
-                  className={`px-4 py-2 text-sm font-semibold rounded-lg transition ${
-                    physioMode === 'ringkasan'
-                      ? 'bg-[#F56A00] text-white'
-                      : 'bg-gray-100 text-[#444] hover:bg-gray-200'
-                  }`}
-                >
-                  Ringkasan
-                </button>
-                <button
-                  onClick={() => setPhysioMode('terperinci')}
-                  className={`px-4 py-2 text-sm font-semibold rounded-lg transition ${
-                    physioMode === 'terperinci'
-                      ? 'bg-[#F56A00] text-white'
-                      : 'bg-gray-100 text-[#444] hover:bg-gray-200'
-                  }`}
-                >
-                  Terperinci
-                </button>
-              </div>
-            )}
-
             {active === 'attendance' && (
               <div>
-                <select value={latihkanMode} onChange={e => { setLatihkanMode(e.target.value as LatihkanMode); setData([]); setGenerated(false) }} className={inputCls}>
+                <select value={latihkanMode} onChange={e => setLatihkanMode(e.target.value as LatihkanMode)} className={inputCls}>
                   <option value="kehadiran">Kehadiran Latihan</option>
                   <option value="jadual">Jadual Latihan</option>
                   <option value="program">Program Latihan</option>
@@ -671,7 +625,7 @@ export default function ReportsPage() {
 
             {active === 'supplement' && (
               <div>
-                <select value={supplementMode} onChange={e => { setSupplementMode(e.target.value as SupplementMode); setData([]); setGenerated(false) }} className={inputCls}>
+                <select value={supplementMode} onChange={e => setSupplementMode(e.target.value as SupplementMode)} className={inputCls}>
                   <option value="permohonan">Permohonan Suplemen</option>
                   <option value="stok">Stok Suplemen</option>
                 </select>
@@ -768,7 +722,7 @@ export default function ReportsPage() {
                         if (filterCol === col) return true
                         if (!filterVal || filterVal === '' || (Array.isArray(filterVal) && filterVal.length === 0)) return true
                         const v = String(row[filterCol] ?? '').toLowerCase()
-                        return Array.isArray(filterVal) ? filterVal.some(f => v.includes(f.toLowerCase())) : v.includes(String(filterVal).toLowerCase())
+                        return Array.isArray(filterVal) ? filterVal.some(f => v === f.toLowerCase()) : v === String(filterVal).toLowerCase()
                       })
                     )
                     const uniqueValues = [...new Set(dataForCol.map(r => String(r[col] ?? '').trim()).filter(Boolean))].sort()
@@ -777,10 +731,10 @@ export default function ReportsPage() {
                     const filteredOptions = uniqueValues.filter(val => val.toLowerCase().includes(searchInput.toLowerCase()))
 
                     return (
-                      <div key={col} className="relative">
+                      <div key={col} className="relative" onClick={e => e.stopPropagation()}>
                         <label className="block text-[10px] font-bold uppercase tracking-widest text-[#888] mb-1">{col}</label>
                         <button
-                          onClick={() => setOpenDropdowns(prev => ({ ...prev, [col]: !isOpen }))}
+                          onClick={() => setOpenDropdowns(prev => ({ [col]: !prev[col] }))}
                           className={`w-full px-3 py-2 text-sm rounded-lg border transition text-left flex items-center justify-between ${
                             isOpen
                               ? 'border-[#F56A00] bg-orange-50'
@@ -936,10 +890,10 @@ export default function ReportsPage() {
                               })}
                             </tr>
                           ))}
-                          {data.length > 0 && (
+                          {displayData.length > 0 && (
                             <tr className="border-t-2 border-gray-200 bg-gray-50 font-semibold">
                               <td colSpan={columns.filter(c => visibleColumns[c] !== false).length} className="px-4 py-3 text-[#111]">
-                                {computeSummaryRow(active, data, active === 'attendance' ? latihkanMode : undefined)}
+                                {computeSummaryRow(active, displayData, active === 'attendance' ? latihkanMode : undefined)}
                               </td>
                             </tr>
                           )}

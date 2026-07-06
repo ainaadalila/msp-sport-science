@@ -15,6 +15,13 @@ interface ProfileForm {
   unit: string
 }
 
+function formatIC(value: string) {
+  const digits = value.replace(/\D/g, '').slice(0, 12)
+  if (digits.length <= 6) return digits
+  if (digits.length <= 8) return `${digits.slice(0, 6)}-${digits.slice(6)}`
+  return `${digits.slice(0, 6)}-${digits.slice(6, 8)}-${digits.slice(8)}`
+}
+
 export default function ProfilePage() {
   const { profile, user } = useAuth()
   const [data, setData] = useState<ProfileData>({ full_name: '', ic_number: null, unit: null })
@@ -149,7 +156,7 @@ export default function ProfilePage() {
 
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-widest text-[#888] mb-2">No. Kad Pengenalan</p>
-              <p className="text-[15px] font-medium text-[#111]">{data.ic_number || '—'}</p>
+              <p className="text-[15px] font-medium text-[#111]">{data.ic_number ? formatIC(data.ic_number) : '—'}</p>
             </div>
 
             <div>
@@ -187,7 +194,7 @@ export default function ProfilePage() {
               <input
                 type="text"
                 value={form.ic_number}
-                onChange={e => setForm(f => ({ ...f, ic_number: e.target.value.toUpperCase() }))}
+                onChange={e => setForm(f => ({ ...f, ic_number: formatIC(e.target.value) }))}
                 className="w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2.5 text-sm text-[#111] outline-none transition focus:border-[#F56A00] focus:bg-white"
                 placeholder="cth. 123456-12-1234"
               />

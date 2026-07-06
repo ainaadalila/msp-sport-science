@@ -231,7 +231,7 @@ export default function AthletesPage() {
 
   async function handleSave() {
     if (!form.name.trim() || !form.ic_number.trim() || !form.sport_id) {
-      setError('Nama, No. IC, dan Sukan wajib diisi.')
+      setError('Sila pastikan maklumat lengkap.')
       return
     }
     setSaving(true)
@@ -262,7 +262,7 @@ export default function AthletesPage() {
         .eq('ic_number', form.ic_number.trim())
         .maybeSingle()
       if (existing) {
-        setError(`Atlet dengan No. IC ini sudah wujud: ${existing.name}`)
+        setError(`No. Kad Pengenalan telah wujud: ${existing.name}`)
         setSaving(false)
         return
       }
@@ -433,7 +433,7 @@ export default function AthletesPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100">
-                  {['Atlet', 'No. IC', 'Jantina', 'Sukan', 'Kategori/Acara', 'Status', 'Atlet Elit', ''].map(h => (
+                  {['Nama Atlet', 'No. Kad Pengenalan', 'Jantina', 'Sukan', 'Kategori/Acara', 'Status', 'Atlet Elit', ''].map(h => (
                     <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-wider text-[#888] px-5 py-3">{h}</th>
                   ))}
                 </tr>

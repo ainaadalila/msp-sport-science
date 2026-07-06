@@ -82,7 +82,8 @@ export default function PhysioReportPage() {
     setGenerated(false)
 
     const startDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`
-    const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().slice(0, 10)
+    const lastDay = new Date(selectedYear, selectedMonth, 0)
+    const endDate = `${lastDay.getFullYear()}-${String(lastDay.getMonth() + 1).padStart(2, '0')}-${String(lastDay.getDate()).padStart(2, '0')}`
 
     const { data, error } = await supabase
       .from('physio_slots')

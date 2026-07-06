@@ -89,7 +89,7 @@ export default function AuditLogPage() {
   }, [])
 
   const filtered = logs.filter(log => {
-    const logDate = log.created_at.slice(0, 10)
+    const logDate = new Date(log.created_at).toLocaleDateString('en-CA')
     if (filterDateFrom && logDate < filterDateFrom) return false
     if (filterDateTo && logDate > filterDateTo) return false
 
@@ -144,7 +144,7 @@ export default function AuditLogPage() {
         <p className="text-sm font-semibold text-[#111] mb-4">Penapis</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <label className="block text-xs font-semibold text-[#888] uppercase tracking-wider mb-2">Julat Tarikh</label>
+            <label className="block text-xs font-semibold text-[#888] uppercase tracking-wider mb-2">Tarikh</label>
             <div className="flex items-center gap-2">
               <input
                 type="date"

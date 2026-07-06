@@ -98,6 +98,7 @@ export default function StrengthPage() {
   const { sports } = useSports()
   const [searchParams] = useSearchParams()
   const tabParam = searchParams.get('tab') as 'kehadiran' | 'program' | 'jadual' | null
+  const athleteParam = searchParams.get('athlete')
 
   // Ensure component re-renders when sports data arrives
   useEffect(() => {
@@ -116,7 +117,7 @@ export default function StrengthPage() {
   const [records, setRecords] = useState<SCRecord[]>([])
   const [attendanceSport, setAttendanceSport] = useState('')
   const [attendanceSearch, setAttendanceSearch] = useState('')
-  const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().slice(0, 10))
+  const [attendanceDate, setAttendanceDate] = useState(new Date().toLocaleDateString('en-CA'))
   useEffect(() => { setKehadiranPage(1) }, [attendanceSport, attendanceSearch])
   const [expandedAthletes, setExpandedAthletes] = useState<{ [key: string]: boolean }>({})
   const [showMoreHistory, setShowMoreHistory] = useState<{ [key: string]: boolean }>({})
@@ -145,11 +146,11 @@ export default function StrengthPage() {
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false)
   const [editingSchedule, setEditingSchedule] = useState<CoachSchedule | null>(null)
   const [scheduleForm, setScheduleForm] = useState<ScheduleForm>({
-    coach_id: '', valid_from: new Date().toISOString().slice(0, 10),
+    coach_id: '', valid_from: new Date().toLocaleDateString('en-CA'),
     repeats: false, repeat_pattern: 'weekly', repeat_until: '', sport: '', selected_days: [],
   })
   const [scheduleSlots, setScheduleSlots] = useState<ScheduleSlotForm[]>([
-    { slot_date: new Date().toISOString().slice(0, 10), start_time: '09:00', end_time: '11:00' },
+    { slot_date: new Date().toLocaleDateString('en-CA'), start_time: '09:00', end_time: '11:00' },
   ])
   const [confirmDeleteSchedule, setConfirmDeleteSchedule] = useState<CoachSchedule | null>(null)
   const [confirmDeleteSlot, setConfirmDeleteSlot] = useState<{ schedule: CoachSchedule; slot: CoachScheduleSlot } | null>(null)
@@ -161,10 +162,14 @@ export default function StrengthPage() {
   useEffect(() => { fetchAll() }, [])
 
   useEffect(() => {
-    if (tabParam) {
-      setActiveTab(tabParam)
-    }
+    if (tabParam) setActiveTab(tabParam)
   }, [tabParam])
+
+  useEffect(() => {
+    if (!athleteParam || !athletes.length) return
+    const match = athletes.find(a => a.id === athleteParam)
+    if (match) setAttendanceSearch(match.name)
+  }, [athleteParam, athletes])
 
   const dayLayouts = useMemo(() => {
     const layouts: Record<string, Array<{
@@ -320,7 +325,7 @@ export default function StrengthPage() {
 
   // --- SCHEDULE SLOTS ---
   function addScheduleSlot() {
-    const today = new Date().toISOString().slice(0, 10)
+    const today = new Date().toLocaleDateString('en-CA')
     setScheduleSlots([...scheduleSlots, { slot_date: today, start_time: '09:00', end_time: '11:00' }])
   }
   function removeScheduleSlot(index: number) {
@@ -388,7 +393,7 @@ export default function StrengthPage() {
 
   function openAddSchedule() {
     setEditingSchedule(null)
-    const today = new Date().toISOString().slice(0, 10)
+    const today = new Date().toLocaleDateString('en-CA')
     setScheduleForm({ coach_id: '', valid_from: today, repeats: true, repeat_pattern: 'weekly', repeat_until: '', sport: '', selected_days: [] })
     setScheduleSlots([{ slot_date: today, start_time: '09:00', end_time: '11:00' }])
     setError(null)
@@ -403,6 +408,8 @@ export default function StrengthPage() {
     }
     if (scheduleSlots.length === 0) { setError('Sila tambah sekurang-kurangnya satu slot hari/masa.'); return }
     if (scheduleForm.repeats && scheduleForm.repeat_pattern !== 'custom' && !scheduleForm.repeat_until) { setError('Sila tentukan tarikh akhir untuk jadual berulang.'); return }
+    const badSlot = scheduleSlots.find(s => s.start_time < '08:00' || s.end_time > '22:00' || s.start_time >= s.end_time)
+    if (badSlot) { setError('Masa mesti antara 8:00 AM – 10:00 PM dan masa mula mestilah sebelum masa akhir.'); return }
     setSaving(true); setError(null)
 
     const coach = coaches.find(c => c.id === scheduleForm.coach_id)
@@ -1136,12 +1143,22 @@ export default function StrengthPage() {
                     </>
                   ) : null}
             </div>
-            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 sticky bottom-0 bg-white">
-              <button onClick={() => setScheduleModalOpen(false)} className="px-4 py-2 text-sm text-[#888] hover:text-[#111] transition">Batal</button>
-              <button onClick={handleSaveSchedule} disabled={saving} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
-                {saving ? 'Menyimpan...' : 'Simpan'}
-              </button>
-            </div>
+            {(() => {
+              const hasTimeError = scheduleSlots.some(s => s.start_time < '08:00' || s.end_time > '22:00' || s.start_time >= s.end_time)
+              return (
+                <div className="px-6 py-4 border-t border-gray-100 sticky bottom-0 bg-white">
+                  {hasTimeError && (
+                    <p className="text-xs text-red-500 mb-3">Masa mesti antara 8:00 AM – 10:00 PM dan masa mula mestilah sebelum masa akhir.</p>
+                  )}
+                  <div className="flex justify-end gap-3">
+                    <button onClick={() => setScheduleModalOpen(false)} className="px-4 py-2 text-sm text-[#888] hover:text-[#111] transition">Batal</button>
+                    <button onClick={handleSaveSchedule} disabled={saving || hasTimeError} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
+                      {saving ? 'Menyimpan...' : 'Simpan'}
+                    </button>
+                  </div>
+                </div>
+              )
+            })()}
           </div>
         </div>
       )}
