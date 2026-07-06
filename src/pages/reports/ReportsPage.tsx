@@ -412,7 +412,7 @@ export default function ReportsPage() {
           if (physioMode === 'terperinci') {
             const { data: rows, error } = await (supabase
               .from('physio_slots')
-              .select('slot_date, diagnosis, chief_complaint, injury_type, session_type, treatment_type, target_muscle, pain_scale, duration_minutes, assessment_notes, rehab_plan, progress_notes, referred_by, date_of_injury, athlete_id, athlete:athletes(name, sport_id, sport:sport_id(name)), physio_case:physio_cases(status)')
+              .select('slot_date, diagnosis, chief_complaint, injury_type, session_type, target_muscle, pain_scale, duration_minutes, assessment_notes, rehab_plan, referred_by, date_of_injury, athlete_id, athlete:athletes(name, sport_id, sport:sport_id(name)), physio_case:physio_cases(status)')
               .not('athlete_id', 'is', null)
               .order('slot_date', { ascending: false }).limit(5000) as any)
             if (error) throw error
@@ -426,16 +426,14 @@ export default function ReportsPage() {
                 'Aduan Utama': s.chief_complaint ?? '—',
                 'Jenis Kecederaan': s.injury_type ?? '—',
                 'Jenis Sesi': s.session_type ?? '—',
-                'Jenis Rawatan': s.treatment_type ?? '—',
                 'Otot Sasaran': s.target_muscle ?? '—',
                 'Skala Kesakitan': s.pain_scale !== null ? `${s.pain_scale} / 10` : '—',
                 'Tempoh (min)': s.duration_minutes ?? '—',
                 'Dirujuk Oleh': s.referred_by ?? '—',
                 'Tarikh Kecederaan': s.date_of_injury ?? '—',
                 'Status Kes': (Array.isArray(s.physio_case) ? s.physio_case[0]?.status : s.physio_case?.status) ?? '—',
-                'Catatan Penilaian': s.assessment_notes ?? '—',
-                'Pelan Pemulihan': s.rehab_plan ?? '—',
-                'Catatan Kemajuan': s.progress_notes ?? '—',
+                'Catatan Penilaian / Catatan Kemajuan': s.assessment_notes ?? '—',
+                'Pelan Pemulihan / Jenis Rawatan': s.rehab_plan ?? '—',
               }))
             )
           } else {
