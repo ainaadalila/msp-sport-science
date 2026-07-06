@@ -136,8 +136,8 @@ function handlePrintCatatan(slot: PhysioSlot) {
   sectionLabel('CATATAN SESI')
   fieldRow('Keluhan Utama (COC)', slot.chief_complaint, true)
   fieldRow('Jenis Kecederaan', slot.injury_type, true)
-  fieldRow('Nota Penilaian', slot.assessment_notes, true)
-  fieldRow('Pelan Rehabilitasi', slot.rehab_plan, true)
+  fieldRow('Nota Penilaian / Nota Kemajuan', slot.assessment_notes, true)
+  fieldRow('Pelan Rehabilitasi / Jenis Rawatan', slot.rehab_plan, true)
 
   // Stats row
   const hasScale = slot.pain_scale !== null
@@ -731,10 +731,10 @@ export default function PhysioPage() {
                 <Field label="Jenis Kecederaan">
                   <input value={assessmentForm.injury_type} onChange={e => setAssessmentField('injury_type', e.target.value.toUpperCase())} className={inputCls} placeholder="cth. LIGAMEN LUTUT" />
                 </Field>
-                <Field label="Nota Penilaian">
+                <Field label="Nota Penilaian / Nota Kemajuan">
                   <textarea value={assessmentForm.assessment_notes} onChange={e => setAssessmentField('assessment_notes', e.target.value.toUpperCase())} className={`${inputCls} resize-none`} rows={2} placeholder="DAPATAN SARINGAN..." />
                 </Field>
-                <Field label="Pelan Rehabilitasi">
+                <Field label="Pelan Rehabilitasi / Jenis Rawatan">
                   <textarea value={assessmentForm.rehab_plan} onChange={e => setAssessmentField('rehab_plan', e.target.value.toUpperCase())} className={`${inputCls} resize-none`} rows={2} placeholder="PELAN RAWATAN & LATIHAN..." />
                 </Field>
                 <div className="grid grid-cols-2 gap-4">
@@ -814,8 +814,8 @@ export default function PhysioPage() {
                       </div>
                     ))}
                     {[
-                      ['Nota Penilaian', detailSlot.assessment_notes],
-                      ['Pelan Rehabilitasi', detailSlot.rehab_plan],
+                      ['Nota Penilaian / Nota Kemajuan', detailSlot.assessment_notes],
+                      ['Pelan Rehabilitasi / Jenis Rawatan', detailSlot.rehab_plan],
                     ].map(([label, val]) => (
                       val && (
                         <div key={label as string}>
