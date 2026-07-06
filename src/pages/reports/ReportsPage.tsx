@@ -410,11 +410,12 @@ export default function ReportsPage() {
           }
         } else if (active === 'physio') {
           if (physioMode === 'terperinci') {
-            const { data: rows } = await (supabase
+            const { data: rows, error } = await (supabase
               .from('physio_slots')
               .select('slot_date, diagnosis, chief_complaint, injury_type, session_type, treatment_type, target_muscle, pain_scale, duration_minutes, assessment_notes, rehab_plan, progress_notes, referred_by, date_of_injury, athlete_id, athlete:athletes(name, sport_id, sport:sport_id(name)), physio_case:physio_cases(status)')
               .not('athlete_id', 'is', null)
               .order('slot_date', { ascending: false }).limit(5000) as any)
+            if (error) throw error
             setData((rows ?? [])
               .filter((s: any) => !filterSport || (Array.isArray(s.athlete) ? s.athlete[0]?.sport?.name : s.athlete?.sport?.name) === filterSport)
               .map((s: any) => ({
@@ -438,11 +439,12 @@ export default function ReportsPage() {
               }))
             )
           } else {
-            const { data: rows } = await (supabase
+            const { data: rows, error } = await (supabase
               .from('physio_slots')
               .select('athlete_id, slot_date, pain_scale, case_id, athlete:athletes(name, sport_id, sport:sport_id(name)), physio_case:physio_cases(referred_to_doctor)')
               .not('athlete_id', 'is', null)
               .order('slot_date', { ascending: true }).limit(5000) as any)
+            if (error) throw error
             const grouped = new Map<string, Record<string, unknown>>()
             ;(rows ?? []).forEach((s: any) => {
               const athleteName = Array.isArray(s.athlete) ? s.athlete[0]?.name : s.athlete?.name
