@@ -194,6 +194,7 @@ export default function PhysioPage() {
   const [athletes, setAthletes] = useState<Athlete[]>([])
   const [cases, setCases] = useState<PhysioCase[]>([])
   const [loading, setLoading] = useState(true)
+  const [fetchError, setFetchError] = useState<string | null>(null)
 
   // Athlete-first filters
   const [search, setSearch] = useState('')
@@ -248,6 +249,13 @@ export default function PhysioPage() {
         .eq('status', 'active')
         .order('open_date', { ascending: false }) as any,
     ])
+    const firstError = slotRes.error || athRes.error || caseRes.error
+    if (firstError) {
+      console.error('PhysioPage fetchAll error:', slotRes.error, athRes.error, caseRes.error)
+      setFetchError(firstError.message)
+    } else {
+      setFetchError(null)
+    }
     setSlots(slotRes.data ?? [])
     setAthletes(athRes.data ?? [])
     setCases(caseRes.data ?? [])
@@ -439,6 +447,12 @@ export default function PhysioPage() {
 
   return (
     <div className="space-y-4">
+
+      {fetchError && (
+        <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-600">
+          Gagal memuatkan data: {fetchError}
+        </div>
+      )}
 
       {/* Header */}
       <div className="flex items-center justify-between">
