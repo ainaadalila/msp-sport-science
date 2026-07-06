@@ -70,7 +70,7 @@ export default function PhysioCasePage() {
   const [fetchError, setFetchError] = useState<string | null>(null)
 
   const [createModal, setCreateModal] = useState(false)
-  const [createForm, setCreateForm] = useState({ athlete_id: '', open_date: new Date().toISOString().slice(0, 10), injury_type: '' })
+  const [createForm, setCreateForm] = useState({ athlete_id: '', open_date: new Date().toLocaleDateString('en-CA'), injury_type: '' })
   const [createFormSport, setCreateFormSport] = useState('')
   const [createSaving, setCreateSaving] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
@@ -165,7 +165,7 @@ export default function PhysioCasePage() {
     await logAction(profile!.id, 'create_physio_case', 'physio_cases', data.id)
     setCreateSaving(false)
     setCreateModal(false)
-    setCreateForm({ athlete_id: '', open_date: new Date().toISOString().slice(0, 10), injury_type: '' })
+    setCreateForm({ athlete_id: '', open_date: new Date().toLocaleDateString('en-CA'), injury_type: '' })
     fetchAll()
   }
 

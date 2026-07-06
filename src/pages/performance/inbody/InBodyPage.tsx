@@ -44,7 +44,7 @@ type FormState = Omit<InBodyRecord, 'id' | 'created_at' | 'athlete'>
 
 const emptyForm: FormState = {
   athlete_id: '',
-  recorded_date: new Date().toISOString().slice(0, 10),
+  recorded_date: new Date().toLocaleDateString('en-CA'),
   weight: null,
   smm: null,
   body_fat_mass: null,
@@ -135,6 +135,7 @@ export default function InBodyPage() {
   const profilRef = useRef<HTMLDivElement>(null)
   const [uploadingDietPlan, setUploadingDietPlan] = useState(false)
   const [dietPlanError, setDietPlanError] = useState<string | null>(null)
+  const [confirmDeleteDietPlan, setConfirmDeleteDietPlan] = useState(false)
 
   async function openDietPlan(url: string) {
     const match = url.match(/inbody_diet_plans\/(.+)$/)
@@ -193,7 +194,7 @@ export default function InBodyPage() {
 
   function openAdd() {
     setEditing(null)
-    setForm({ ...emptyForm, recorded_date: new Date().toISOString().slice(0, 10) })
+    setForm({ ...emptyForm, recorded_date: new Date().toLocaleDateString('en-CA') })
     setFormSportFilter('')
     setError(null)
     setModalOpen(true)
@@ -201,7 +202,7 @@ export default function InBodyPage() {
 
   function openAddForAthlete(a: Athlete) {
     setEditing(null)
-    setForm({ ...emptyForm, athlete_id: a.id, recorded_date: new Date().toISOString().slice(0, 10) })
+    setForm({ ...emptyForm, athlete_id: a.id, recorded_date: new Date().toLocaleDateString('en-CA') })
     setFormSportFilter(a.sport?.name ?? '')
     setError(null)
     setModalOpen(true)
@@ -579,7 +580,7 @@ export default function InBodyPage() {
       y += HROW
     })
 
-    pdf.save(`Profil_InBody_${athlete.name}_${new Date().toISOString().slice(0, 10)}.pdf`)
+    pdf.save(`Profil_InBody_${athlete.name}_${new Date().toLocaleDateString('en-CA')}.pdf`)
   }
 
   // Compute latest record and count per athlete from fetched records
@@ -1023,7 +1024,7 @@ export default function InBodyPage() {
                           {uploadingDietPlan ? 'Memuat...' : 'Ganti'}
                         </button>
                         <button
-                          onClick={() => { setViewRecord(latestRecord); handleDeleteDietPlan() }}
+                          onClick={() => setConfirmDeleteDietPlan(true)}
                           disabled={uploadingDietPlan}
                           className="flex-1 px-3 py-2 text-xs font-semibold text-[#D44040] border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-60 transition"
                         >
@@ -1051,6 +1052,27 @@ export default function InBodyPage() {
               )}
             </>
           )}
+        </div>
+      )}
+
+      {/* Confirm Delete Diet Plan Modal */}
+      {confirmDeleteDietPlan && latestRecord && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-xs mx-4 p-6">
+            <h3 className="font-bold text-[#111] mb-1">Buang Pelan Diet?</h3>
+            <p className="text-sm text-[#888] mb-5">Tindakan ini tidak boleh dibatalkan.</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmDeleteDietPlan(false)}
+                className="flex-1 px-4 py-2 text-sm font-semibold text-[#888] border border-gray-200 rounded-lg hover:bg-gray-50 transition"
+              >Batal</button>
+              <button
+                onClick={() => { setConfirmDeleteDietPlan(false); setViewRecord(latestRecord); handleDeleteDietPlan() }}
+                disabled={uploadingDietPlan}
+                className="flex-1 px-4 py-2 text-sm font-semibold text-white bg-[#D44040] hover:bg-red-700 rounded-lg disabled:opacity-60 transition"
+              >Ya, Buang</button>
+            </div>
+          </div>
         </div>
       )}
 

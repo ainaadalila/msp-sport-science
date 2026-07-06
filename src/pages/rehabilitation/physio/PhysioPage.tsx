@@ -159,7 +159,7 @@ function handlePrintCatatan(slot: PhysioSlot) {
 }
 
 const emptyBookingForm: BookingFormState = {
-  slot_date: new Date().toISOString().slice(0, 10),
+  slot_date: new Date().toLocaleDateString('en-CA'),
   athlete_id: '',
   case_id: '',
 }
