@@ -809,15 +809,9 @@ export default function PhysioPage() {
               </div>
             </div>
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 shrink-0 flex-wrap">
-              {can('physio', 'delete') && (
-                <button onClick={() => { setConfirmDelete(detailSlot); setDetailSlot(null) }} className="px-4 py-2 text-sm text-[#D44040] border border-red-200 rounded-lg hover:bg-red-50 transition">Padam</button>
-              )}
               <button onClick={() => handlePrintCatatan(detailSlot)} className="px-4 py-2 text-sm font-semibold border border-gray-200 text-[#444] hover:bg-gray-50 rounded-lg transition">
                 Cetak
               </button>
-              {can('physio', 'update') && (
-                <button onClick={() => { openBookingEdit(detailSlot); setDetailSlot(null) }} className="px-4 py-2 text-sm font-semibold bg-[#F5F5F7] text-[#111] hover:bg-gray-100 rounded-lg transition">Edit</button>
-              )}
               {can('physio', 'update') && (
                 <button onClick={() => { openAssessmentEdit(detailSlot); setDetailSlot(null) }} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold rounded-lg transition">Edit Catatan</button>
               )}
