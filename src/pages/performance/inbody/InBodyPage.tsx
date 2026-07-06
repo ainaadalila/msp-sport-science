@@ -109,6 +109,7 @@ export default function InBodyPage() {
   // Athlete-first filters (matches AthletesPage style)
   const [search, setSearch] = useState('')
   const [filterSport, setFilterSport] = useState('')
+  const [filterDietPlan, setFilterDietPlan] = useState(false)
   const [expandedAthleteId, setExpandedAthleteId] = useState<string | null>(null)
 
   const [modalOpen, setModalOpen] = useState(false)
@@ -165,7 +166,7 @@ export default function InBodyPage() {
   useEffect(() => {
     setCurrentPage(1)
     setExpandedAthleteId(null)
-  }, [search, filterSport])
+  }, [search, filterSport, filterDietPlan])
 
   async function fetchAll() {
     setLoading(true)
@@ -605,9 +606,11 @@ export default function InBodyPage() {
       const sportName = a.sport?.name?.toLowerCase() || ''
       const matchSearch = !q || a.name.toLowerCase().includes(q) || (a.ic_number || '').toLowerCase().includes(q) || sportName.includes(q)
       const matchSport = !filterSport || a.sport_id === filterSport
-      return matchSearch && matchSport
+      const hasDietPlan = !!latestByAthlete.get(a.id)?.diet_plan_url
+      const matchDietPlan = !filterDietPlan || hasDietPlan
+      return matchSearch && matchSport && matchDietPlan
     })
-  }, [athletes, search, filterSport])
+  }, [athletes, search, filterSport, filterDietPlan, latestByAthlete])
 
   const totalPages = Math.ceil(filteredAthletes.length / ATHLETES_PER_PAGE)
   const paginatedAthletes = filteredAthletes.slice(
@@ -685,9 +688,15 @@ export default function InBodyPage() {
               <option value="">Semua Sukan</option>
               {sports.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
-            {(search || filterSport) && (
+            <button
+              onClick={() => setFilterDietPlan(v => !v)}
+              className={`px-3 py-2 text-xs font-semibold rounded-lg border transition ${filterDietPlan ? 'bg-yellow-400 border-yellow-400 text-white' : 'bg-white border-gray-200 text-[#888] hover:border-[#F56A00]'}`}
+            >
+              Pelan Diet
+            </button>
+            {(search || filterSport || filterDietPlan) && (
               <button
-                onClick={() => { setSearch(''); setFilterSport('') }}
+                onClick={() => { setSearch(''); setFilterSport(''); setFilterDietPlan(false) }}
                 className="px-3 py-2 text-xs text-[#888] hover:text-[#F56A00] border border-gray-200 rounded-lg transition"
               >
                 Kosongkan Penapis
