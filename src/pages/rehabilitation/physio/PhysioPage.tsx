@@ -386,15 +386,6 @@ export default function PhysioPage() {
     }
   }
 
-  async function handleMarkArrived(s: PhysioSlot) {
-    if (s.attendance_status !== 'scheduled') return
-    await supabase.from('physio_slots').update({ attendance_status: 'arrived' }).eq('id', s.id)
-    await logAction(profile!.id, 'mark_arrived_physio_slot', 'physio_slots', s.id)
-    const updated = await (supabase.from('physio_slots').select('id, athlete_id, case_id, slot_date, pain_scale, chief_complaint, injury_type, date_of_injury, diagnosis, referred_by, target_muscle, rehab_plan, assessment_notes, attendance_status, athlete:athletes(name, sport_id, sport:sport_id(name))').eq('id', s.id).single() as any)
-    if (updated.data) setDetailSlot(updated.data)
-    fetchAll()
-  }
-
   // Group slots by athlete
   const slotsByAthlete = useMemo(() => {
     const map = new Map<string, PhysioSlot[]>()
@@ -820,11 +811,6 @@ export default function PhysioPage() {
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 shrink-0 flex-wrap">
               {can('physio', 'delete') && (
                 <button onClick={() => { setConfirmDelete(detailSlot); setDetailSlot(null) }} className="px-4 py-2 text-sm text-[#D44040] border border-red-200 rounded-lg hover:bg-red-50 transition">Padam</button>
-              )}
-              {can('physio', 'update') && detailSlot.attendance_status === 'scheduled' && (
-                <button onClick={() => handleMarkArrived(detailSlot)} className="px-4 py-2 text-sm font-semibold text-white bg-[#3A7EC8] hover:bg-blue-700 rounded-lg transition">
-                  Tandai Hadir
-                </button>
               )}
               <button onClick={() => handlePrintCatatan(detailSlot)} className="px-4 py-2 text-sm font-semibold border border-gray-200 text-[#444] hover:bg-gray-50 rounded-lg transition">
                 Cetak
