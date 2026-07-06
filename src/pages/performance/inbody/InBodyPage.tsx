@@ -691,7 +691,7 @@ export default function InBodyPage() {
               onClick={() => setFilterDietPlan(v => !v)}
               className={`px-3 py-2 text-xs font-semibold rounded-lg border transition ${filterDietPlan ? 'bg-yellow-400 border-yellow-400 text-white' : 'bg-white border-gray-200 text-[#888] hover:border-[#F56A00]'}`}
             >
-              Ada Pelan Diet
+              Pelan Diet
             </button>
             {(search || filterSport || filterDietPlan) && (
               <button
