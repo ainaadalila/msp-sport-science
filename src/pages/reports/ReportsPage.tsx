@@ -198,7 +198,7 @@ function computeSummaryRow(reportType: ReportType, data: Record<string, unknown>
   }
 
   if (reportType === 'psychology') {
-    const athletes = new Set(data.map(r => r['Atlet']))
+    const athletes = new Set(data.map(r => r['Nama Atlet']))
     const avgCog = (data as any[]).reduce((sum, r) => sum + (parseFloat(String(r['Kebimbangan Kognitif'] ?? 0)) || 0), 0) / data.length
     const avgSom = (data as any[]).reduce((sum, r) => sum + (parseFloat(String(r['Kebimbangan Somatik'] ?? 0)) || 0), 0) / data.length
     const avgConf = (data as any[]).reduce((sum, r) => sum + (parseFloat(String(r['Kepercayaan Diri'] ?? 0)) || 0), 0) / data.length
@@ -296,7 +296,7 @@ export default function ReportsPage() {
             .filter((r: any) => !filterSport || r.athlete?.sport?.name === filterSport)
             .map((r: any) => ({
               'Tarikh': r.recorded_date,
-              'Atlet': r.athlete?.name ?? '—',
+              'Nama Atlet': r.athlete?.name ?? '—',
               'Sukan': r.athlete?.sport?.name ?? '—',
               'Berat (kg)': r.weight ?? '',
               'BMI': r.bmi ?? '',
@@ -478,7 +478,7 @@ export default function ReportsPage() {
           setData((rows ?? [])
             .filter((r: any) => !filterSport || r.athlete?.sport?.name === filterSport)
             .map((r: any) => ({
-              'Atlet': r.athlete?.name ?? '—',
+              'Nama Atlet': r.athlete?.name ?? '—',
               'Sukan': r.athlete?.sport?.name ?? '—',
               'Fasa': phaseMap[r.phase] ?? r.phase,
               'Tarikh': r.assessment_date,
