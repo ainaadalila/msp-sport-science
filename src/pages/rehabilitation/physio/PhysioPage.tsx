@@ -315,6 +315,10 @@ export default function PhysioPage() {
       setBookingError('Tarikh sesi wajib diisi.')
       return
     }
+    if (!bookingForm.athlete_id) {
+      setBookingError('Atlet wajib dipilih.')
+      return
+    }
     setBookingSaving(true)
     setBookingError(null)
 
