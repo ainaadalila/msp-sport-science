@@ -22,7 +22,6 @@ interface PhysioCase {
 interface PhysioSlot {
   id: string
   slot_date: string
-  time_slot: string
   pain_scale: number | null
   session_type: 'standard' | 'manual' | 'injury' | null
   attendance_status: 'scheduled' | 'arrived' | 'completed' | 'no_show'
@@ -123,7 +122,7 @@ export default function PhysioCasePage() {
     setCaseLoading(true)
     const { data } = await supabase
       .from('physio_slots')
-      .select('id, slot_date, time_slot, pain_scale, session_type, attendance_status, assessment_notes, athlete:athletes(name, sport_id, sport:sport_id(name))')
+      .select('id, slot_date, pain_scale, session_type, attendance_status, assessment_notes, athlete:athletes(name, sport_id, sport:sport_id(name))')
       .eq('case_id', caseId)
       .order('slot_date', { ascending: true }) as any
     setCaseSlots((data as any) ?? [])
@@ -327,7 +326,6 @@ export default function PhysioCasePage() {
         doc.setFont('', 'normal')
         const sessionInfo = [
           `Tarikh: ${fmtDate(slot.slot_date)}`,
-          `Masa: ${slot.time_slot || '—'}`,
           `Kehadiran: ${slot.attendance_status || '—'}`,
           ...(slot.pain_scale !== null ? [`Kesakitan: ${slot.pain_scale}/10`] : []),
         ]
@@ -606,7 +604,6 @@ export default function PhysioCasePage() {
                       <thead>
                         <tr className="border-b border-gray-100 bg-gray-50">
                           <th className="text-left px-3 py-2 font-semibold text-[10px] uppercase text-[#888]">Tarikh</th>
-                          <th className="text-left px-3 py-2 font-semibold text-[10px] uppercase text-[#888]">Masa</th>
                           <th className="text-left px-3 py-2 font-semibold text-[10px] uppercase text-[#888]">Jenis Sesi</th>
                           <th className="text-left px-3 py-2 font-semibold text-[10px] uppercase text-[#888]">Kehadiran</th>
                           <th className="text-left px-3 py-2 font-semibold text-[10px] uppercase text-[#888]">Kesakitan</th>
@@ -616,7 +613,6 @@ export default function PhysioCasePage() {
                         {caseSlots.map(s => (
                           <tr key={s.id} className="border-b border-gray-50 last:border-0">
                             <td className="px-3 py-2 font-mono text-[#444]">{fmtDateShort(s.slot_date)}</td>
-                            <td className="px-3 py-2 font-mono text-[#444]">{s.time_slot}</td>
                             <td className="px-3 py-2">
                               {s.session_type ? (
                                 <span className="inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 text-[#444]">
