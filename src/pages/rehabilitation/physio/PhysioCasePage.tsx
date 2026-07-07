@@ -159,7 +159,9 @@ export default function PhysioCasePage() {
     setCreateSaving(false)
     setCreateModal(false)
     setCreateForm({ athlete_id: '', open_date: new Date().toLocaleDateString('en-CA'), injury_type: '' })
-    fetchAll()
+    const newId = data.id
+    await fetchAll()
+    setCases(prev => { const n = prev.find(c => c.id === newId); return n ? [n, ...prev.filter(c => c.id !== newId)] : prev })
   }
 
   async function handleCloseCase() {
@@ -395,7 +397,7 @@ export default function PhysioCasePage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100">
-                  {['Atlet', 'Sukan', 'Tarikh Buka', 'Bilangan Sesi', 'Kesakitan Terkini', 'Status', ''].map(h => (
+                  {['Atlet', 'Sukan', 'Tarikh Buka', 'Jenis Kecederaan', 'Bilangan Sesi', 'Kesakitan Terkini', 'Status', ''].map(h => (
                     <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-wider text-[#888] px-4 py-3">{h}</th>
                   ))}
                 </tr>
@@ -406,6 +408,7 @@ export default function PhysioCasePage() {
                     <td className="px-4 py-3 font-medium text-[#111]">{c.athlete?.name ?? '—'}</td>
                     <td className="px-4 py-3 text-[#888]">{c.athlete?.sport?.name ?? '—'}</td>
                     <td className="px-4 py-3 font-mono text-[12px]">{fmtDate(c.open_date)}</td>
+                    <td className="px-4 py-3 text-[#444] text-[12px]">{c.injury_type ?? <span className="text-[#bbb]">—</span>}</td>
                     <td className="px-4 py-3 font-semibold text-[#111]">{caseStats[c.id]?.count ?? 0}</td>
                     <td className="px-4 py-3">
                       {caseStats[c.id]?.latestPain !== null && caseStats[c.id]?.latestPain !== undefined ? (

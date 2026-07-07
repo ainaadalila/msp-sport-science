@@ -27,11 +27,9 @@ interface PhysioSlot {
   injury_type: string | null
   assessment_notes: string | null
   rehab_plan: string | null
-  progress_notes: string | null
   physiotherapist_id: string | null
   pain_scale: number | null
   target_muscle: string | null
-  treatment_type: string | null
   attendance_status: 'scheduled' | 'arrived' | 'completed' | 'no_show'
   case_id: string | null
   created_at: string
@@ -63,10 +61,8 @@ type AssessmentFormState = {
   injury_type: string
   assessment_notes: string
   rehab_plan: string
-  progress_notes: string
   pain_scale: string
   target_muscle: string
-  treatment_type: string
   attendance_status: 'scheduled' | 'arrived' | 'completed' | 'no_show'
 }
 
@@ -176,10 +172,8 @@ const emptyAssessmentForm: AssessmentFormState = {
   injury_type: '',
   assessment_notes: '',
   rehab_plan: '',
-  progress_notes: '',
   pain_scale: '',
   target_muscle: '',
-  treatment_type: '',
   attendance_status: 'scheduled',
 }
 
@@ -238,7 +232,7 @@ export default function PhysioPage() {
     setLoading(true)
     const [slotRes, athRes, caseRes] = await Promise.all([
       supabase.from('physio_slots')
-        .select('id, athlete_id, case_id, slot_date, pain_scale, chief_complaint, injury_type, date_of_injury, diagnosis, treatment_type, referred_by, target_muscle, rehab_plan, progress_notes, assessment_notes, attendance_status, athlete:athletes(name, sport_id, sport:sport_id(name))')
+        .select('id, athlete_id, case_id, slot_date, pain_scale, chief_complaint, injury_type, date_of_injury, diagnosis, referred_by, target_muscle, rehab_plan, assessment_notes, attendance_status, athlete:athletes(name, sport_id, sport:sport_id(name))')
         .order('slot_date', { ascending: false }) as any,
       supabase.from('athletes')
         .select('id, name, ic_number, sport_id, status, sport:sport_id(name)')
@@ -292,10 +286,8 @@ export default function PhysioPage() {
       injury_type: s.injury_type ?? '',
       assessment_notes: s.assessment_notes ?? '',
       rehab_plan: s.rehab_plan ?? '',
-      progress_notes: s.progress_notes ?? '',
       pain_scale: s.pain_scale !== null ? String(s.pain_scale) : '',
       target_muscle: s.target_muscle ?? '',
-      treatment_type: s.treatment_type ?? '',
       attendance_status: s.attendance_status ?? 'scheduled',
     })
     setAssessmentError(null)
@@ -329,15 +321,19 @@ export default function PhysioPage() {
       const { error } = await supabase.from('physio_slots').update(payload).eq('id', bookingEditing.id)
       if (error) { setBookingError(error.message); setBookingSaving(false); return }
       await logAction(profile!.id, 'update_physio_slot', 'physio_slots', bookingEditing.id)
+      setBookingSaving(false)
+      setBookingModalOpen(false)
+      fetchAll()
     } else {
       const { data, error } = await supabase.from('physio_slots').insert(payload).select('id').single()
       if (error) { setBookingError(error.message); setBookingSaving(false); return }
       await logAction(profile!.id, 'create_physio_slot', 'physio_slots', data.id)
+      setBookingSaving(false)
+      setBookingModalOpen(false)
+      const newId = data.id
+      await fetchAll()
+      setSlots(prev => { const n = prev.find(s => s.id === newId); return n ? [n, ...prev.filter(s => s.id !== newId)] : prev })
     }
-
-    setBookingSaving(false)
-    setBookingModalOpen(false)
-    fetchAll()
   }
 
   async function handleAssessmentSave() {
@@ -352,10 +348,8 @@ export default function PhysioPage() {
       injury_type: assessmentForm.injury_type || null,
       assessment_notes: assessmentForm.assessment_notes || null,
       rehab_plan: assessmentForm.rehab_plan || null,
-      progress_notes: assessmentForm.progress_notes || null,
       pain_scale: assessmentForm.pain_scale !== '' ? parseInt(assessmentForm.pain_scale, 10) : null,
       target_muscle: assessmentForm.target_muscle || null,
-      treatment_type: assessmentForm.treatment_type || null,
       attendance_status: assessmentForm.attendance_status || 'scheduled',
     }
 
@@ -366,7 +360,7 @@ export default function PhysioPage() {
     setAssessmentSaving(false)
     setAssessmentModalOpen(false)
     if (detailSlot?.id === assessmentEditing?.id) {
-      const updated = await (supabase.from('physio_slots').select('id, athlete_id, case_id, slot_date, pain_scale, chief_complaint, injury_type, date_of_injury, diagnosis, treatment_type, referred_by, target_muscle, rehab_plan, progress_notes, assessment_notes, attendance_status, athlete:athletes(name, sport_id, sport:sport_id(name))').eq('id', assessmentEditing!.id).single() as any)
+      const updated = await (supabase.from('physio_slots').select('id, athlete_id, case_id, slot_date, pain_scale, chief_complaint, injury_type, date_of_injury, diagnosis, referred_by, target_muscle, rehab_plan, assessment_notes, attendance_status, athlete:athletes(name, sport_id, sport:sport_id(name))').eq('id', assessmentEditing!.id).single() as any)
       if (updated.data) setDetailSlot(updated.data)
     }
     fetchAll()
@@ -389,7 +383,7 @@ export default function PhysioPage() {
     if (s.attendance_status !== 'scheduled') return
     await supabase.from('physio_slots').update({ attendance_status: 'arrived' }).eq('id', s.id)
     await logAction(profile!.id, 'mark_arrived_physio_slot', 'physio_slots', s.id)
-    const updated = await (supabase.from('physio_slots').select('id, athlete_id, case_id, slot_date, pain_scale, chief_complaint, injury_type, date_of_injury, diagnosis, treatment_type, referred_by, target_muscle, rehab_plan, progress_notes, assessment_notes, attendance_status, athlete:athletes(name, sport_id, sport:sport_id(name))').eq('id', s.id).single() as any)
+    const updated = await (supabase.from('physio_slots').select('id, athlete_id, case_id, slot_date, pain_scale, chief_complaint, injury_type, date_of_injury, diagnosis, referred_by, target_muscle, rehab_plan, assessment_notes, attendance_status, athlete:athletes(name, sport_id, sport:sport_id(name))').eq('id', s.id).single() as any)
     if (updated.data) setDetailSlot(updated.data)
     fetchAll()
   }

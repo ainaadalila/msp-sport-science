@@ -255,6 +255,9 @@ export default function AthletesPage() {
       const { error } = await supabase.from('athletes').update(payload).eq('id', editing.id)
       if (error) { setError(error.message); setSaving(false); return }
       await logAction(profile!.id, 'update_athlete', 'athletes', editing.id)
+      setSaving(false)
+      setModalOpen(false)
+      fetchAthletes()
     } else {
       const { data: existing } = await supabase
         .from('athletes')
@@ -269,11 +272,12 @@ export default function AthletesPage() {
       const { data, error } = await supabase.from('athletes').insert(payload).select('id').single()
       if (error) { setError(error.message); setSaving(false); return }
       await logAction(profile!.id, 'create_athlete', 'athletes', data.id)
+      setSaving(false)
+      setModalOpen(false)
+      const newId = data.id
+      await fetchAthletes()
+      setAthletes(prev => { const n = prev.find(a => a.id === newId); return n ? [n, ...prev.filter(a => a.id !== newId)] : prev })
     }
-
-    setSaving(false)
-    setModalOpen(false)
-    fetchAthletes()
   }
 
   const filtered = athletes.filter(a => {
