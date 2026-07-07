@@ -132,8 +132,8 @@ function handlePrintCatatan(slot: PhysioSlot) {
   sectionLabel('CATATAN SESI')
   fieldRow('Keluhan Utama (COC)', slot.chief_complaint, true)
   fieldRow('Jenis Kecederaan', slot.injury_type, true)
-  fieldRow('Nota Penilaian', slot.assessment_notes, true)
-  fieldRow('Pelan Rehabilitasi', slot.rehab_plan, true)
+  fieldRow('Nota Penilaian / Nota Kemajuan', slot.assessment_notes, true)
+  fieldRow('Pelan Rehabilitasi / Jenis Rawatan', slot.rehab_plan, true)
 
   // Stats row
   const hasScale = slot.pain_scale !== null
@@ -188,6 +188,7 @@ export default function PhysioPage() {
   const [athletes, setAthletes] = useState<Athlete[]>([])
   const [cases, setCases] = useState<PhysioCase[]>([])
   const [loading, setLoading] = useState(true)
+  const [fetchError, setFetchError] = useState<string | null>(null)
 
   // Athlete-first filters
   const [search, setSearch] = useState('')
@@ -197,7 +198,6 @@ export default function PhysioPage() {
   const [bookingModalOpen, setBookingModalOpen] = useState(false)
   const [assessmentModalOpen, setAssessmentModalOpen] = useState(false)
   const [detailSlot, setDetailSlot] = useState<PhysioSlot | null>(null)
-  const [detailView, setDetailView] = useState<'booking' | 'full'>('booking')
 
   const [bookingEditing, setBookingEditing] = useState<PhysioSlot | null>(null)
   const [bookingForm, setBookingForm] = useState<BookingFormState>(emptyBookingForm)
@@ -242,6 +242,13 @@ export default function PhysioPage() {
         .eq('status', 'active')
         .order('open_date', { ascending: false }) as any,
     ])
+    const firstError = slotRes.error || athRes.error || caseRes.error
+    if (firstError) {
+      console.error('PhysioPage fetchAll error:', slotRes.error, athRes.error, caseRes.error)
+      setFetchError(firstError.message)
+    } else {
+      setFetchError(null)
+    }
     setSlots(slotRes.data ?? [])
     setAthletes(athRes.data ?? [])
     setCases(caseRes.data ?? [])
@@ -305,6 +312,10 @@ export default function PhysioPage() {
   async function handleBookingSave() {
     if (!bookingForm.slot_date) {
       setBookingError('Tarikh sesi wajib diisi.')
+      return
+    }
+    if (!bookingForm.athlete_id) {
+      setBookingError('Atlet wajib dipilih.')
       return
     }
     setBookingSaving(true)
@@ -429,6 +440,12 @@ export default function PhysioPage() {
 
   return (
     <div className="space-y-4">
+
+      {fetchError && (
+        <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-600">
+          Gagal memuatkan data: {fetchError}
+        </div>
+      )}
 
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -584,7 +601,7 @@ export default function PhysioPage() {
                                             </td>
                                             <td className="px-3 py-2">
                                               <div className="flex gap-2 justify-end">
-                                                <button onClick={e => { e.stopPropagation(); setDetailSlot(s); setDetailView('full') }} className="text-[#F56A00] hover:underline font-medium">Catatan</button>
+                                                <button onClick={e => { e.stopPropagation(); setDetailSlot(s) }} className="text-[#F56A00] hover:underline font-medium">Catatan</button>
                                                 {can('physio', 'update') && <button onClick={e => { e.stopPropagation(); openBookingEdit(s) }} className="text-[#555] hover:underline font-medium">Edit</button>}
                                                 {can('physio', 'delete') && <button onClick={e => { e.stopPropagation(); setConfirmDelete(s) }} className="text-[#D44040] hover:underline font-medium">Padam</button>}
                                               </div>
@@ -707,10 +724,10 @@ export default function PhysioPage() {
                 <Field label="Jenis Kecederaan">
                   <input value={assessmentForm.injury_type} onChange={e => setAssessmentField('injury_type', e.target.value.toUpperCase())} className={inputCls} placeholder="cth. LIGAMEN LUTUT" />
                 </Field>
-                <Field label="Nota Penilaian">
+                <Field label="Nota Penilaian / Nota Kemajuan">
                   <textarea value={assessmentForm.assessment_notes} onChange={e => setAssessmentField('assessment_notes', e.target.value.toUpperCase())} className={`${inputCls} resize-none`} rows={2} placeholder="DAPATAN SARINGAN..." />
                 </Field>
-                <Field label="Pelan Rehabilitasi">
+                <Field label="Pelan Rehabilitasi / Jenis Rawatan">
                   <textarea value={assessmentForm.rehab_plan} onChange={e => setAssessmentField('rehab_plan', e.target.value.toUpperCase())} className={`${inputCls} resize-none`} rows={2} placeholder="PELAN RAWATAN & LATIHAN..." />
                 </Field>
                 <div className="grid grid-cols-2 gap-4">
@@ -751,109 +768,65 @@ export default function PhysioPage() {
               <button onClick={() => setDetailSlot(null)} className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
             </div>
             <div className="px-6 py-5 overflow-y-auto space-y-5">
-              {detailView === 'booking' ? (
-                <div className="space-y-3">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-[#888]">Maklumat Sesi</p>
-                  <div className="space-y-2">
-                    {[
-                      ['Diagnosis', detailSlot.diagnosis],
-                      ['Tarikh Kecederaan', detailSlot.date_of_injury ? fmtDate(detailSlot.date_of_injury) : null],
-                      ['Dirujuk Oleh', detailSlot.referred_by],
-                      ['Kes', detailSlot.case_id ? cases.find(c => c.id === detailSlot.case_id)?.athlete?.name : null],
-                    ].map(([label, val]) => (
-                      <div key={label as string} className="flex justify-between">
-                        <p className="text-[10px] text-[#888]">{label}</p>
-                        <p className="text-sm font-medium text-[#111]">{val ?? '—'}</p>
-                      </div>
-                    ))}
+              <div className="bg-[#F5F5F7] rounded-lg px-4 py-3 space-y-1.5">
+                <p className="text-[11px] font-bold text-[#888]">MAKLUMAT SESI</p>
+                <div className="text-sm text-[#444] space-y-0.5">
+                  <p><span className="text-[#888]">Diagnosis:</span> {detailSlot.diagnosis || '—'}</p>
+                  <p><span className="text-[#888]">Tarikh Kecederaan:</span> {detailSlot.date_of_injury ? fmtDate(detailSlot.date_of_injury) : '—'}</p>
+                  <p><span className="text-[#888]">Dirujuk Oleh:</span> {detailSlot.referred_by || '—'}</p>
+                  <p><span className="text-[#888]">Kes:</span> {detailSlot.case_id ? (cases.find(c => c.id === detailSlot.case_id)?.athlete?.name ?? '—') : '—'}</p>
+                </div>
+              </div>
+              <div className="space-y-3">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-[#888]">Catatan Sesi</p>
+                {[
+                  ['Keluhan Utama (COC)', detailSlot.chief_complaint],
+                  ['Jenis Kecederaan', detailSlot.injury_type],
+                ].map(([label, val]) => (
+                  <div key={label as string}>
+                    <p className="text-[10px] text-[#888] mb-1">{label}</p>
+                    <p className="text-sm text-[#444] bg-gray-50 rounded px-3 py-2">{val || '—'}</p>
+                  </div>
+                ))}
+                {[
+                  ['Nota Penilaian / Nota Kemajuan', detailSlot.assessment_notes],
+                  ['Pelan Rehabilitasi / Jenis Rawatan', detailSlot.rehab_plan],
+                ].map(([label, val]) => (
+                  val && (
+                    <div key={label as string}>
+                      <p className="text-[10px] text-[#888] mb-1 font-semibold">{label}</p>
+                      <p className="text-sm text-[#444] bg-gray-50 rounded px-3 py-2 whitespace-pre-wrap">{val}</p>
+                    </div>
+                  )
+                ))}
+                <div className="grid grid-cols-2 gap-3">
+                  {detailSlot.pain_scale !== null && (
+                    <div className="bg-[#F5F5F7] rounded px-3 py-2">
+                      <p className="text-[10px] text-[#888] mb-0.5">Skala Kesakitan</p>
+                      <p className="text-sm font-bold text-[#111]">{detailSlot.pain_scale} / 10</p>
+                    </div>
+                  )}
+                  <div className="bg-[#F5F5F7] rounded px-3 py-2">
+                    <p className="text-[10px] text-[#888] mb-0.5">Status Kehadiran</p>
+                    <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full inline-block ${attendanceStyle[detailSlot.attendance_status ?? 'scheduled']}`}>
+                      {attendanceLabel[detailSlot.attendance_status ?? 'scheduled']}
+                    </span>
                   </div>
                 </div>
-              ) : (
-                <>
-                  <div className="bg-[#F5F5F7] rounded-lg px-4 py-3 space-y-1.5">
-                    <p className="text-[11px] font-bold text-[#888]">MAKLUMAT SESI</p>
-                    <div className="text-sm text-[#444] space-y-0.5">
-                      <p><span className="text-[#888]">Diagnosis:</span> {detailSlot.diagnosis || '—'}</p>
-                      <p><span className="text-[#888]">Tarikh Kecederaan:</span> {detailSlot.date_of_injury ? fmtDate(detailSlot.date_of_injury) : '—'}</p>
-                      <p><span className="text-[#888]">Dirujuk Oleh:</span> {detailSlot.referred_by || '—'}</p>
-                    </div>
+                {detailSlot.target_muscle && (
+                  <div>
+                    <p className="text-[10px] text-[#888] mb-1">Otot Sasaran</p>
+                    <p className="text-sm text-[#444] bg-gray-50 rounded px-3 py-2">{detailSlot.target_muscle}</p>
                   </div>
-                  <div className="space-y-3">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-[#888]">Catatan Sesi</p>
-                    {[
-                      ['Keluhan Utama (COC)', detailSlot.chief_complaint],
-                      ['Jenis Kecederaan', detailSlot.injury_type],
-                    ].map(([label, val]) => (
-                      <div key={label as string}>
-                        <p className="text-[10px] text-[#888] mb-1">{label}</p>
-                        <p className="text-sm text-[#444] bg-gray-50 rounded px-3 py-2">{val || '—'}</p>
-                      </div>
-                    ))}
-                    {[
-                      ['Nota Penilaian', detailSlot.assessment_notes],
-                      ['Pelan Rehabilitasi', detailSlot.rehab_plan],
-                    ].map(([label, val]) => (
-                      val && (
-                        <div key={label as string}>
-                          <p className="text-[10px] text-[#888] mb-1 font-semibold">{label}</p>
-                          <p className="text-sm text-[#444] bg-gray-50 rounded px-3 py-2 whitespace-pre-wrap">{val}</p>
-                        </div>
-                      )
-                    ))}
-                    <div className="grid grid-cols-2 gap-3">
-                      {detailSlot.pain_scale !== null && (
-                        <div className="bg-[#F5F5F7] rounded px-3 py-2">
-                          <p className="text-[10px] text-[#888] mb-0.5">Skala Kesakitan</p>
-                          <p className="text-sm font-bold text-[#111]">{detailSlot.pain_scale} / 10</p>
-                        </div>
-                      )}
-                      <div className="bg-[#F5F5F7] rounded px-3 py-2">
-                        <p className="text-[10px] text-[#888] mb-0.5">Status Kehadiran</p>
-                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full inline-block ${attendanceStyle[detailSlot.attendance_status ?? 'scheduled']}`}>
-                          {attendanceLabel[detailSlot.attendance_status ?? 'scheduled']}
-                        </span>
-                      </div>
-                    </div>
-                    {detailSlot.target_muscle && (
-                      <div>
-                        <p className="text-[10px] text-[#888] mb-1">Otot Sasaran</p>
-                        <p className="text-sm text-[#444] bg-gray-50 rounded px-3 py-2">{detailSlot.target_muscle}</p>
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
+                )}
+              </div>
             </div>
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 shrink-0 flex-wrap">
-              {detailView === 'booking' ? (
-                <>
-                  {can('physio', 'delete') && (
-                    <button onClick={() => { setConfirmDelete(detailSlot); setDetailSlot(null) }} className="px-4 py-2 text-sm text-[#D44040] border border-red-200 rounded-lg hover:bg-red-50 transition">Padam</button>
-                  )}
-                  {can('physio', 'update') && detailSlot.attendance_status === 'scheduled' && (
-                    <button onClick={() => handleMarkArrived(detailSlot)} className="px-4 py-2 text-sm font-semibold text-white bg-[#3A7EC8] hover:bg-blue-700 rounded-lg transition">
-                      Tandai Hadir
-                    </button>
-                  )}
-                  <button onClick={() => setDetailView('full')} className="px-4 py-2 text-sm font-semibold bg-[#F5F5F7] text-[#111] hover:bg-gray-100 rounded-lg transition">
-                    Catatan Sesi
-                  </button>
-                  {can('physio', 'update') && (
-                    <button onClick={() => { openBookingEdit(detailSlot); setDetailSlot(null) }} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold rounded-lg transition">Edit</button>
-                  )}
-                </>
-              ) : (
-                <>
-                  <button onClick={() => setDetailView('booking')} className="px-4 py-2 text-sm font-semibold bg-[#F5F5F7] text-[#111] hover:bg-gray-100 rounded-lg transition">
-                    Kembali
-                  </button>
-                  <button onClick={() => handlePrintCatatan(detailSlot)} className="px-4 py-2 text-sm font-semibold border border-gray-200 text-[#444] hover:bg-gray-50 rounded-lg transition">
-                    Cetak
-                  </button>
-                  {can('physio', 'update') && (
-                    <button onClick={() => { openAssessmentEdit(detailSlot); setDetailSlot(null) }} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold rounded-lg transition">Edit Catatan</button>
-                  )}
-                </>
+              <button onClick={() => handlePrintCatatan(detailSlot)} className="px-4 py-2 text-sm font-semibold border border-gray-200 text-[#444] hover:bg-gray-50 rounded-lg transition">
+                Cetak
+              </button>
+              {can('physio', 'update') && (
+                <button onClick={() => { openAssessmentEdit(detailSlot); setDetailSlot(null) }} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold rounded-lg transition">Edit Catatan</button>
               )}
             </div>
           </div>
