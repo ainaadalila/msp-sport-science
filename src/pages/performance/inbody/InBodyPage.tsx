@@ -241,6 +241,16 @@ export default function InBodyPage() {
       const { data, error } = await supabase.from('inbody_records').insert(payload).select('id').single()
       if (error) { setError(error.message); setSaving(false); return }
       await logAction(profile!.id, 'create_inbody', 'inbody_records', data.id)
+      setSaving(false)
+      setModalOpen(false)
+      const newId = data.id
+      await fetchAll()
+      setRecords(prev => { const n = prev.find(r => r.id === newId); return n ? [n, ...prev.filter(r => r.id !== newId)] : prev })
+      if (profilAthlete) {
+        await fetchAthleteRecords(profilAthlete)
+        setProfilRecords(prev => { const n = prev.find(r => r.id === newId); return n ? [n, ...prev.filter(r => r.id !== newId)] : prev })
+      }
+      return
     }
 
     setSaving(false)

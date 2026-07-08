@@ -176,6 +176,12 @@ export default function SupplementPage() {
       const { data, error } = await supabase.from('supplements').insert(payload).select('id').single()
       if (error) { setSupError(error.message); setSupSaving(false); return }
       await logAction(profile!.id, 'create_supplement', 'supplements', data.id)
+      setSupSaving(false)
+      setInvModal(false)
+      const newId = data.id
+      await fetchAll()
+      setSupplements(prev => { const n = prev.find(s => s.id === newId); return n ? [n, ...prev.filter(s => s.id !== newId)] : prev })
+      return
     }
     setSupSaving(false)
     setInvModal(false)
@@ -249,9 +255,15 @@ export default function SupplementPage() {
     for (const row of data) {
       await logAction(profile!.id, 'submit_supplement_request', 'supplement_requests', row.id)
     }
+    const newIds = (data as any[]).map(r => r.id)
     setReqSaving(false)
     setReqModal(false)
-    fetchAll()
+    await fetchAll()
+    setRequests(prev => {
+      const newOnes = prev.filter(r => newIds.includes(r.id))
+      const rest = prev.filter(r => !newIds.includes(r.id))
+      return [...newOnes, ...rest]
+    })
   }
 
   async function handleCoordinatorReview(id: string, decision: 'lulus' | 'tolak', notes?: string) {

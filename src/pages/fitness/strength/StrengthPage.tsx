@@ -262,12 +262,13 @@ export default function StrengthPage() {
         const { error } = await supabase.from('strength_conditioning').update(payload).eq('id', existing.id)
         if (error) throw error
         await logAction(profile!.id, 'update_sc_session', 'strength_conditioning', existing.id)
+        setRecords(prev => prev.map(r => r.id === existing.id ? { ...r, attendance: status } : r))
       } else {
         const { data, error } = await supabase.from('strength_conditioning').insert(payload).select('id').single()
         if (error) throw error
         await logAction(profile!.id, 'create_sc_session', 'strength_conditioning', data.id)
+        setRecords(prev => [...prev, { id: data.id, athlete_id: athleteId, session_date: attendanceDate, attendance: status, training_program: null as null, notes: null as null }])
       }
-      await fetchAll()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save attendance')
     } finally {
@@ -310,6 +311,11 @@ export default function StrengthPage() {
       const { data, error } = await supabase.from('sc_programs').insert(payload).select('id').single()
       if (error) { setError(error.message); setSaving(false); return }
       await logAction(profile!.id, 'create_sc_program', 'sc_programs', data.id)
+      setSaving(false); setProgramModalOpen(false)
+      const newId = data.id
+      await fetchAll()
+      setPrograms(prev => { const n = prev.find(p => p.id === newId); return n ? [n, ...prev.filter(p => p.id !== newId)] : prev })
+      return
     }
     setSaving(false); setProgramModalOpen(false); fetchAll()
   }
@@ -472,7 +478,9 @@ export default function StrengthPage() {
         if (slotsError) throw new Error(`Insert slots failed: ${slotsError.message}`)
 
         await logAction(profile!.id, 'create_coach_schedule', 'coach_schedules', scheduleId)
-        setSaving(false); setScheduleModalOpen(false); fetchSchedules()
+        setSaving(false); setScheduleModalOpen(false)
+        await fetchSchedules()
+        setSchedules(prev => { const n = prev.find(s => s.id === scheduleId); return n ? [n, ...prev.filter(s => s.id !== scheduleId)] : prev })
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err)

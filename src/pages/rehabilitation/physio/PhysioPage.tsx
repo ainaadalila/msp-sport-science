@@ -332,15 +332,19 @@ export default function PhysioPage() {
       const { error } = await supabase.from('physio_slots').update(payload).eq('id', bookingEditing.id)
       if (error) { setBookingError(error.message); setBookingSaving(false); return }
       await logAction(profile!.id, 'update_physio_slot', 'physio_slots', bookingEditing.id)
+      setBookingSaving(false)
+      setBookingModalOpen(false)
+      fetchAll()
     } else {
       const { data, error } = await supabase.from('physio_slots').insert(payload).select('id').single()
       if (error) { setBookingError(error.message); setBookingSaving(false); return }
       await logAction(profile!.id, 'create_physio_slot', 'physio_slots', data.id)
+      setBookingSaving(false)
+      setBookingModalOpen(false)
+      const newId = data.id
+      await fetchAll()
+      setSlots(prev => { const n = prev.find(s => s.id === newId); return n ? [n, ...prev.filter(s => s.id !== newId)] : prev })
     }
-
-    setBookingSaving(false)
-    setBookingModalOpen(false)
-    fetchAll()
   }
 
   async function handleAssessmentSave() {

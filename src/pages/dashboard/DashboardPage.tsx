@@ -133,21 +133,21 @@ export default function DashboardPage() {
       value: stats.activeAthletes,
       sub: `${stats.totalAthletes > 0 ? Math.round((stats.activeAthletes / stats.totalAthletes) * 100) : 0}% daripada jumlah`,
       valueColor: 'text-[#3A9E6A]',
-      href: '/athletes',
+      href: '/athletes?status=active',
     },
     {
       label: 'Kecederaan',
       value: stats.injuredAthletes,
       sub: 'Atlet berstatus cedera',
       valueColor: stats.injuredAthletes > 0 ? 'text-[#D44040]' : 'text-[#111]',
-      href: '/rehabilitation/physio',
+      href: '/rehabilitation/physio/cases',
     },
     {
       label: 'Permohonan Suplemen',
       value: stats.pendingSupplements,
       sub: 'Menunggu kelulusan',
       valueColor: stats.pendingSupplements > 0 ? 'text-[#F56A00]' : 'text-[#111]',
-      href: '/performance/supplement',
+      href: '/performance/supplement?status=pending',
     },
   ]
 
