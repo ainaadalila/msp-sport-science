@@ -56,33 +56,21 @@ ALTER FUNCTION "public"."get_my_role"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."handle_new_user"() RETURNS "trigger"
-    LANGUAGE "plpgsql"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
     AS $$
 DECLARE
-  perms jsonb;
-  role_val text;
+  full_name_val text;
 BEGIN
-  role_val := COALESCE(new.raw_user_meta_data->>'role', 'pegawai_belia_sukan');
-  
-  -- Build permissions based on role using CASE
-  perms := CASE role_val
-    WHEN 'superadmin' THEN '{"athletes":true,"inbody":true,"supplement":true,"physio":true,"fitness":true,"strength":true,"reports":true,"psychology":true,"supplement_coordinator":true,"supplement_supporter":true,"supplement_approver":true}'::jsonb
-    WHEN 'admin' THEN '{"athletes":true,"inbody":true,"supplement":true,"physio":true,"fitness":true,"strength":true,"reports":true,"psychology":true,"supplement_coordinator":true,"supplement_supporter":true,"supplement_approver":true}'::jsonb
-    WHEN 'coach' THEN '{"athletes":true,"inbody":false,"supplement":false,"physio":false,"fitness":false,"strength":true,"reports":false,"psychology":false,"supplement_coordinator":false,"supplement_supporter":false,"supplement_approver":false}'::jsonb
-    WHEN 'physio' THEN '{"athletes":true,"inbody":false,"supplement":false,"physio":true,"fitness":false,"strength":false,"reports":false,"psychology":false,"supplement_coordinator":false,"supplement_supporter":false,"supplement_approver":false}'::jsonb
-    WHEN 'psikologis' THEN '{"athletes":true,"inbody":false,"supplement":false,"physio":false,"fitness":false,"strength":false,"reports":false,"psychology":true,"supplement_coordinator":false,"supplement_supporter":false,"supplement_approver":false}'::jsonb
-    ELSE '{"athletes":true,"inbody":false,"supplement":false,"physio":false,"fitness":false,"strength":false,"reports":false,"psychology":false,"supplement_coordinator":false,"supplement_supporter":false,"supplement_approver":false}'::jsonb
-  END;
-  
-  INSERT INTO profiles (id, full_name, role, module_permissions, created_at)
+  full_name_val := COALESCE(new.raw_user_meta_data->>'full_name', new.email);
+
+  INSERT INTO public.profiles (id, full_name, role)
   VALUES (
     new.id,
-    COALESCE(new.raw_user_meta_data->>'full_name', 'User'),
-    role_val,
-    perms,
-    now()
+    full_name_val,
+    'pegawai_belia_sukan'
   );
-  
+
   RETURN new;
 END;
 $$;
@@ -818,6 +806,10 @@ CREATE POLICY "audit_logs: admin read" ON "public"."audit_logs" FOR SELECT USING
 
 
 
+CREATE POLICY "audit_logs: insert own" ON "public"."audit_logs" FOR INSERT WITH CHECK (("user_id" = "auth"."uid"()));
+
+
+
 ALTER TABLE "public"."coach_schedule_slots" ENABLE ROW LEVEL SECURITY;
 
 
@@ -976,7 +968,7 @@ CREATE POLICY "physio_slots: update" ON "public"."physio_slots" FOR UPDATE USING
 ALTER TABLE "public"."profiles" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "profiles: admin write" ON "public"."profiles" FOR UPDATE USING (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"]))) WITH CHECK (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])));
+CREATE POLICY "profiles: admin write" ON "public"."profiles" FOR UPDATE USING (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"]))) WITH CHECK ((("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])) AND ("id" <> "auth"."uid"()) AND (("public"."get_my_role"() = 'superadmin'::"text") OR ("role" <> 'superadmin'::"text"))));
 
 
 
