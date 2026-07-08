@@ -7,11 +7,12 @@ export async function logAction(
   targetId?: string,
   ipAddress?: string,
 ) {
-  await supabase.from('audit_logs').insert({
+  const { error } = await supabase.from('audit_logs').insert({
     user_id: userId,
     action,
     target_table: targetTable ?? null,
     target_id: targetId ?? null,
     ip_address: ipAddress ?? null,
   })
+  if (error && import.meta.env.DEV) console.warn('logAction failed:', error.message)
 }
