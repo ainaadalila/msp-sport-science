@@ -45,6 +45,59 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA "extensions";
 
 
 
+CREATE OR REPLACE FUNCTION "public"."approve_supplement_request"("p_request_id" "uuid", "p_status" "text", "p_approved_quantity" integer DEFAULT NULL::integer, "p_notes" "text" DEFAULT NULL::"text") RETURNS json
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_request supplement_requests%ROWTYPE;
+  v_quantity int;
+  v_new_stock int;
+BEGIN
+  IF get_my_role() NOT IN ('superadmin', 'admin') THEN
+    RAISE EXCEPTION 'Unauthorized';
+  END IF;
+
+  SELECT * INTO v_request FROM supplement_requests WHERE id = p_request_id FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Request not found';
+  END IF;
+
+  IF v_request.requested_by = auth.uid() THEN
+    RAISE EXCEPTION 'Cannot approve your own request';
+  END IF;
+
+  IF v_request.status NOT IN ('semakan_lulus', 'approved') THEN
+    RAISE EXCEPTION 'Request is not ready for approval';
+  END IF;
+
+  v_quantity := COALESCE(p_approved_quantity, v_request.quantity);
+
+  UPDATE supplements
+  SET stock = stock - v_quantity
+  WHERE id = v_request.supplement_id AND stock >= v_quantity
+  RETURNING stock INTO v_new_stock;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Insufficient stock';
+  END IF;
+
+  UPDATE supplement_requests
+  SET
+    status = p_status,
+    reviewed_by = auth.uid(),
+    approved_quantity = p_approved_quantity
+  WHERE id = p_request_id;
+
+  RETURN json_build_object('success', true, 'new_stock', v_new_stock);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."approve_supplement_request"("p_request_id" "uuid", "p_status" "text", "p_approved_quantity" integer, "p_notes" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."get_my_role"() RETURNS "text"
     LANGUAGE "sql" SECURITY DEFINER
     AS $$
@@ -1245,6 +1298,11 @@ GRANT USAGE ON SCHEMA "public" TO "service_role";
 
 
 
+
+
+
+GRANT ALL ON FUNCTION "public"."approve_supplement_request"("p_request_id" "uuid", "p_status" "text", "p_approved_quantity" integer, "p_notes" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."approve_supplement_request"("p_request_id" "uuid", "p_status" "text", "p_approved_quantity" integer, "p_notes" "text") TO "service_role";
 
 
 
