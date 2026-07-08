@@ -388,7 +388,7 @@ export default function ReportsPage() {
             })))
           } else {
             let q = supabase.from('supplement_requests')
-              .select('*, supplement:supplements(name, unit)')
+              .select('request_date, sport, quantity, status, supplement:supplements(name, unit)')
               .order('created_at', { ascending: false }).limit(5000)
             if (filterStatus) q = q.eq('status', filterStatus)
             if (filterFrom) q = q.gte('request_date', filterFrom)

@@ -45,6 +45,59 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA "extensions";
 
 
 
+CREATE OR REPLACE FUNCTION "public"."approve_supplement_request"("p_request_id" "uuid", "p_status" "text", "p_approved_quantity" integer DEFAULT NULL::integer, "p_notes" "text" DEFAULT NULL::"text") RETURNS json
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_request supplement_requests%ROWTYPE;
+  v_quantity int;
+  v_new_stock int;
+BEGIN
+  IF get_my_role() NOT IN ('superadmin', 'admin') THEN
+    RAISE EXCEPTION 'Unauthorized';
+  END IF;
+
+  SELECT * INTO v_request FROM supplement_requests WHERE id = p_request_id FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Request not found';
+  END IF;
+
+  IF v_request.requested_by = auth.uid() THEN
+    RAISE EXCEPTION 'Cannot approve your own request';
+  END IF;
+
+  IF v_request.status != 'semakan_lulus' THEN
+    RAISE EXCEPTION 'Request is not ready for approval';
+  END IF;
+
+  v_quantity := COALESCE(p_approved_quantity, v_request.quantity);
+
+  UPDATE supplements
+  SET stock = stock - v_quantity
+  WHERE id = v_request.supplement_id AND stock >= v_quantity
+  RETURNING stock INTO v_new_stock;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Insufficient stock';
+  END IF;
+
+  UPDATE supplement_requests
+  SET
+    status = p_status,
+    reviewed_by = auth.uid(),
+    approved_quantity = p_approved_quantity
+  WHERE id = p_request_id;
+
+  RETURN json_build_object('success', true, 'new_stock', v_new_stock);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."approve_supplement_request"("p_request_id" "uuid", "p_status" "text", "p_approved_quantity" integer, "p_notes" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."get_my_role"() RETURNS "text"
     LANGUAGE "sql" SECURITY DEFINER
     AS $$
@@ -56,56 +109,27 @@ ALTER FUNCTION "public"."get_my_role"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."handle_new_user"() RETURNS "trigger"
-    LANGUAGE "plpgsql"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
     AS $$
 DECLARE
-  perms jsonb;
-  role_val text;
+  full_name_val text;
 BEGIN
-  role_val := COALESCE(new.raw_user_meta_data->>'role', 'pegawai_belia_sukan');
-  
-  -- Build permissions based on role using CASE
-  perms := CASE role_val
-    WHEN 'superadmin' THEN '{"athletes":true,"inbody":true,"supplement":true,"physio":true,"fitness":true,"strength":true,"reports":true,"psychology":true,"supplement_coordinator":true,"supplement_supporter":true,"supplement_approver":true}'::jsonb
-    WHEN 'admin' THEN '{"athletes":true,"inbody":true,"supplement":true,"physio":true,"fitness":true,"strength":true,"reports":true,"psychology":true,"supplement_coordinator":true,"supplement_supporter":true,"supplement_approver":true}'::jsonb
-    WHEN 'coach' THEN '{"athletes":true,"inbody":false,"supplement":false,"physio":false,"fitness":false,"strength":true,"reports":false,"psychology":false,"supplement_coordinator":false,"supplement_supporter":false,"supplement_approver":false}'::jsonb
-    WHEN 'physio' THEN '{"athletes":true,"inbody":false,"supplement":false,"physio":true,"fitness":false,"strength":false,"reports":false,"psychology":false,"supplement_coordinator":false,"supplement_supporter":false,"supplement_approver":false}'::jsonb
-    WHEN 'psikologis' THEN '{"athletes":true,"inbody":false,"supplement":false,"physio":false,"fitness":false,"strength":false,"reports":false,"psychology":true,"supplement_coordinator":false,"supplement_supporter":false,"supplement_approver":false}'::jsonb
-    ELSE '{"athletes":true,"inbody":false,"supplement":false,"physio":false,"fitness":false,"strength":false,"reports":false,"psychology":false,"supplement_coordinator":false,"supplement_supporter":false,"supplement_approver":false}'::jsonb
-  END;
-  
-  INSERT INTO profiles (id, full_name, role, module_permissions, created_at)
+  full_name_val := COALESCE(new.raw_user_meta_data->>'full_name', new.email);
+
+  INSERT INTO public.profiles (id, full_name, role)
   VALUES (
     new.id,
-    COALESCE(new.raw_user_meta_data->>'full_name', 'User'),
-    role_val,
-    perms,
-    now()
+    full_name_val,
+    'pegawai_belia_sukan'
   );
-  
+
   RETURN new;
 END;
 $$;
 
 
 ALTER FUNCTION "public"."handle_new_user"() OWNER TO "postgres";
-
-
-CREATE OR REPLACE FUNCTION "public"."handle_supplement_approval"() RETURNS "trigger"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    AS $$
-begin
-  if new.status = 'approved' and old.status = 'pending' then
-    update supplements
-    set stock = stock - new.quantity
-    where id = new.supplement_id;
-  end if;
-  return new;
-end;
-$$;
-
-
-ALTER FUNCTION "public"."handle_supplement_approval"() OWNER TO "postgres";
 
 SET default_tablespace = '';
 
@@ -278,7 +302,7 @@ CREATE TABLE IF NOT EXISTS "public"."physio_cases" (
     "injury_type" "text",
     "referred_to_doctor" boolean DEFAULT false NOT NULL,
     "referred_date" "date",
-    CONSTRAINT "physio_cases_status_check" CHECK (("status" = ANY (ARRAY['active'::"text", 'closed'::"text"])))
+    CONSTRAINT "physio_cases_status_check" CHECK (("status" = ANY (ARRAY['active'::"text", 'closed'::"text", 'referred'::"text"])))
 );
 
 
@@ -643,10 +667,6 @@ CREATE INDEX "idx_supplement_requests_supporter_id" ON "public"."supplement_requ
 
 
 
-CREATE OR REPLACE TRIGGER "on_supplement_approved" AFTER UPDATE ON "public"."supplement_requests" FOR EACH ROW EXECUTE FUNCTION "public"."handle_supplement_approval"();
-
-
-
 ALTER TABLE ONLY "public"."athletes"
     ADD CONSTRAINT "athletes_sport_id_fkey" FOREIGN KEY ("sport_id") REFERENCES "public"."sports"("id") ON DELETE RESTRICT;
 
@@ -795,134 +815,318 @@ ALTER TABLE ONLY "public"."supplement_requests"
 ALTER TABLE "public"."athletes" ENABLE ROW LEVEL SECURITY;
 
 
+CREATE POLICY "athletes: admin delete" ON "public"."athletes" FOR DELETE USING (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])));
+
+
+
+CREATE POLICY "athletes: admin update" ON "public"."athletes" FOR UPDATE USING (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"]))) WITH CHECK (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])));
+
+
+
+CREATE POLICY "athletes: admin write" ON "public"."athletes" FOR INSERT WITH CHECK (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])));
+
+
+
+CREATE POLICY "athletes: read" ON "public"."athletes" FOR SELECT USING (("auth"."role"() = 'authenticated'::"text"));
+
+
+
 ALTER TABLE "public"."audit_logs" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "authenticated access" ON "public"."athletes" USING (("auth"."role"() = 'authenticated'::"text"));
+CREATE POLICY "audit_logs: admin read" ON "public"."audit_logs" FOR SELECT USING (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])));
 
 
 
-CREATE POLICY "authenticated access" ON "public"."audit_logs" USING (("auth"."role"() = 'authenticated'::"text"));
-
-
-
-CREATE POLICY "authenticated access" ON "public"."coach_schedule_slots" USING (("auth"."role"() = 'authenticated'::"text"));
-
-
-
-CREATE POLICY "authenticated access" ON "public"."coach_schedules" USING (("auth"."role"() = 'authenticated'::"text"));
-
-
-
-CREATE POLICY "authenticated access" ON "public"."fitness_test_definitions" USING (("auth"."role"() = 'authenticated'::"text"));
-
-
-
-CREATE POLICY "authenticated access" ON "public"."fitness_test_norms" USING (("auth"."role"() = 'authenticated'::"text"));
-
-
-
-CREATE POLICY "authenticated access" ON "public"."fitness_test_results" USING (("auth"."role"() = 'authenticated'::"text"));
-
-
-
-CREATE POLICY "authenticated access" ON "public"."fitness_test_sessions" USING (("auth"."role"() = 'authenticated'::"text"));
-
-
-
-CREATE POLICY "authenticated access" ON "public"."inbody_records" USING (("auth"."role"() = 'authenticated'::"text"));
-
-
-
-CREATE POLICY "authenticated access" ON "public"."physio_cases" USING (("auth"."role"() = 'authenticated'::"text"));
-
-
-
-CREATE POLICY "authenticated access" ON "public"."physio_slots" USING (("auth"."role"() = 'authenticated'::"text"));
-
-
-
-CREATE POLICY "authenticated access" ON "public"."profiles" USING (("auth"."role"() = 'authenticated'::"text"));
-
-
-
-CREATE POLICY "authenticated access" ON "public"."psychology_ratings" USING (("auth"."role"() = 'authenticated'::"text"));
-
-
-
-CREATE POLICY "authenticated access" ON "public"."sc_programs" USING (("auth"."role"() = 'authenticated'::"text"));
-
-
-
-CREATE POLICY "authenticated access" ON "public"."sport_fitness_tests" USING (("auth"."role"() = 'authenticated'::"text"));
-
-
-
-CREATE POLICY "authenticated access" ON "public"."sports" USING (("auth"."role"() = 'authenticated'::"text"));
-
-
-
-CREATE POLICY "authenticated access" ON "public"."strength_conditioning" USING (("auth"."role"() = 'authenticated'::"text"));
-
-
-
-CREATE POLICY "authenticated access" ON "public"."supplement_requests" USING (("auth"."role"() = 'authenticated'::"text"));
-
-
-
-CREATE POLICY "authenticated access" ON "public"."supplements" USING (("auth"."role"() = 'authenticated'::"text"));
+CREATE POLICY "audit_logs: insert own" ON "public"."audit_logs" FOR INSERT WITH CHECK (("user_id" = "auth"."uid"()));
 
 
 
 ALTER TABLE "public"."coach_schedule_slots" ENABLE ROW LEVEL SECURITY;
 
 
+CREATE POLICY "coach_schedule_slots: admin delete" ON "public"."coach_schedule_slots" FOR DELETE USING (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])));
+
+
+
+CREATE POLICY "coach_schedule_slots: insert" ON "public"."coach_schedule_slots" FOR INSERT WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+
+
+
+CREATE POLICY "coach_schedule_slots: read" ON "public"."coach_schedule_slots" FOR SELECT USING (("auth"."role"() = 'authenticated'::"text"));
+
+
+
+CREATE POLICY "coach_schedule_slots: update" ON "public"."coach_schedule_slots" FOR UPDATE USING (("auth"."role"() = 'authenticated'::"text")) WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+
+
+
 ALTER TABLE "public"."coach_schedules" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "coach_schedules: admin delete" ON "public"."coach_schedules" FOR DELETE USING (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])));
+
+
+
+CREATE POLICY "coach_schedules: insert" ON "public"."coach_schedules" FOR INSERT WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+
+
+
+CREATE POLICY "coach_schedules: read" ON "public"."coach_schedules" FOR SELECT USING (("auth"."role"() = 'authenticated'::"text"));
+
+
+
+CREATE POLICY "coach_schedules: update" ON "public"."coach_schedules" FOR UPDATE USING (("auth"."role"() = 'authenticated'::"text")) WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+
 
 
 ALTER TABLE "public"."fitness_test_definitions" ENABLE ROW LEVEL SECURITY;
 
 
+CREATE POLICY "fitness_test_definitions: admin write" ON "public"."fitness_test_definitions" USING (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"]))) WITH CHECK (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])));
+
+
+
+CREATE POLICY "fitness_test_definitions: read" ON "public"."fitness_test_definitions" FOR SELECT USING (("auth"."role"() = 'authenticated'::"text"));
+
+
+
 ALTER TABLE "public"."fitness_test_norms" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "fitness_test_norms: admin write" ON "public"."fitness_test_norms" USING (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"]))) WITH CHECK (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])));
+
+
+
+CREATE POLICY "fitness_test_norms: read" ON "public"."fitness_test_norms" FOR SELECT USING (("auth"."role"() = 'authenticated'::"text"));
+
 
 
 ALTER TABLE "public"."fitness_test_results" ENABLE ROW LEVEL SECURITY;
 
 
+CREATE POLICY "fitness_test_results: admin delete" ON "public"."fitness_test_results" FOR DELETE USING (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])));
+
+
+
+CREATE POLICY "fitness_test_results: insert" ON "public"."fitness_test_results" FOR INSERT WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+
+
+
+CREATE POLICY "fitness_test_results: read" ON "public"."fitness_test_results" FOR SELECT USING (("auth"."role"() = 'authenticated'::"text"));
+
+
+
+CREATE POLICY "fitness_test_results: update" ON "public"."fitness_test_results" FOR UPDATE USING (("auth"."role"() = 'authenticated'::"text")) WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+
+
+
 ALTER TABLE "public"."fitness_test_sessions" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "fitness_test_sessions: admin delete" ON "public"."fitness_test_sessions" FOR DELETE USING (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])));
+
+
+
+CREATE POLICY "fitness_test_sessions: insert" ON "public"."fitness_test_sessions" FOR INSERT WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+
+
+
+CREATE POLICY "fitness_test_sessions: read" ON "public"."fitness_test_sessions" FOR SELECT USING (("auth"."role"() = 'authenticated'::"text"));
+
+
+
+CREATE POLICY "fitness_test_sessions: update" ON "public"."fitness_test_sessions" FOR UPDATE USING (("auth"."role"() = 'authenticated'::"text")) WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+
 
 
 ALTER TABLE "public"."inbody_records" ENABLE ROW LEVEL SECURITY;
 
 
+CREATE POLICY "inbody_records: admin delete" ON "public"."inbody_records" FOR DELETE USING (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])));
+
+
+
+CREATE POLICY "inbody_records: insert" ON "public"."inbody_records" FOR INSERT WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+
+
+
+CREATE POLICY "inbody_records: read" ON "public"."inbody_records" FOR SELECT USING (("auth"."role"() = 'authenticated'::"text"));
+
+
+
+CREATE POLICY "inbody_records: update" ON "public"."inbody_records" FOR UPDATE USING (("auth"."role"() = 'authenticated'::"text")) WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+
+
+
 ALTER TABLE "public"."physio_cases" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "physio_cases: admin delete" ON "public"."physio_cases" FOR DELETE USING (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])));
+
+
+
+CREATE POLICY "physio_cases: insert" ON "public"."physio_cases" FOR INSERT WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+
+
+
+CREATE POLICY "physio_cases: read" ON "public"."physio_cases" FOR SELECT USING (("auth"."role"() = 'authenticated'::"text"));
+
+
+
+CREATE POLICY "physio_cases: update" ON "public"."physio_cases" FOR UPDATE USING (("auth"."role"() = 'authenticated'::"text")) WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+
 
 
 ALTER TABLE "public"."physio_slots" ENABLE ROW LEVEL SECURITY;
 
 
+CREATE POLICY "physio_slots: admin delete" ON "public"."physio_slots" FOR DELETE USING (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])));
+
+
+
+CREATE POLICY "physio_slots: insert" ON "public"."physio_slots" FOR INSERT WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+
+
+
+CREATE POLICY "physio_slots: read" ON "public"."physio_slots" FOR SELECT USING (("auth"."role"() = 'authenticated'::"text"));
+
+
+
+CREATE POLICY "physio_slots: update" ON "public"."physio_slots" FOR UPDATE USING (("auth"."role"() = 'authenticated'::"text")) WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+
+
+
 ALTER TABLE "public"."profiles" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "profiles: admin write" ON "public"."profiles" FOR UPDATE USING (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"]))) WITH CHECK ((("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])) AND ("id" <> "auth"."uid"()) AND (("public"."get_my_role"() = 'superadmin'::"text") OR ("role" <> 'superadmin'::"text"))));
+
+
+
+CREATE POLICY "profiles: read" ON "public"."profiles" FOR SELECT USING (("auth"."role"() = 'authenticated'::"text"));
+
 
 
 ALTER TABLE "public"."psychology_ratings" ENABLE ROW LEVEL SECURITY;
 
 
+CREATE POLICY "psychology_ratings: admin delete" ON "public"."psychology_ratings" FOR DELETE USING (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])));
+
+
+
+CREATE POLICY "psychology_ratings: insert" ON "public"."psychology_ratings" FOR INSERT WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+
+
+
+CREATE POLICY "psychology_ratings: read" ON "public"."psychology_ratings" FOR SELECT USING (("auth"."role"() = 'authenticated'::"text"));
+
+
+
+CREATE POLICY "psychology_ratings: update" ON "public"."psychology_ratings" FOR UPDATE USING (("auth"."role"() = 'authenticated'::"text")) WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+
+
+
 ALTER TABLE "public"."sc_programs" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "sc_programs: admin delete" ON "public"."sc_programs" FOR DELETE USING (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])));
+
+
+
+CREATE POLICY "sc_programs: insert" ON "public"."sc_programs" FOR INSERT WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+
+
+
+CREATE POLICY "sc_programs: read" ON "public"."sc_programs" FOR SELECT USING (("auth"."role"() = 'authenticated'::"text"));
+
+
+
+CREATE POLICY "sc_programs: update" ON "public"."sc_programs" FOR UPDATE USING (("auth"."role"() = 'authenticated'::"text")) WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+
 
 
 ALTER TABLE "public"."sport_fitness_tests" ENABLE ROW LEVEL SECURITY;
 
 
+CREATE POLICY "sport_fitness_tests: admin write" ON "public"."sport_fitness_tests" USING (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"]))) WITH CHECK (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])));
+
+
+
+CREATE POLICY "sport_fitness_tests: read" ON "public"."sport_fitness_tests" FOR SELECT USING (("auth"."role"() = 'authenticated'::"text"));
+
+
+
 ALTER TABLE "public"."sports" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "sports: admin write" ON "public"."sports" USING (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"]))) WITH CHECK (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])));
+
+
+
+CREATE POLICY "sports: read" ON "public"."sports" FOR SELECT USING (("auth"."role"() = 'authenticated'::"text"));
+
 
 
 ALTER TABLE "public"."strength_conditioning" ENABLE ROW LEVEL SECURITY;
 
 
+CREATE POLICY "strength_conditioning: admin delete" ON "public"."strength_conditioning" FOR DELETE USING (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])));
+
+
+
+CREATE POLICY "strength_conditioning: insert" ON "public"."strength_conditioning" FOR INSERT WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+
+
+
+CREATE POLICY "strength_conditioning: read" ON "public"."strength_conditioning" FOR SELECT USING (("auth"."role"() = 'authenticated'::"text"));
+
+
+
+CREATE POLICY "strength_conditioning: update" ON "public"."strength_conditioning" FOR UPDATE USING (("auth"."role"() = 'authenticated'::"text")) WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+
+
+
 ALTER TABLE "public"."supplement_requests" ENABLE ROW LEVEL SECURITY;
 
 
+CREATE POLICY "supplement_requests: admin update" ON "public"."supplement_requests" FOR UPDATE USING (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"]))) WITH CHECK (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])));
+
+
+
+CREATE POLICY "supplement_requests: coordinator update" ON "public"."supplement_requests" FOR UPDATE USING (("auth"."role"() = 'authenticated'::"text")) WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND ("status" = ANY (ARRAY['pending'::"text", 'semakan_lulus'::"text", 'semakan_tolak'::"text"]))));
+
+
+
+CREATE POLICY "supplement_requests: insert own" ON "public"."supplement_requests" FOR INSERT WITH CHECK ((("requested_by" = "auth"."uid"()) AND ("auth"."role"() = 'authenticated'::"text")));
+
+
+
+CREATE POLICY "supplement_requests: read" ON "public"."supplement_requests" FOR SELECT USING (("auth"."role"() = 'authenticated'::"text"));
+
+
+
+CREATE POLICY "supplement_requests: supporter update" ON "public"."supplement_requests" FOR UPDATE USING (("auth"."role"() = 'authenticated'::"text")) WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND ("status" = 'semakan_lulus'::"text")));
+
+
+
 ALTER TABLE "public"."supplements" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "supplements: admin delete" ON "public"."supplements" FOR DELETE USING (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])));
+
+
+
+CREATE POLICY "supplements: admin update" ON "public"."supplements" FOR UPDATE USING (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"]))) WITH CHECK (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])));
+
+
+
+CREATE POLICY "supplements: admin write" ON "public"."supplements" FOR INSERT WITH CHECK (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])));
+
+
+
+CREATE POLICY "supplements: read" ON "public"."supplements" FOR SELECT USING (("auth"."role"() = 'authenticated'::"text"));
+
 
 
 
@@ -1084,21 +1288,21 @@ GRANT USAGE ON SCHEMA "public" TO "service_role";
 
 
 
-GRANT ALL ON FUNCTION "public"."get_my_role"() TO "anon";
+GRANT ALL ON FUNCTION "public"."approve_supplement_request"("p_request_id" "uuid", "p_status" "text", "p_approved_quantity" integer, "p_notes" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."approve_supplement_request"("p_request_id" "uuid", "p_status" "text", "p_approved_quantity" integer, "p_notes" "text") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."get_my_role"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_my_role"() TO "service_role";
 
 
 
-GRANT ALL ON FUNCTION "public"."handle_new_user"() TO "anon";
 GRANT ALL ON FUNCTION "public"."handle_new_user"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."handle_new_user"() TO "service_role";
 
 
 
-GRANT ALL ON FUNCTION "public"."handle_supplement_approval"() TO "anon";
-GRANT ALL ON FUNCTION "public"."handle_supplement_approval"() TO "authenticated";
-GRANT ALL ON FUNCTION "public"."handle_supplement_approval"() TO "service_role";
 
 
 
@@ -1114,118 +1318,96 @@ GRANT ALL ON FUNCTION "public"."handle_supplement_approval"() TO "service_role";
 
 
 
-
-
-
-GRANT ALL ON TABLE "public"."athletes" TO "anon";
 GRANT ALL ON TABLE "public"."athletes" TO "authenticated";
 GRANT ALL ON TABLE "public"."athletes" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."audit_logs" TO "anon";
 GRANT ALL ON TABLE "public"."audit_logs" TO "authenticated";
 GRANT ALL ON TABLE "public"."audit_logs" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."coach_schedule_slots" TO "anon";
 GRANT ALL ON TABLE "public"."coach_schedule_slots" TO "authenticated";
 GRANT ALL ON TABLE "public"."coach_schedule_slots" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."coach_schedules" TO "anon";
 GRANT ALL ON TABLE "public"."coach_schedules" TO "authenticated";
 GRANT ALL ON TABLE "public"."coach_schedules" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."fitness_test_definitions" TO "anon";
 GRANT ALL ON TABLE "public"."fitness_test_definitions" TO "authenticated";
 GRANT ALL ON TABLE "public"."fitness_test_definitions" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."fitness_test_norms" TO "anon";
 GRANT ALL ON TABLE "public"."fitness_test_norms" TO "authenticated";
 GRANT ALL ON TABLE "public"."fitness_test_norms" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."fitness_test_results" TO "anon";
 GRANT ALL ON TABLE "public"."fitness_test_results" TO "authenticated";
 GRANT ALL ON TABLE "public"."fitness_test_results" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."fitness_test_sessions" TO "anon";
 GRANT ALL ON TABLE "public"."fitness_test_sessions" TO "authenticated";
 GRANT ALL ON TABLE "public"."fitness_test_sessions" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."inbody_records" TO "anon";
 GRANT ALL ON TABLE "public"."inbody_records" TO "authenticated";
 GRANT ALL ON TABLE "public"."inbody_records" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."physio_cases" TO "anon";
 GRANT ALL ON TABLE "public"."physio_cases" TO "authenticated";
 GRANT ALL ON TABLE "public"."physio_cases" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."physio_slots" TO "anon";
 GRANT ALL ON TABLE "public"."physio_slots" TO "authenticated";
 GRANT ALL ON TABLE "public"."physio_slots" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."profiles" TO "anon";
 GRANT ALL ON TABLE "public"."profiles" TO "authenticated";
 GRANT ALL ON TABLE "public"."profiles" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."psychology_ratings" TO "anon";
 GRANT ALL ON TABLE "public"."psychology_ratings" TO "authenticated";
 GRANT ALL ON TABLE "public"."psychology_ratings" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."sc_programs" TO "anon";
 GRANT ALL ON TABLE "public"."sc_programs" TO "authenticated";
 GRANT ALL ON TABLE "public"."sc_programs" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."sport_fitness_tests" TO "anon";
 GRANT ALL ON TABLE "public"."sport_fitness_tests" TO "authenticated";
 GRANT ALL ON TABLE "public"."sport_fitness_tests" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."sports" TO "anon";
 GRANT ALL ON TABLE "public"."sports" TO "authenticated";
 GRANT ALL ON TABLE "public"."sports" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."strength_conditioning" TO "anon";
 GRANT ALL ON TABLE "public"."strength_conditioning" TO "authenticated";
 GRANT ALL ON TABLE "public"."strength_conditioning" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."supplement_requests" TO "anon";
 GRANT ALL ON TABLE "public"."supplement_requests" TO "authenticated";
 GRANT ALL ON TABLE "public"."supplement_requests" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."supplements" TO "anon";
 GRANT ALL ON TABLE "public"."supplements" TO "authenticated";
 GRANT ALL ON TABLE "public"."supplements" TO "service_role";
 
@@ -1238,7 +1420,6 @@ GRANT ALL ON TABLE "public"."supplements" TO "service_role";
 
 
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON SEQUENCES TO "postgres";
-ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON SEQUENCES TO "anon";
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON SEQUENCES TO "authenticated";
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON SEQUENCES TO "service_role";
 
@@ -1248,7 +1429,6 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON SEQ
 
 
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUNCTIONS TO "postgres";
-ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUNCTIONS TO "anon";
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUNCTIONS TO "authenticated";
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUNCTIONS TO "service_role";
 
@@ -1258,7 +1438,6 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUN
 
 
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "postgres";
-ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "anon";
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "authenticated";
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "service_role";
 

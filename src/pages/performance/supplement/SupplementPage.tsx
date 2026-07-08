@@ -191,22 +191,17 @@ export default function SupplementPage() {
   async function handleDelSup(s: Supplement) {
     setDeleteSup(true)
     try {
-      console.log('Starting delete for supplement:', s.id)
       const { error } = await supabase.from('supplements').delete().eq('id', s.id)
-      console.log('Delete response:', { error })
       if (error) {
-        console.error('Delete error:', error)
         setSupError(`Failed to delete: ${error.message}`)
         setDeleteSup(false)
         return
       }
-      console.log('Delete successful, logging action and fetching...')
       await logAction(profile!.id, 'delete_supplement', 'supplements', s.id)
       setConfirmDelSup(null)
       await fetchAll()
-      console.log('Fetch complete after delete')
     } catch (err) {
-      console.error('Exception during delete:', err)
+      if (import.meta.env.DEV) console.error('Exception during delete:', err)
       setSupError(err instanceof Error ? err.message : 'Delete failed')
     } finally {
       setDeleteSup(false)
@@ -280,25 +275,23 @@ export default function SupplementPage() {
   async function handleApproval(id: string, status: 'approved' | 'partial', approvedQuantity?: number, notes?: string) {
     setProcessingId(id)
 
-    const { data: request } = await supabase.from('supplement_requests').select('supplement_id, quantity').eq('id', id).single() as any
-    const quantityToReduce = status === 'partial' ? (approvedQuantity ?? request?.quantity ?? 0) : (request?.quantity ?? 0)
+    const { error } = await supabase.rpc('approve_supplement_request', {
+      p_request_id: id,
+      p_status: status,
+      p_approved_quantity: approvedQuantity ?? null,
+      p_notes: notes ?? null,
+    })
 
-    const updatePayload: Partial<SupplementRequest> & Record<string, any> = { status, reviewed_by: profile?.id, approved_quantity: approvedQuantity || null }
-    if (notes) updatePayload.reviewer_notes = notes
-
-    // Fetch current stock and update request in parallel
-    const [supRes] = await Promise.all([
-      request?.supplement_id
-        ? supabase.from('supplements').select('stock').eq('id', request.supplement_id).single() as any
-        : Promise.resolve({ data: null }),
-      supabase.from('supplement_requests').update(updatePayload).eq('id', id),
-    ])
-
-    // Reduce stock
-    if (supRes.data) {
-      const newStock = Math.max(0, supRes.data.stock - quantityToReduce)
-      await supabase.from('supplements').update({ stock: newStock }).eq('id', request.supplement_id)
-      setSupplements(prev => prev.map(s => s.id === request.supplement_id ? { ...s, stock: newStock } : s))
+    if (error) {
+      setProcessingId(null)
+      const msgMap: Record<string, string> = {
+        'Cannot approve your own request': 'Anda tidak boleh meluluskan permohonan anda sendiri',
+        'Insufficient stock': 'Stok tidak mencukupi',
+        'Request is not ready for approval': 'Permohonan belum bersedia untuk diluluskan',
+        'Unauthorized': 'Anda tidak mempunyai kebenaran',
+        'Request not found': 'Permohonan tidak dijumpai',
+      }
+      throw new Error(msgMap[error.message] ?? 'Ralat semasa meluluskan permohonan')
     }
 
     await logAction(profile!.id, status === 'approved' ? 'approve_supplement' : 'approve_supplement_partial', 'supplement_requests', id)
@@ -606,6 +599,7 @@ export default function SupplementPage() {
                               <button
                                 onClick={() => {
                                   setApprovalRequest(r)
+                                  setPartialQuantity(r.quantity)
                                   setApprovalForm({ notes: '', decision: 'partial' })
                                   setApprovalError(null)
                                   setApprovalModal(true)
@@ -998,8 +992,9 @@ export default function SupplementPage() {
                     type="number"
                     min={1}
                     max={approvalRequest.quantity}
-                    value={partialQuantity}
-                    onChange={e => setPartialQuantity(Math.min(approvalRequest.quantity, Math.max(1, +e.target.value)))}
+                    value={partialQuantity || ''}
+                    onChange={e => setPartialQuantity(+e.target.value || 0)}
+                    onBlur={e => setPartialQuantity(Math.min(approvalRequest.quantity, Math.max(1, +e.target.value || 1)))}
                     onFocus={e => e.target.select()}
                     className="w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2 text-sm"
                   />
