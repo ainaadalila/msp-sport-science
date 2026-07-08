@@ -275,7 +275,7 @@ export default function SupplementPage() {
   async function handleApproval(id: string, status: 'approved' | 'partial', approvedQuantity?: number, notes?: string) {
     setProcessingId(id)
 
-    const { data, error } = await supabase.rpc('approve_supplement_request', {
+    const { error } = await supabase.rpc('approve_supplement_request', {
       p_request_id: id,
       p_status: status,
       p_approved_quantity: approvedQuantity ?? null,
