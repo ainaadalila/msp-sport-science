@@ -390,15 +390,6 @@ export default function PhysioPage() {
     }
   }
 
-  async function handleMarkArrived(s: PhysioSlot) {
-    if (s.attendance_status !== 'scheduled') return
-    await supabase.from('physio_slots').update({ attendance_status: 'arrived' }).eq('id', s.id)
-    await logAction(profile!.id, 'mark_arrived_physio_slot', 'physio_slots', s.id)
-    const updated = await (supabase.from('physio_slots').select('id, athlete_id, case_id, slot_date, pain_scale, chief_complaint, injury_type, date_of_injury, diagnosis, referred_by, target_muscle, rehab_plan, assessment_notes, attendance_status, athlete:athletes(name, sport_id, sport:sport_id(name))').eq('id', s.id).single() as any)
-    if (updated.data) setDetailSlot(updated.data)
-    fetchAll()
-  }
-
   // Group slots by athlete
   const slotsByAthlete = useMemo(() => {
     const map = new Map<string, PhysioSlot[]>()
