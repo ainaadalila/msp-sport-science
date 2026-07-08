@@ -68,7 +68,7 @@ BEGIN
     RAISE EXCEPTION 'Cannot approve your own request';
   END IF;
 
-  IF v_request.status NOT IN ('semakan_lulus', 'approved') THEN
+  IF v_request.status != 'semakan_lulus' THEN
     RAISE EXCEPTION 'Request is not ready for approval';
   END IF;
 
@@ -130,23 +130,6 @@ $$;
 
 
 ALTER FUNCTION "public"."handle_new_user"() OWNER TO "postgres";
-
-
-CREATE OR REPLACE FUNCTION "public"."handle_supplement_approval"() RETURNS "trigger"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    AS $$
-begin
-  if new.status = 'approved' and old.status = 'pending' then
-    update supplements
-    set stock = stock - new.quantity
-    where id = new.supplement_id;
-  end if;
-  return new;
-end;
-$$;
-
-
-ALTER FUNCTION "public"."handle_supplement_approval"() OWNER TO "postgres";
 
 SET default_tablespace = '';
 
@@ -319,7 +302,7 @@ CREATE TABLE IF NOT EXISTS "public"."physio_cases" (
     "injury_type" "text",
     "referred_to_doctor" boolean DEFAULT false NOT NULL,
     "referred_date" "date",
-    CONSTRAINT "physio_cases_status_check" CHECK (("status" = ANY (ARRAY['active'::"text", 'closed'::"text"])))
+    CONSTRAINT "physio_cases_status_check" CHECK (("status" = ANY (ARRAY['active'::"text", 'closed'::"text", 'referred'::"text"])))
 );
 
 
@@ -681,10 +664,6 @@ CREATE INDEX "idx_supplement_requests_status_created" ON "public"."supplement_re
 
 
 CREATE INDEX "idx_supplement_requests_supporter_id" ON "public"."supplement_requests" USING "btree" ("supporter_id");
-
-
-
-CREATE OR REPLACE TRIGGER "on_supplement_approved" AFTER UPDATE ON "public"."supplement_requests" FOR EACH ROW EXECUTE FUNCTION "public"."handle_supplement_approval"();
 
 
 
@@ -1115,11 +1094,19 @@ CREATE POLICY "supplement_requests: admin update" ON "public"."supplement_reques
 
 
 
-CREATE POLICY "supplement_requests: insert own" ON "public"."supplement_requests" FOR INSERT WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+CREATE POLICY "supplement_requests: coordinator update" ON "public"."supplement_requests" FOR UPDATE USING (("auth"."role"() = 'authenticated'::"text")) WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND ("status" = ANY (ARRAY['pending'::"text", 'semakan_lulus'::"text", 'semakan_tolak'::"text"]))));
+
+
+
+CREATE POLICY "supplement_requests: insert own" ON "public"."supplement_requests" FOR INSERT WITH CHECK ((("requested_by" = "auth"."uid"()) AND ("auth"."role"() = 'authenticated'::"text")));
 
 
 
 CREATE POLICY "supplement_requests: read" ON "public"."supplement_requests" FOR SELECT USING (("auth"."role"() = 'authenticated'::"text"));
+
+
+
+CREATE POLICY "supplement_requests: supporter update" ON "public"."supplement_requests" FOR UPDATE USING (("auth"."role"() = 'authenticated'::"text")) WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND ("status" = 'semakan_lulus'::"text")));
 
 
 
@@ -1313,11 +1300,6 @@ GRANT ALL ON FUNCTION "public"."get_my_role"() TO "service_role";
 
 GRANT ALL ON FUNCTION "public"."handle_new_user"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."handle_new_user"() TO "service_role";
-
-
-
-GRANT ALL ON FUNCTION "public"."handle_supplement_approval"() TO "authenticated";
-GRANT ALL ON FUNCTION "public"."handle_supplement_approval"() TO "service_role";
 
 
 
