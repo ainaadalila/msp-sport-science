@@ -798,11 +798,11 @@ ALTER TABLE "public"."athletes" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."audit_logs" ENABLE ROW LEVEL SECURITY;
 
 
+CREATE POLICY "audit_logs: admin read" ON "public"."audit_logs" FOR SELECT USING (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])));
+
+
+
 CREATE POLICY "authenticated access" ON "public"."athletes" USING (("auth"."role"() = 'authenticated'::"text"));
-
-
-
-CREATE POLICY "authenticated access" ON "public"."audit_logs" USING (("auth"."role"() = 'authenticated'::"text"));
 
 
 
@@ -842,10 +842,6 @@ CREATE POLICY "authenticated access" ON "public"."physio_slots" USING (("auth"."
 
 
 
-CREATE POLICY "authenticated access" ON "public"."profiles" USING (("auth"."role"() = 'authenticated'::"text"));
-
-
-
 CREATE POLICY "authenticated access" ON "public"."psychology_ratings" USING (("auth"."role"() = 'authenticated'::"text"));
 
 
@@ -863,10 +859,6 @@ CREATE POLICY "authenticated access" ON "public"."sports" USING (("auth"."role"(
 
 
 CREATE POLICY "authenticated access" ON "public"."strength_conditioning" USING (("auth"."role"() = 'authenticated'::"text"));
-
-
-
-CREATE POLICY "authenticated access" ON "public"."supplement_requests" USING (("auth"."role"() = 'authenticated'::"text"));
 
 
 
@@ -904,6 +896,14 @@ ALTER TABLE "public"."physio_slots" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."profiles" ENABLE ROW LEVEL SECURITY;
 
 
+CREATE POLICY "profiles: admin write" ON "public"."profiles" FOR UPDATE USING (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"]))) WITH CHECK (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])));
+
+
+
+CREATE POLICY "profiles: read" ON "public"."profiles" FOR SELECT USING (("auth"."role"() = 'authenticated'::"text"));
+
+
+
 ALTER TABLE "public"."psychology_ratings" ENABLE ROW LEVEL SECURITY;
 
 
@@ -920,6 +920,18 @@ ALTER TABLE "public"."strength_conditioning" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."supplement_requests" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "supplement_requests: admin update" ON "public"."supplement_requests" FOR UPDATE USING (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"]))) WITH CHECK (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])));
+
+
+
+CREATE POLICY "supplement_requests: insert own" ON "public"."supplement_requests" FOR INSERT WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+
+
+
+CREATE POLICY "supplement_requests: read" ON "public"."supplement_requests" FOR SELECT USING (("auth"."role"() = 'authenticated'::"text"));
+
 
 
 ALTER TABLE "public"."supplements" ENABLE ROW LEVEL SECURITY;
@@ -1084,19 +1096,16 @@ GRANT USAGE ON SCHEMA "public" TO "service_role";
 
 
 
-GRANT ALL ON FUNCTION "public"."get_my_role"() TO "anon";
 GRANT ALL ON FUNCTION "public"."get_my_role"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_my_role"() TO "service_role";
 
 
 
-GRANT ALL ON FUNCTION "public"."handle_new_user"() TO "anon";
 GRANT ALL ON FUNCTION "public"."handle_new_user"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."handle_new_user"() TO "service_role";
 
 
 
-GRANT ALL ON FUNCTION "public"."handle_supplement_approval"() TO "anon";
 GRANT ALL ON FUNCTION "public"."handle_supplement_approval"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."handle_supplement_approval"() TO "service_role";
 
@@ -1117,115 +1126,96 @@ GRANT ALL ON FUNCTION "public"."handle_supplement_approval"() TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."athletes" TO "anon";
 GRANT ALL ON TABLE "public"."athletes" TO "authenticated";
 GRANT ALL ON TABLE "public"."athletes" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."audit_logs" TO "anon";
 GRANT ALL ON TABLE "public"."audit_logs" TO "authenticated";
 GRANT ALL ON TABLE "public"."audit_logs" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."coach_schedule_slots" TO "anon";
 GRANT ALL ON TABLE "public"."coach_schedule_slots" TO "authenticated";
 GRANT ALL ON TABLE "public"."coach_schedule_slots" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."coach_schedules" TO "anon";
 GRANT ALL ON TABLE "public"."coach_schedules" TO "authenticated";
 GRANT ALL ON TABLE "public"."coach_schedules" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."fitness_test_definitions" TO "anon";
 GRANT ALL ON TABLE "public"."fitness_test_definitions" TO "authenticated";
 GRANT ALL ON TABLE "public"."fitness_test_definitions" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."fitness_test_norms" TO "anon";
 GRANT ALL ON TABLE "public"."fitness_test_norms" TO "authenticated";
 GRANT ALL ON TABLE "public"."fitness_test_norms" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."fitness_test_results" TO "anon";
 GRANT ALL ON TABLE "public"."fitness_test_results" TO "authenticated";
 GRANT ALL ON TABLE "public"."fitness_test_results" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."fitness_test_sessions" TO "anon";
 GRANT ALL ON TABLE "public"."fitness_test_sessions" TO "authenticated";
 GRANT ALL ON TABLE "public"."fitness_test_sessions" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."inbody_records" TO "anon";
 GRANT ALL ON TABLE "public"."inbody_records" TO "authenticated";
 GRANT ALL ON TABLE "public"."inbody_records" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."physio_cases" TO "anon";
 GRANT ALL ON TABLE "public"."physio_cases" TO "authenticated";
 GRANT ALL ON TABLE "public"."physio_cases" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."physio_slots" TO "anon";
 GRANT ALL ON TABLE "public"."physio_slots" TO "authenticated";
 GRANT ALL ON TABLE "public"."physio_slots" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."profiles" TO "anon";
 GRANT ALL ON TABLE "public"."profiles" TO "authenticated";
 GRANT ALL ON TABLE "public"."profiles" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."psychology_ratings" TO "anon";
 GRANT ALL ON TABLE "public"."psychology_ratings" TO "authenticated";
 GRANT ALL ON TABLE "public"."psychology_ratings" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."sc_programs" TO "anon";
 GRANT ALL ON TABLE "public"."sc_programs" TO "authenticated";
 GRANT ALL ON TABLE "public"."sc_programs" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."sport_fitness_tests" TO "anon";
 GRANT ALL ON TABLE "public"."sport_fitness_tests" TO "authenticated";
 GRANT ALL ON TABLE "public"."sport_fitness_tests" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."sports" TO "anon";
 GRANT ALL ON TABLE "public"."sports" TO "authenticated";
 GRANT ALL ON TABLE "public"."sports" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."strength_conditioning" TO "anon";
 GRANT ALL ON TABLE "public"."strength_conditioning" TO "authenticated";
 GRANT ALL ON TABLE "public"."strength_conditioning" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."supplement_requests" TO "anon";
 GRANT ALL ON TABLE "public"."supplement_requests" TO "authenticated";
 GRANT ALL ON TABLE "public"."supplement_requests" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."supplements" TO "anon";
 GRANT ALL ON TABLE "public"."supplements" TO "authenticated";
 GRANT ALL ON TABLE "public"."supplements" TO "service_role";
 
@@ -1238,7 +1228,6 @@ GRANT ALL ON TABLE "public"."supplements" TO "service_role";
 
 
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON SEQUENCES TO "postgres";
-ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON SEQUENCES TO "anon";
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON SEQUENCES TO "authenticated";
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON SEQUENCES TO "service_role";
 
@@ -1248,7 +1237,6 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON SEQ
 
 
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUNCTIONS TO "postgres";
-ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUNCTIONS TO "anon";
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUNCTIONS TO "authenticated";
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUNCTIONS TO "service_role";
 
@@ -1258,7 +1246,6 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUN
 
 
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "postgres";
-ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "anon";
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "authenticated";
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "service_role";
 

@@ -367,7 +367,6 @@ export default function PsychologyRatingPage() {
           let icNumber = String(row['NO. KAD PENGENALAN'] || '').trim()
 
           if (!icNumber) {
-            console.warn(`Missing IC number for athlete: ${athleteName}`)
             continue
           }
 
@@ -442,12 +441,12 @@ export default function PsychologyRatingPage() {
             self_confidence_score: self_conf,
           })
         } catch (err) {
-          console.error(`Error processing athlete ${athleteName}:`, err)
+          if (import.meta.env.DEV) console.error(`Error processing athlete ${athleteName}:`, err)
         }
       }
 
       if (missing.length > 0) onMissing(missing)
-      if (duplicates.length > 0) console.warn(`Skipped ${duplicates.length} duplicate entries: ${duplicates.join(', ')}`)
+      if (duplicates.length > 0) if (import.meta.env.DEV) console.warn(`Skipped ${duplicates.length} duplicate entries`)
 
       resolve(parsed)
     } catch (err) {

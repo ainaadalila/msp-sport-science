@@ -45,7 +45,7 @@ export default function App() {
             <Route path="athletes/:id" element={<ProtectedRoute module="athletes"><AthleteProfilePage /></ProtectedRoute>} />
             <Route path="fitness/strength" element={<ProtectedRoute module="strength"><StrengthPage /></ProtectedRoute>} />
             <Route path="fitness/testing" element={<ProtectedRoute module="fitness"><FitnessTestingPage /></ProtectedRoute>} />
-            <Route path="fitness/config" element={<ProtectedRoute module="fitness"><FitnessTestConfigPage /></ProtectedRoute>} />
+            <Route path="fitness/config" element={<ProtectedRoute module="fitness_config"><FitnessTestConfigPage /></ProtectedRoute>} />
             <Route path="performance/inbody" element={<ProtectedRoute module="inbody"><InBodyPage /></ProtectedRoute>} />
             <Route path="performance/supplement" element={<ProtectedRoute module="supplement"><SupplementPage /></ProtectedRoute>} />
             <Route path="rehabilitation/physio" element={<ProtectedRoute module="physio"><PhysioPage /></ProtectedRoute>} />
