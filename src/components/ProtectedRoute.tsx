@@ -24,10 +24,10 @@ export function ProtectedRoute({ children, roles, module }: Props) {
 
   if (loading) return <div className="flex items-center justify-center h-screen text-muted">Loading...</div>
   if (!user) return <Navigate to="/login" replace />
-  if (!profile) return <Navigate to="/" replace />
+  if (!profile) return <div className="flex items-center justify-center h-screen text-muted">Loading...</div>
   if (roles && !roles.includes(profile.role)) return <Navigate to="/" replace />
 
-  if (module && profile) {
+  if (module) {
     const isSuperAdmin = profile.role === 'superadmin'
     const perm = profile.module_permissions?.[module]
     const hasExplicitPermission = typeof perm === 'boolean' ? perm : perm?.read
