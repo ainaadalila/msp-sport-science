@@ -1,5 +1,9 @@
 project_id = "msp-sport-science"
 
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql", "./seed_data.sql"]
+
 [functions.create-user]
 verify_jwt = true
 
