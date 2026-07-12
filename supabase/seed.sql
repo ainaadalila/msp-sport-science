@@ -1,8 +1,12 @@
--- Local-only test accounts, one per application role, for pentesting this
--- app against a disposable `supabase start` Docker instance. Auto-loaded by
--- the Supabase CLI after migrations run (`supabase start` / `supabase db
--- reset`). These rows only ever exist inside that local Postgres container
--- — never run this against a real/hosted Supabase project.
+-- Local-only test accounts for pentesting this app against a disposable
+-- `supabase start` Docker instance. Auto-loaded by the Supabase CLI after
+-- migrations run (`supabase start` / `supabase db reset`). These rows only
+-- ever exist inside that local Postgres container — never run this against
+-- a real/hosted Supabase project.
+--
+-- Deliberately limited to 2 accounts (superadmin + the lowest-privilege
+-- default role) to give the widest privilege contrast with the fewest
+-- credentials to hand out.
 --
 -- All accounts share the same password. Do not reuse it anywhere real.
 --   password: PentestLocal123!
@@ -12,11 +16,6 @@ DECLARE
   test_password text := 'PentestLocal123!';
   test_users jsonb := '[
     {"role": "superadmin",          "email": "superadmin.test@local.dev",          "full_name": "Test Superadmin"},
-    {"role": "admin",               "email": "admin.test@local.dev",               "full_name": "Test Admin"},
-    {"role": "coach",               "email": "coach.test@local.dev",               "full_name": "Test Coach"},
-    {"role": "physio",              "email": "physio.test@local.dev",              "full_name": "Test Physio"},
-    {"role": "psikologis",          "email": "psikologis.test@local.dev",          "full_name": "Test Psikologis"},
-    {"role": "penolong_pegawai",    "email": "penolong-pegawai.test@local.dev",    "full_name": "Test Penolong Pegawai"},
     {"role": "pegawai_belia_sukan", "email": "pegawai-belia-sukan.test@local.dev", "full_name": "Test Pegawai Belia Sukan"}
   ]'::jsonb;
   u jsonb;
