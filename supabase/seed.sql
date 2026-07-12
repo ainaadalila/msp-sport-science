@@ -38,7 +38,7 @@ BEGIN
       'authenticated',
       'authenticated',
       u->>'email',
-      crypt(test_password, gen_salt('bf')),
+      extensions.crypt(test_password, extensions.gen_salt('bf')),
       now(), now(), now(),
       '{"provider":"email","providers":["email"]}',
       jsonb_build_object('full_name', u->>'full_name', 'role', u->>'role'),
