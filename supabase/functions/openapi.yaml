@@ -1,0 +1,110 @@
+openapi: 3.0.3
+info:
+  title: msp-sport-science Edge Functions
+  version: "1.0"
+  description: >
+    The app has no custom REST backend beyond these two Supabase Edge
+    Functions — all other data access goes through Supabase's
+    auto-generated PostgREST API, documented via Supabase Studio's "API"
+    tab. Both functions require `verify_jwt = true` (see
+    supabase/config.toml): the caller must send their own Supabase session
+    JWT, and each function additionally enforces a `superadmin` role check
+    against `public.profiles` before doing anything privileged.
+servers:
+  - url: "{supabaseUrl}/functions/v1"
+    variables:
+      supabaseUrl:
+        default: "http://localhost:54321"
+        description: Local instance by default; replace with the target environment's Supabase URL.
+security:
+  - bearerAuth: []
+paths:
+  /create-user:
+    post:
+      summary: Create a new application user (auth user + profile row)
+      description: Requires the caller's profile role to be `superadmin`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, full_name, role]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                full_name:
+                  type: string
+                role:
+                  type: string
+                  enum: [superadmin, admin, coach, physio, psikologis, penolong_pegawai, pegawai_belia_sukan]
+                module_permissions:
+                  type: object
+                  description: Optional; defaults to the profiles table's default module_permissions.
+      responses:
+        "200":
+          description: User created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    type: object
+                    properties:
+                      id: { type: string, format: uuid }
+                      email: { type: string }
+        "400":
+          description: Missing/invalid fields, or user or profile creation failed
+        "401":
+          description: Missing Authorization header or caller not authenticated
+        "403":
+          description: Caller is authenticated but not a superadmin
+        "405":
+          description: Method not allowed (only POST/OPTIONS accepted)
+        "500":
+          description: Unexpected server error
+  /delete-user:
+    post:
+      summary: Delete an application user (cascades to their profile row)
+      description: Requires the caller's profile role to be `superadmin`. A caller cannot delete their own account.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId]
+              properties:
+                userId:
+                  type: string
+                  format: uuid
+      responses:
+        "200":
+          description: User deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+        "400":
+          description: Missing userId, caller attempted to delete themselves, or deletion failed
+        "401":
+          description: Missing Authorization header or caller not authenticated
+        "403":
+          description: Caller is authenticated but not a superadmin
+        "405":
+          description: Method not allowed (only POST/OPTIONS accepted)
+        "500":
+          description: Unexpected server error
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: The calling user's own Supabase session access token (not the service role key — that never leaves the function runtime).
