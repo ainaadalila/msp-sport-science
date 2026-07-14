@@ -7,8 +7,9 @@ export function usePermissions() {
 
   function can(mod: SubmoduleKey, action: keyof SubmoduleCRUD = 'read'): boolean {
     if (isSuperAdmin) return true
-    const perm = profile?.module_permissions?.[mod] as SubmoduleCRUD | undefined
-    return perm?.[action] ?? false
+    const perm = profile?.module_permissions?.[mod]
+    if (typeof perm === 'boolean') return perm
+    return (perm as SubmoduleCRUD | undefined)?.[action] ?? false
   }
 
   return { can }
