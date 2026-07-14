@@ -4,6 +4,7 @@ import { AthletesTableSkeleton } from '../../components/Skeleton'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { logAction } from '../../lib/audit'
+import { randomUUID } from '../../lib/uuid'
 import { usePermissions } from '../../hooks/usePermissions'
 import { useSports } from '../../hooks/useSports'
 import { invalidateAthletesCache } from '../../hooks/useAthletes'
@@ -221,7 +222,7 @@ export default function AthletesPage() {
   async function handlePhotoUpload(file: File) {
     setUploading(true)
     const ext = file.name.split('.').pop()
-    const path = `${crypto.randomUUID()}.${ext}`
+    const path = `${randomUUID()}.${ext}`
     const { error } = await supabase.storage.from('athlete-photos').upload(path, file, { upsert: true })
     if (error) { setError(error.message); setUploading(false); return }
     const { data } = supabase.storage.from('athlete-photos').getPublicUrl(path)
