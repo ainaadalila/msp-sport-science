@@ -14,7 +14,7 @@ const expandableGroups: Record<string, NavItem[]> = {
   kecergasan: [
     { label: 'Latihan Suaian Fizikal', path: '/fitness/strength', module: 'strength' },
     { label: 'Ujian Kecergasan', path: '/fitness/testing', module: 'fitness' },
-    { label: 'Konfigurasi Ujian', path: '/fitness/config', module: 'fitness' },
+    { label: 'Konfigurasi Ujian', path: '/fitness/config', module: 'fitness_config' },
   ],
   prestasi: [
     { label: 'Penilaian InBody', path: '/performance/inbody', module: 'inbody' },
