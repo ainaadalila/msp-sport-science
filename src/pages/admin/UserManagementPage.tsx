@@ -432,14 +432,16 @@ export default function UserManagementPage() {
                         <div className="px-3 py-2 text-[12px] text-[#111]">{item.label}</div>
                         {(['read', 'create', 'update', 'delete'] as const).map(action => {
                           const perm = editForm.module_permissions[item.key]
-                          const isChecked = typeof perm === 'boolean' ? false : perm[action]
+                          const isChecked = typeof perm === 'boolean' ? perm : (perm?.[action] ?? false)
                           return (
                             <div key={action} className="px-2 py-2 text-center">
                               <input
                                 type="checkbox"
                                 checked={isChecked}
                                 onChange={e => {
-                                  const newPerm = typeof perm === 'boolean' ? { read: false, create: false, update: false, delete: false } : perm
+                                  const newPerm = typeof perm === 'boolean'
+                                    ? { read: perm, create: perm, update: perm, delete: perm }
+                                    : (perm ?? { read: false, create: false, update: false, delete: false })
                                   const updated = { ...newPerm, [action]: e.target.checked }
                                   if (action === 'read' && !e.target.checked) {
                                     updated.create = false
@@ -677,14 +679,16 @@ export default function UserManagementPage() {
                             <div className="px-3 py-2 text-[12px] text-[#111]">{item.label}</div>
                             {(['read', 'create', 'update', 'delete'] as const).map(action => {
                               const perm = createForm.module_permissions[item.key]
-                              const isChecked = typeof perm === 'boolean' ? false : perm[action]
+                              const isChecked = typeof perm === 'boolean' ? perm : (perm?.[action] ?? false)
                               return (
                                 <div key={action} className="px-2 py-2 text-center">
                                   <input
                                     type="checkbox"
                                     checked={isChecked}
                                     onChange={e => {
-                                      const newPerm = typeof perm === 'boolean' ? { read: false, create: false, update: false, delete: false } : perm
+                                      const newPerm = typeof perm === 'boolean'
+                                        ? { read: perm, create: perm, update: perm, delete: perm }
+                                        : (perm ?? { read: false, create: false, update: false, delete: false })
                                       const updated = { ...newPerm, [action]: e.target.checked }
                                       if (action === 'read' && !e.target.checked) {
                                         updated.create = false
