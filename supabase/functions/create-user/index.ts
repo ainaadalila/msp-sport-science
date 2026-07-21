@@ -63,9 +63,42 @@ Deno.serve(async (req: Request) => {
 
     // 4. Validate input.
     const body = await req.json()
-    const { email, password, full_name, role, module_permissions } = body ?? {}
+    const { email, password, full_name, role, module_permissions, caller_password } = body ?? {}
     if (!email || !password || !full_name || !role) {
       return json({ error: 'Missing required fields: email, password, full_name, role' }, 400)
+    }
+
+    // 4b. The Auth Admin API (used below) does not enforce the project's
+    // password policy (config.toml's [auth] settings only apply to the
+    // self-service /auth/v1/signup and /auth/v1/user endpoints) — confirmed
+    // by testing directly. Since this function is the only way real
+    // accounts get created, the policy has to be checked here explicitly,
+    // mirroring src/lib/passwordValidator.ts's rules.
+    if (
+      password.length < 12 ||
+      !/[A-Z]/.test(password) ||
+      !/[a-z]/.test(password) ||
+      !/[0-9]/.test(password)
+    ) {
+      return json({ error: 'Password must be at least 12 characters and include an uppercase letter, a lowercase letter, and a number' }, 400)
+    }
+
+    // 4c. Creating a peer superadmin needs step-up re-authentication: a
+    // stolen bearer token/session alone must not be enough to plant a
+    // durable backdoor superadmin account. Re-verify the caller's current
+    // password against their own account before proceeding.
+    if (role === 'superadmin') {
+      if (!caller_password) {
+        return json({ error: 'Current password confirmation is required to create a superadmin account' }, 400)
+      }
+      const reauthClient = createClient(supabaseUrl, anonKey)
+      const { error: reauthErr } = await reauthClient.auth.signInWithPassword({
+        email: caller.email!,
+        password: caller_password,
+      })
+      if (reauthErr) {
+        return json({ error: 'Password confirmation incorrect' }, 403)
+      }
     }
 
     // 5. Create the auth user.

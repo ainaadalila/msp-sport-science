@@ -33,6 +33,7 @@ export const ACTION_LABELS: Record<string, string> = {
   close_physio_case: 'Tutup Kes Fisio',
   delete_physio_case: 'Padam Kes Fisio',
   open_physio_case: 'Buka Semula Kes Fisio',
+  refer_physio_case: 'Rujuk Kes Fisio',
   // InBody
   create_inbody: 'Rekod InBody',
   update_inbody: 'Kemaskini InBody',
