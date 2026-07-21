@@ -147,6 +147,8 @@ export default function AthletesPage() {
 
   const ATHLETES_PER_PAGE = 25
   const [athletes, setAthletes] = useState<Athlete[]>([])
+  const [photoSignedUrls, setPhotoSignedUrls] = useState<Map<string, string>>(new Map())
+  const [formPhotoSignedUrl, setFormPhotoSignedUrl] = useState<string | null>(null)
   const [totalCount, setTotalCount] = useState(0)
   const [maleCount, setMaleCount] = useState(0)
   const [femaleCount, setFemaleCount] = useState(0)
@@ -182,7 +184,19 @@ export default function AthletesPage() {
       supabase.from('athletes').select('*', { count: 'exact', head: true }).eq('status', 'active'),
       supabase.from('athletes').select('*', { count: 'exact', head: true }).eq('status', 'injured'),
     ]) as any
-    if (!listRes.error) setAthletes(listRes.data ?? [])
+    if (!listRes.error) {
+      const list = (listRes.data ?? []) as Athlete[]
+      setAthletes(list)
+      const paths = [...new Set(list.map(a => a.photo_url).filter((p): p is string => !!p))]
+      if (paths.length) {
+        const { data: signed } = await supabase.storage.from('athlete-photos').createSignedUrls(paths, 3600)
+        const map = new Map<string, string>()
+        signed?.forEach((s, i) => { if (s.signedUrl) map.set(paths[i], s.signedUrl) })
+        setPhotoSignedUrls(map)
+      } else {
+        setPhotoSignedUrls(new Map())
+      }
+    }
     setTotalCount(totalRes.count ?? 0)
     setMaleCount(maleRes.count ?? 0)
     setFemaleCount(femaleRes.count ?? 0)
@@ -195,6 +209,7 @@ export default function AthletesPage() {
   function openAdd() {
     setEditing(null)
     setForm(emptyForm)
+    setFormPhotoSignedUrl(null)
     setError(null)
     setModalOpen(true)
   }
@@ -214,6 +229,7 @@ export default function AthletesPage() {
       photo_url: a.photo_url,
       is_elite: a.is_elite,
     })
+    setFormPhotoSignedUrl(a.photo_url ? photoSignedUrls.get(a.photo_url) ?? null : null)
     setError(null)
     setModalOpen(true)
   }
@@ -224,8 +240,9 @@ export default function AthletesPage() {
     const path = `${crypto.randomUUID()}.${ext}`
     const { error } = await supabase.storage.from('athlete-photos').upload(path, file, { upsert: true })
     if (error) { setError(error.message); setUploading(false); return }
-    const { data } = supabase.storage.from('athlete-photos').getPublicUrl(path)
-    setForm(f => ({ ...f, photo_url: data.publicUrl }))
+    const { data: signed } = await supabase.storage.from('athlete-photos').createSignedUrl(path, 3600)
+    setForm(f => ({ ...f, photo_url: path }))
+    setFormPhotoSignedUrl(signed?.signedUrl ?? null)
     setUploading(false)
   }
 
@@ -451,7 +468,7 @@ export default function AthletesPage() {
                   >
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
-                        <Avatar name={a.name} url={a.photo_url} size={32} />
+                        <Avatar name={a.name} url={a.photo_url ? photoSignedUrls.get(a.photo_url) ?? null : null} size={32} />
                         <div>
                           <span className="font-medium text-[#111] group-hover:text-[#F56A00] transition">{a.name}</span>
                           {a.date_of_birth && <p className="text-[11px] text-[#888] mt-0.5">{fmtDate(a.date_of_birth)}</p>}
@@ -526,7 +543,7 @@ export default function AthletesPage() {
                   className="relative cursor-pointer group"
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  <Avatar name={form.name || '?'} url={form.photo_url} size={80} />
+                  <Avatar name={form.name || '?'} url={formPhotoSignedUrl} size={80} />
                   <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
                   </div>

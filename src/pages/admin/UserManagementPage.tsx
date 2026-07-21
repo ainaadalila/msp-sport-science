@@ -132,7 +132,7 @@ export default function UserManagementPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const getInitialCreateForm = () => {
     const role = 'admin' as Role
-    return { email: '', full_name: '', password: '', role, showPw: false, module_permissions: getDefaultModulesByRole(role) }
+    return { email: '', full_name: '', password: '', role, showPw: false, module_permissions: getDefaultModulesByRole(role), callerPassword: '' }
   }
   const [createForm, setCreateForm] = useState(getInitialCreateForm())
   const [creating, setCreating] = useState(false)
@@ -209,6 +209,10 @@ export default function UserManagementPage() {
       setCreateError(strength.errors[0] || 'Kata laluan tidak memenuhi persyaratan keamanan.')
       return
     }
+    if (createForm.role === 'superadmin' && !createForm.callerPassword) {
+      setCreateError('Sila sahkan kata laluan anda untuk mencipta akaun superadmin.')
+      return
+    }
     setCreating(true)
     const finalModulePermissions = createForm.module_permissions
     try {
@@ -219,10 +223,11 @@ export default function UserManagementPage() {
           full_name: createForm.full_name.trim().toUpperCase(),
           role: createForm.role,
         },
-        finalModulePermissions
+        finalModulePermissions,
+        createForm.role === 'superadmin' ? createForm.callerPassword : undefined
       )
       const userId = newUser.user.id
-      await logAction(currentUser?.id || '', 'create_user', 'profiles', userId)
+      await logAction(currentUser?.id || '', createForm.role === 'superadmin' ? 'create_superadmin_user' : 'create_user', 'profiles', userId)
       setCreating(false)
       setCreateSuccess(true)
       fetchUsers()
@@ -340,13 +345,13 @@ export default function UserManagementPage() {
 
       {/* Edit Modal */}
       {editingUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm max-h-[90vh] flex flex-col">
             <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
               <h3 className="font-bold text-[#111]">Edit Pengguna</h3>
               <button onClick={() => setEditingUser(null)} className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
             </div>
-            <div className="px-6 py-5 space-y-4">
+            <div className="px-6 py-5 space-y-4 overflow-y-auto flex-1 min-h-0">
               {saveError && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-600">{saveError}</div>}
               <div>
                 <label className={labelCls}>Nama Penuh</label>
@@ -473,7 +478,7 @@ export default function UserManagementPage() {
                 </div>
               </div>
             </div>
-            <div className="px-6 py-4 border-t border-gray-100 flex justify-between gap-3">
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-between gap-3 flex-shrink-0">
               <div>
                 {isSuperAdmin && editingUser?.id !== currentUser?.id && (
                   <button onClick={() => setDeleteConfirm(true)} className="px-4 py-2 text-sm text-red-600 hover:text-red-700 font-medium transition">
@@ -509,13 +514,13 @@ export default function UserManagementPage() {
       {/* Create User Modal */}
       {createOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm max-h-[90vh] flex flex-col">
             <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
               <h3 className="font-bold text-[#111]">Buat Pengguna Baharu</h3>
-              <button onClick={() => { setCreateOpen(false); setCreateForm({ email: '', full_name: '', password: '', role: 'admin', showPw: false, module_permissions: defaultModulePermissions }); setCreateError(null); setCreateSuccess(false) }}
+              <button onClick={() => { setCreateOpen(false); setCreateForm(getInitialCreateForm()); setCreateError(null); setCreateSuccess(false) }}
                 className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
             </div>
-            <div className="px-6 py-5 space-y-4">
+            <div className="px-6 py-5 space-y-4 overflow-y-auto flex-1 min-h-0">
               {createSuccess ? (
                 <div className="px-4 py-3 bg-green-50 border border-green-200 rounded-lg text-[13px] text-green-700">
                   Pengguna berjaya dicipta.
@@ -601,6 +606,22 @@ export default function UserManagementPage() {
                       {ROLES.map(r => <option key={r} value={r}>{roleLabel[r]}</option>)}
                     </select>
                   </div>
+
+                  {createForm.role === 'superadmin' && (
+                    <div>
+                      <label className={labelCls}>Sahkan Kata Laluan Anda</label>
+                      <input
+                        type="password"
+                        value={createForm.callerPassword}
+                        onChange={e => setCreateForm(f => ({ ...f, callerPassword: e.target.value }))}
+                        placeholder="Kata laluan akaun anda sendiri"
+                        className={inputCls}
+                      />
+                      <p className="text-[11px] text-[#888] mt-1">
+                        Diperlukan untuk mengesahkan identiti anda sebelum mencipta akaun superadmin baharu.
+                      </p>
+                    </div>
+                  )}
 
                   {/* Module Permissions Matrix - Tabbed */}
                   <div className="space-y-3">
@@ -705,8 +726,8 @@ export default function UserManagementPage() {
               )}
             </div>
             {!createSuccess && (
-              <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
-                <button onClick={() => { setCreateOpen(false); setCreateForm({ email: '', full_name: '', password: '', role: 'admin', showPw: false, module_permissions: defaultModulePermissions }); setCreateError(null); setCreateSuccess(false) }} className="px-4 py-2 text-sm text-[#888] hover:text-[#111] transition">Batal</button>
+              <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 flex-shrink-0">
+                <button onClick={() => { setCreateOpen(false); setCreateForm(getInitialCreateForm()); setCreateError(null); setCreateSuccess(false) }} className="px-4 py-2 text-sm text-[#888] hover:text-[#111] transition">Batal</button>
                 <button onClick={handleCreate} disabled={creating}
                   className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
                   {creating ? 'Mencipta...' : 'Buat Pengguna'}
