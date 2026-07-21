@@ -98,6 +98,11 @@ $$;
 ALTER FUNCTION "public"."approve_supplement_request"("p_request_id" "uuid", "p_status" "text", "p_approved_quantity" integer, "p_notes" "text") OWNER TO "postgres";
 
 
+-- Reads role from the profiles table specifically, never from
+-- auth.users.raw_user_meta_data / JWT user_metadata. That field is
+-- writable by the user themselves via the client SDK (see F-28) — it's
+-- fine as long as nothing treats it as an authorization source. Keep it
+-- that way; do not change this to read role from the JWT/user_metadata.
 CREATE OR REPLACE FUNCTION "public"."get_my_role"() RETURNS "text"
     LANGUAGE "sql" SECURITY DEFINER
     AS $$
@@ -282,7 +287,9 @@ CREATE TABLE IF NOT EXISTS "public"."inbody_records" (
     "ulasan" "text",
     "diet_plan_url" "text",
     "diet_plan_name" "text",
-    "catatan" "text"
+    "catatan" "text",
+    CONSTRAINT "inbody_records_ulasan_no_html_check" CHECK (("ulasan" !~ '<[a-zA-Z/!][^>]*>'::"text")),
+    CONSTRAINT "inbody_records_catatan_no_html_check" CHECK (("catatan" !~ '<[a-zA-Z/!][^>]*>'::"text"))
 );
 
 
@@ -372,7 +379,8 @@ CREATE TABLE IF NOT EXISTS "public"."psychology_ratings" (
     "assessment_date" "date" NOT NULL,
     "recorded_by" "uuid",
     "created_at" timestamp with time zone DEFAULT "now"(),
-    "catatan" "text"
+    "catatan" "text",
+    CONSTRAINT "psychology_ratings_catatan_no_html_check" CHECK (("catatan" !~ '<[a-zA-Z/!][^>]*>'::"text"))
 );
 
 
