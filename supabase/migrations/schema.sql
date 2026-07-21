@@ -100,12 +100,24 @@ ALTER FUNCTION "public"."approve_supplement_request"("p_request_id" "uuid", "p_s
 
 CREATE OR REPLACE FUNCTION "public"."get_my_role"() RETURNS "text"
     LANGUAGE "sql" SECURITY DEFINER
+    SET "search_path" TO 'public'
     AS $$
   select role from profiles where id = auth.uid();
 $$;
 
 
 ALTER FUNCTION "public"."get_my_role"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."get_coaches"() RETURNS TABLE("id" "uuid", "full_name" "text")
+    LANGUAGE "sql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+  select id, full_name from profiles where role = 'coach' order by full_name;
+$$;
+
+
+ALTER FUNCTION "public"."get_coaches"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."has_module_permission"("mod" "text", "action" "text" DEFAULT 'read') RETURNS boolean
@@ -1029,7 +1041,11 @@ CREATE POLICY "profiles: admin write" ON "public"."profiles" FOR UPDATE USING ((
 
 
 
-CREATE POLICY "profiles: read" ON "public"."profiles" FOR SELECT USING (("auth"."role"() = 'authenticated'::"text"));
+CREATE POLICY "profiles: read" ON "public"."profiles" FOR SELECT USING ((("id" = "auth"."uid"()) OR ("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"]))));
+
+
+
+CREATE POLICY "profiles: self update" ON "public"."profiles" FOR UPDATE USING (("id" = "auth"."uid"())) WITH CHECK ((("id" = "auth"."uid"()) AND ("role" = ( SELECT "profiles_1"."role" FROM "public"."profiles" "profiles_1" WHERE ("profiles_1"."id" = "auth"."uid"()))) AND ("module_permissions" = ( SELECT "profiles_1"."module_permissions" FROM "public"."profiles" "profiles_1" WHERE ("profiles_1"."id" = "auth"."uid"())))));
 
 
 
@@ -1358,6 +1374,10 @@ GRANT ALL ON FUNCTION "public"."approve_supplement_request"("p_request_id" "uuid
 GRANT ALL ON FUNCTION "public"."get_my_role"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_my_role"() TO "service_role";
 
+
+
+GRANT ALL ON FUNCTION "public"."get_coaches"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_coaches"() TO "service_role";
 
 
 GRANT ALL ON FUNCTION "public"."has_module_permission"("mod" "text", "action" "text") TO "authenticated";
