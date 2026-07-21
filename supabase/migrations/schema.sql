@@ -108,15 +108,23 @@ $$;
 ALTER FUNCTION "public"."get_my_role"() OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."has_module_permission"("perm" "text") RETURNS boolean
+CREATE OR REPLACE FUNCTION "public"."has_module_permission"("mod" "text", "action" "text" DEFAULT 'read') RETURNS boolean
     LANGUAGE "sql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
-  select coalesce((module_permissions ->> perm)::boolean, false) from profiles where id = auth.uid();
+  select coalesce(
+    case jsonb_typeof(module_permissions -> mod)
+      when 'boolean' then (module_permissions ->> mod)::boolean
+      when 'object' then (module_permissions -> mod ->> action)::boolean
+      else false
+    end,
+    false
+  )
+  from profiles where id = auth.uid();
 $$;
 
 
-ALTER FUNCTION "public"."has_module_permission"("perm" "text") OWNER TO "postgres";
+ALTER FUNCTION "public"."has_module_permission"("mod" "text", "action" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."handle_new_user"() RETURNS "trigger"
@@ -1346,8 +1354,8 @@ GRANT ALL ON FUNCTION "public"."get_my_role"() TO "service_role";
 
 
 
-GRANT ALL ON FUNCTION "public"."has_module_permission"("perm" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."has_module_permission"("perm" "text") TO "service_role";
+GRANT ALL ON FUNCTION "public"."has_module_permission"("mod" "text", "action" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."has_module_permission"("mod" "text", "action" "text") TO "service_role";
 
 
 
