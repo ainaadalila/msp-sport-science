@@ -328,11 +328,15 @@ export default function ReportsPage() {
               }))
             )
           } else if (latihkanMode === 'jadual') {
-            const { data: schedules, error } = await supabase
-              .from('coach_schedules')
-              .select('id, sport, repeats, repeat_pattern, coach:profiles(full_name), slots:coach_schedule_slots(slot_date, start_time, end_time)')
-              .order('valid_from', { ascending: false }).limit(5000) as any
+            const [{ data: schedules, error }, { data: coachList }] = await Promise.all([
+              supabase
+                .from('coach_schedules')
+                .select('id, sport, coach_id, repeats, repeat_pattern, slots:coach_schedule_slots(slot_date, start_time, end_time)')
+                .order('valid_from', { ascending: false }).limit(5000) as any,
+              supabase.rpc('get_coaches'),
+            ])
             if (error) throw error
+            const coachMap = new Map((coachList ?? []).map((c: any) => [c.id, c.full_name]))
             const repeatPatternMap: Record<string, string> = { weekly: 'Mingguan', 'bi-weekly': 'Dua Minggu Sekali', custom: 'Kustom' }
             const rows: Record<string, unknown>[] = []
             for (const s of (schedules ?? [])) {
@@ -340,7 +344,7 @@ export default function ReportsPage() {
               const slots = ((s.slots ?? []) as any[]).sort((a: any, b: any) => a.slot_date.localeCompare(b.slot_date))
               const base = {
                 'Sukan': s.sport ?? '—',
-                'Jurulatih': s.coach?.full_name ?? '—',
+                'Jurulatih': (s.coach_id && coachMap.get(s.coach_id)) ?? '—',
                 'Berulang': s.repeats ? 'Ya' : 'Tidak',
                 'Corak Ulangan': repeatPatternMap[s.repeat_pattern] ?? '—',
               }
@@ -352,12 +356,16 @@ export default function ReportsPage() {
             }
             setData(rows)
           } else if (latihkanMode === 'program') {
-            const { data: programs, error } = await supabase
-              .from('sc_programs')
-              .select('id, sport, month, year, start_date, end_date, structured_data, coach_id, coach:profiles(full_name)')
-              .order('year', { ascending: false })
-              .order('month', { ascending: false }).limit(5000) as any
+            const [{ data: programs, error }, { data: coachList }] = await Promise.all([
+              supabase
+                .from('sc_programs')
+                .select('id, sport, month, year, start_date, end_date, structured_data, coach_id')
+                .order('year', { ascending: false })
+                .order('month', { ascending: false }).limit(5000) as any,
+              supabase.rpc('get_coaches'),
+            ])
             if (error) throw error
+            const coachMap = new Map((coachList ?? []).map((c: any) => [c.id, c.full_name]))
             const monthNames = ['Januari', 'Februari', 'Mac', 'April', 'Mei', 'Jun', 'Julai', 'Ogos', 'September', 'Oktober', 'November', 'Disember']
             setData((programs ?? [])
               .filter((p: any) => !filterSport || p.sport === filterSport)
@@ -369,7 +377,7 @@ export default function ReportsPage() {
                   'Tahun': p.year,
                   'Fasa': structured?.phase ?? '—',
                   'Bilangan Sesi': structured?.sessions?.length ?? 0,
-                  'Jurulatih': (p.coach as any)?.full_name ?? '—',
+                  'Jurulatih': (p.coach_id && coachMap.get(p.coach_id)) ?? '—',
                   'Tarikh Mula': p.start_date ?? '—',
                   'Tarikh Tamat': p.end_date ?? '—',
                 }

@@ -15,19 +15,28 @@ export default function ResetPasswordPage() {
   const [passwordStrength, setPasswordStrength] = useState(validatePassword(''))
 
   useEffect(() => {
-    supabase.auth.onAuthStateChange((event, session) => {
+    let recovered = false
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY' && session) {
+        recovered = true
         setVerifying(false)
       }
     })
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        setVerifying(false)
-      } else {
-        setTimeout(() => setError('Pautan tidak sah atau telah tamat tempoh.'), 2000)
+    // Only a genuine PASSWORD_RECOVERY event may unlock this page — an
+    // ordinary active session must not, or anyone with a stolen/shared
+    // session could reach this page and replace the account password.
+    const timeout = setTimeout(() => {
+      if (!recovered) {
+        setError('Pautan tidak sah atau telah tamat tempoh.')
       }
-    })
+    }, 2000)
+
+    return () => {
+      subscription.unsubscribe()
+      clearTimeout(timeout)
+    }
   }, [])
 
   async function handleSubmit(e: React.FormEvent) {
@@ -63,7 +72,9 @@ export default function ResetPasswordPage() {
 
         {verifying ? (
           <div className="text-center py-16">
-            <p className="text-[13px] text-[#888]">Mengesahkan pautan...</p>
+            <p className={`text-[13px] ${error ? 'text-red-600' : 'text-[#888]'}`}>
+              {error || 'Mengesahkan pautan...'}
+            </p>
           </div>
         ) : success ? (
           <div className="text-center space-y-4">

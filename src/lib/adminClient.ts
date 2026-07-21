@@ -19,7 +19,8 @@ export async function createUserAdmin(
   email: string,
   password: string,
   userData: NewUserData,
-  modulePermissions: ModulePermissions
+  modulePermissions: ModulePermissions,
+  callerPassword?: string
 ) {
   const { data, error } = await supabase.functions.invoke('create-user', {
     body: {
@@ -28,6 +29,7 @@ export async function createUserAdmin(
       full_name: userData.full_name,
       role: userData.role,
       module_permissions: modulePermissions,
+      caller_password: callerPassword,
     },
   })
 

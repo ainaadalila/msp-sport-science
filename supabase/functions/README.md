@@ -50,9 +50,19 @@ supabase functions deploy create-user
 supabase functions deploy delete-user
 ```
 
-No manual secrets to set — Supabase automatically injects `SUPABASE_URL`,
-`SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` into every Edge
-Function at runtime, both locally (`supabase start`) and when deployed.
+Supabase automatically injects `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and
+`SUPABASE_SERVICE_ROLE_KEY` into every Edge Function at runtime, both
+locally (`supabase start`) and when deployed.
+
+One secret must be set manually: `ALLOWED_ORIGIN`, the frontend's exact
+origin (e.g. `https://profilatlet.pahang.gov.my`, no trailing slash). The
+shared CORS config (`_shared/cors.ts`) fails closed without it — requests
+from the browser get blocked, not silently allowed from anywhere — so this
+has to be set before the frontend can call these functions at all:
+
+```bash
+supabase secrets set ALLOWED_ORIGIN=https://your-frontend-domain
+```
 
 ## Local testing
 
@@ -61,8 +71,11 @@ supabase start
 supabase functions serve create-user --env-file .env.local
 ```
 
-Then point `VITE_SUPABASE_URL` at the local stack (`http://localhost:54321`
-by default) to exercise the full flow from the running frontend.
+`.env.local` needs `ALLOWED_ORIGIN` too (e.g. `http://localhost:5173`,
+matching wherever the frontend dev server actually runs), or the local
+frontend won't be able to read these functions' responses either. Then
+point `VITE_SUPABASE_URL` at the local stack (`http://localhost:54321` by
+default) to exercise the full flow from the running frontend.
 
 ## Self-hosted Supabase (client's AlmaLinux server)
 
