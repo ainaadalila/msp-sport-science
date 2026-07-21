@@ -117,11 +117,31 @@ DECLARE
 BEGIN
   full_name_val := COALESCE(new.raw_user_meta_data->>'full_name', new.email);
 
-  INSERT INTO public.profiles (id, full_name, role)
+  -- module_permissions is set explicitly here (read-only access to most
+  -- modules, matching getDefaultModulesByRole('pegawai_belia_sukan') in
+  -- UserManagementPage.tsx) rather than relying on the profiles table's
+  -- column default, which grants much broader access and is only meant as
+  -- a last-resort fallback, not the real default for this role.
+  INSERT INTO public.profiles (id, full_name, role, module_permissions)
   VALUES (
     new.id,
     full_name_val,
-    'pegawai_belia_sukan'
+    'pegawai_belia_sukan',
+    jsonb_build_object(
+      'athletes', jsonb_build_object('read', true, 'create', false, 'update', false, 'delete', false),
+      'strength', jsonb_build_object('read', true, 'create', false, 'update', false, 'delete', false),
+      'fitness', jsonb_build_object('read', true, 'create', false, 'update', false, 'delete', false),
+      'fitness_config', jsonb_build_object('read', false, 'create', false, 'update', false, 'delete', false),
+      'inbody', jsonb_build_object('read', true, 'create', false, 'update', false, 'delete', false),
+      'supplement', jsonb_build_object('read', false, 'create', false, 'update', false, 'delete', false),
+      'physio', jsonb_build_object('read', true, 'create', false, 'update', false, 'delete', false),
+      'physio_cases', jsonb_build_object('read', true, 'create', false, 'update', false, 'delete', false),
+      'psychology', jsonb_build_object('read', true, 'create', false, 'update', false, 'delete', false),
+      'reports', jsonb_build_object('read', true, 'create', false, 'update', false, 'delete', false),
+      'supplement_coordinator', false,
+      'supplement_supporter', false,
+      'supplement_approver', false
+    )
   );
 
   RETURN new;
@@ -130,6 +150,9 @@ $$;
 
 
 ALTER FUNCTION "public"."handle_new_user"() OWNER TO "postgres";
+
+
+CREATE TRIGGER "on_auth_user_created" AFTER INSERT ON "auth"."users" FOR EACH ROW EXECUTE FUNCTION "public"."handle_new_user"();
 
 SET default_tablespace = '';
 
@@ -343,7 +366,7 @@ CREATE TABLE IF NOT EXISTS "public"."profiles" (
     "full_name" "text",
     "role" "text" DEFAULT 'admin'::"text" NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"(),
-    "module_permissions" "jsonb" DEFAULT "jsonb_build_object"('athletes', true, 'inbody', true, 'supplement', true, 'physio', true, 'fitness', true, 'strength', true, 'reports', true, 'supplement_coordinator', false, 'supplement_supporter', false, 'supplement_approver', false) NOT NULL,
+    "module_permissions" "jsonb" DEFAULT "jsonb_build_object"('athletes', "jsonb_build_object"('read', true, 'create', false, 'update', false, 'delete', false), 'strength', "jsonb_build_object"('read', false, 'create', false, 'update', false, 'delete', false), 'fitness', "jsonb_build_object"('read', false, 'create', false, 'update', false, 'delete', false), 'fitness_config', "jsonb_build_object"('read', false, 'create', false, 'update', false, 'delete', false), 'inbody', "jsonb_build_object"('read', false, 'create', false, 'update', false, 'delete', false), 'supplement', "jsonb_build_object"('read', false, 'create', false, 'update', false, 'delete', false), 'physio', "jsonb_build_object"('read', false, 'create', false, 'update', false, 'delete', false), 'physio_cases', "jsonb_build_object"('read', false, 'create', false, 'update', false, 'delete', false), 'psychology', "jsonb_build_object"('read', false, 'create', false, 'update', false, 'delete', false), 'reports', "jsonb_build_object"('read', false, 'create', false, 'update', false, 'delete', false), 'supplement_coordinator', false, 'supplement_supporter', false, 'supplement_approver', false) NOT NULL,
     "ic_number" "text",
     "unit" "text",
     CONSTRAINT "profiles_role_check" CHECK (("role" = ANY (ARRAY['superadmin'::"text", 'admin'::"text", 'coach'::"text", 'physio'::"text", 'psikologis'::"text", 'penolong_pegawai'::"text", 'pegawai_belia_sukan'::"text"])))
