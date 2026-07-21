@@ -108,6 +108,17 @@ $$;
 ALTER FUNCTION "public"."get_my_role"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."has_module_permission"("perm" "text") RETURNS boolean
+    LANGUAGE "sql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+  select coalesce((module_permissions ->> perm)::boolean, false) from profiles where id = auth.uid();
+$$;
+
+
+ALTER FUNCTION "public"."has_module_permission"("perm" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."handle_new_user"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -1094,7 +1105,7 @@ CREATE POLICY "supplement_requests: admin update" ON "public"."supplement_reques
 
 
 
-CREATE POLICY "supplement_requests: coordinator update" ON "public"."supplement_requests" FOR UPDATE USING (("auth"."role"() = 'authenticated'::"text")) WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND ("status" = ANY (ARRAY['pending'::"text", 'semakan_lulus'::"text", 'semakan_tolak'::"text"]))));
+CREATE POLICY "supplement_requests: coordinator update" ON "public"."supplement_requests" FOR UPDATE USING ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('supplement_coordinator'::"text"))) WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('supplement_coordinator'::"text") AND ("requested_by" <> "auth"."uid"()) AND ("status" = ANY (ARRAY['pending'::"text", 'semakan_lulus'::"text", 'semakan_tolak'::"text"]))));
 
 
 
@@ -1106,7 +1117,7 @@ CREATE POLICY "supplement_requests: read" ON "public"."supplement_requests" FOR 
 
 
 
-CREATE POLICY "supplement_requests: supporter update" ON "public"."supplement_requests" FOR UPDATE USING (("auth"."role"() = 'authenticated'::"text")) WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND ("status" = 'semakan_lulus'::"text")));
+CREATE POLICY "supplement_requests: supporter update" ON "public"."supplement_requests" FOR UPDATE USING ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('supplement_supporter'::"text"))) WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('supplement_supporter'::"text") AND ("requested_by" <> "auth"."uid"()) AND ("status" = 'semakan_lulus'::"text")));
 
 
 
@@ -1295,6 +1306,11 @@ GRANT ALL ON FUNCTION "public"."approve_supplement_request"("p_request_id" "uuid
 
 GRANT ALL ON FUNCTION "public"."get_my_role"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_my_role"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."has_module_permission"("perm" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."has_module_permission"("perm" "text") TO "service_role";
 
 
 
