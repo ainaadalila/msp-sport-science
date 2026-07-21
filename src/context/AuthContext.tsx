@@ -66,7 +66,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.warn('Failed to log logout action:', err)
       })
     }
-    await supabase.auth.signOut()
+    // scope: 'global' revokes the refresh token on every session for this
+    // user, not just this browser tab — the default 'local' scope only
+    // clears local storage here, leaving other sessions (and the ability
+    // to silently refresh to new access tokens) untouched.
+    await supabase.auth.signOut({ scope: 'global' })
   }
 
   return (

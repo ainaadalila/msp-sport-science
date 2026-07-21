@@ -108,29 +108,15 @@ $$;
 ALTER FUNCTION "public"."get_my_role"() OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."has_module_permission"("mod" "text", "action" "text" DEFAULT 'read') RETURNS boolean
+CREATE OR REPLACE FUNCTION "public"."has_module_permission"("perm" "text") RETURNS boolean
     LANGUAGE "sql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
-  -- module_permissions stores two shapes: a plain boolean for
-  -- supplement_coordinator/supplement_supporter/supplement_approver, and a
-  -- {read,create,update,delete} object for every other module key. Handle
-  -- both rather than assuming one shape, since casting a JSON object
-  -- directly to boolean raises a hard Postgres error instead of failing
-  -- closed.
-  select coalesce(
-    case jsonb_typeof(module_permissions -> mod)
-      when 'boolean' then (module_permissions ->> mod)::boolean
-      when 'object' then (module_permissions -> mod ->> action)::boolean
-      else false
-    end,
-    false
-  )
-  from profiles where id = auth.uid();
+  select coalesce((module_permissions ->> perm)::boolean, false) from profiles where id = auth.uid();
 $$;
 
 
-ALTER FUNCTION "public"."has_module_permission"("mod" "text", "action" "text") OWNER TO "postgres";
+ALTER FUNCTION "public"."has_module_permission"("perm" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."handle_new_user"() RETURNS "trigger"
@@ -1119,7 +1105,7 @@ CREATE POLICY "supplement_requests: admin update" ON "public"."supplement_reques
 
 
 
-CREATE POLICY "supplement_requests: coordinator update" ON "public"."supplement_requests" FOR UPDATE USING (("auth"."role"() = 'authenticated'::"text")) WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND ("status" = ANY (ARRAY['pending'::"text", 'semakan_lulus'::"text", 'semakan_tolak'::"text"]))));
+CREATE POLICY "supplement_requests: coordinator update" ON "public"."supplement_requests" FOR UPDATE USING ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('supplement_coordinator'::"text"))) WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('supplement_coordinator'::"text") AND ("requested_by" <> "auth"."uid"()) AND ("status" = ANY (ARRAY['pending'::"text", 'semakan_lulus'::"text", 'semakan_tolak'::"text"]))));
 
 
 
@@ -1131,7 +1117,7 @@ CREATE POLICY "supplement_requests: read" ON "public"."supplement_requests" FOR 
 
 
 
-CREATE POLICY "supplement_requests: supporter update" ON "public"."supplement_requests" FOR UPDATE USING (("auth"."role"() = 'authenticated'::"text")) WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND ("status" = 'semakan_lulus'::"text")));
+CREATE POLICY "supplement_requests: supporter update" ON "public"."supplement_requests" FOR UPDATE USING ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('supplement_supporter'::"text"))) WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('supplement_supporter'::"text") AND ("requested_by" <> "auth"."uid"()) AND ("status" = 'semakan_lulus'::"text")));
 
 
 
@@ -1360,8 +1346,8 @@ GRANT ALL ON FUNCTION "public"."get_my_role"() TO "service_role";
 
 
 
-GRANT ALL ON FUNCTION "public"."has_module_permission"("mod" "text", "action" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."has_module_permission"("mod" "text", "action" "text") TO "service_role";
+GRANT ALL ON FUNCTION "public"."has_module_permission"("perm" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."has_module_permission"("perm" "text") TO "service_role";
 
 
 
