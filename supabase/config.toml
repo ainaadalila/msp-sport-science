@@ -1,5 +1,28 @@
 project_id = "msp-sport-science"
 
+# Mirrors the client-side rules in src/lib/passwordValidator.ts (min 12
+# chars, upper/lower/digit required) so the policy shown to users is also
+# enforced by the Auth service itself, not just the React form — a caller
+# that bypasses the UI and hits Supabase Auth directly is still held to it.
+#
+# Signup is disabled outright: this app has no self-registration UI
+# anywhere (confirmed — no signup route, no signup component, no call to
+# supabase.auth.signUp() in src/). Every account is admin-provisioned via
+# the create-user Edge Function. Leaving /auth/v1/signup open serves no
+# legitimate purpose and only expands the attack surface.
+[auth]
+enabled = true
+enable_signup = false
+minimum_password_length = 12
+password_requirements = "lower_upper_letters_digits"
+# Shortens the window a stolen/leaked access token (including a recovery
+# token — see F-05/F-08) stays usable, from the 3600s default down to 900s
+# (15 min). Does not affect normal use: supabase-js silently refreshes an
+# active session using the refresh token before it expires, so a logged-in
+# user is never interrupted by this — it only limits how long a token is
+# dangerous once it's out of the legitimate holder's hands.
+jwt_expiry = 900
+
 [functions.create-user]
 verify_jwt = true
 

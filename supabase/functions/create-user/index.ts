@@ -68,6 +68,21 @@ Deno.serve(async (req: Request) => {
       return json({ error: 'Missing required fields: email, password, full_name, role' }, 400)
     }
 
+    // 4b. The Auth Admin API (used below) does not enforce the project's
+    // password policy (config.toml's [auth] settings only apply to the
+    // self-service /auth/v1/signup and /auth/v1/user endpoints) — confirmed
+    // by testing directly. Since this function is the only way real
+    // accounts get created, the policy has to be checked here explicitly,
+    // mirroring src/lib/passwordValidator.ts's rules.
+    if (
+      password.length < 12 ||
+      !/[A-Z]/.test(password) ||
+      !/[a-z]/.test(password) ||
+      !/[0-9]/.test(password)
+    ) {
+      return json({ error: 'Password must be at least 12 characters and include an uppercase letter, a lowercase letter, and a number' }, 400)
+    }
+
     // 5. Create the auth user.
     const { data: created, error: createErr } = await adminClient.auth.admin.createUser({
       email,
