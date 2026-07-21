@@ -230,13 +230,16 @@ export default function StrengthPage() {
     setLoading(true)
     const [recRes, progRes, schedRes, coachRes] = await Promise.all([
       supabase.from('strength_conditioning').select('id, athlete_id, session_date, attendance').limit(5000),
-      supabase.from('sc_programs').select('id, sport, month, year, program_type, coach_id, structured_data, start_date, end_date, coach:profiles(full_name)').order('year', { ascending: false }).order('month').limit(5000),
+      supabase.from('sc_programs').select('id, sport, month, year, program_type, coach_id, structured_data, start_date, end_date').order('year', { ascending: false }).order('month').limit(5000),
       supabase.from('coach_schedules').select('id, coach_id, sport, schedule_name, valid_from, repeats, repeat_pattern, repeat_until, slots:coach_schedule_slots(id, schedule_id, slot_date, start_time, end_time)').order('valid_from', { ascending: false }).limit(5000),
-      supabase.from('profiles').select('id, full_name').eq('role', 'coach').order('full_name').limit(500),
+      supabase.rpc('get_coaches'),
     ]) as any
 
     if (!recRes.error) setRecords(recRes.data ?? [])
-    if (!progRes.error) setPrograms(progRes.data ?? [])
+    if (!progRes.error) {
+      const coachMap = new Map((coachRes.data ?? []).map((c: any) => [c.id, { full_name: c.full_name }]))
+      setPrograms((progRes.data ?? []).map((p: any) => ({ ...p, coach: p.coach_id ? coachMap.get(p.coach_id) : undefined })))
+    }
     if (!schedRes.error) setSchedules(schedRes.data ?? [])
     if (!coachRes.error) setCoaches(coachRes.data ?? [])
 

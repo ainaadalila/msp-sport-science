@@ -138,6 +138,18 @@ export default function InBodyPage() {
   const [confirmDeleteDietPlan, setConfirmDeleteDietPlan] = useState(false)
 
   async function openDietPlan(url: string) {
+    let scheme: string
+    try {
+      scheme = new URL(url).protocol
+    } catch {
+      setDietPlanError('Invalid diet plan link')
+      return
+    }
+    if (scheme !== 'https:' && scheme !== 'http:') {
+      setDietPlanError('Invalid diet plan link')
+      return
+    }
+
     const match = url.match(/inbody_diet_plans\/(.+)$/)
     if (!match) { window.open(url, '_blank'); return }
     const { data, error } = await supabase.storage.from('inbody_diet_plans').createSignedUrl(match[1], 120)
