@@ -100,12 +100,49 @@ ALTER FUNCTION "public"."approve_supplement_request"("p_request_id" "uuid", "p_s
 
 CREATE OR REPLACE FUNCTION "public"."get_my_role"() RETURNS "text"
     LANGUAGE "sql" SECURITY DEFINER
+    SET "search_path" TO 'public'
     AS $$
   select role from profiles where id = auth.uid();
 $$;
 
 
 ALTER FUNCTION "public"."get_my_role"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."get_coaches"() RETURNS TABLE("id" "uuid", "full_name" "text")
+    LANGUAGE "sql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+  select id, full_name from profiles where role = 'coach' order by full_name;
+$$;
+
+
+ALTER FUNCTION "public"."get_coaches"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."has_module_permission"("mod" "text", "action" "text" DEFAULT 'read') RETURNS boolean
+    LANGUAGE "sql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+  -- module_permissions stores two shapes: a plain boolean for
+  -- supplement_coordinator/supplement_supporter/supplement_approver, and a
+  -- {read,create,update,delete} object for every other module key. Handle
+  -- both rather than assuming one shape, since casting a JSON object
+  -- directly to boolean raises a hard Postgres error instead of failing
+  -- closed.
+  select coalesce(
+    case jsonb_typeof(module_permissions -> mod)
+      when 'boolean' then (module_permissions ->> mod)::boolean
+      when 'object' then (module_permissions -> mod ->> action)::boolean
+      else false
+    end,
+    false
+  )
+  from profiles where id = auth.uid();
+$$;
+
+
+ALTER FUNCTION "public"."has_module_permission"("mod" "text", "action" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."handle_new_user"() RETURNS "trigger"
@@ -891,7 +928,7 @@ CREATE POLICY "coach_schedules: admin delete" ON "public"."coach_schedules" FOR 
 
 
 
-CREATE POLICY "coach_schedules: insert" ON "public"."coach_schedules" FOR INSERT WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+CREATE POLICY "coach_schedules: insert" ON "public"."coach_schedules" FOR INSERT WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('strength'::"text", 'create'::"text")));
 
 
 
@@ -899,7 +936,7 @@ CREATE POLICY "coach_schedules: read" ON "public"."coach_schedules" FOR SELECT U
 
 
 
-CREATE POLICY "coach_schedules: update" ON "public"."coach_schedules" FOR UPDATE USING (("auth"."role"() = 'authenticated'::"text")) WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+CREATE POLICY "coach_schedules: update" ON "public"."coach_schedules" FOR UPDATE USING ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('strength'::"text", 'update'::"text"))) WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('strength'::"text", 'update'::"text")));
 
 
 
@@ -932,7 +969,7 @@ CREATE POLICY "fitness_test_results: admin delete" ON "public"."fitness_test_res
 
 
 
-CREATE POLICY "fitness_test_results: insert" ON "public"."fitness_test_results" FOR INSERT WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+CREATE POLICY "fitness_test_results: insert" ON "public"."fitness_test_results" FOR INSERT WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('fitness'::"text", 'create'::"text")));
 
 
 
@@ -940,7 +977,7 @@ CREATE POLICY "fitness_test_results: read" ON "public"."fitness_test_results" FO
 
 
 
-CREATE POLICY "fitness_test_results: update" ON "public"."fitness_test_results" FOR UPDATE USING (("auth"."role"() = 'authenticated'::"text")) WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+CREATE POLICY "fitness_test_results: update" ON "public"."fitness_test_results" FOR UPDATE USING ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('fitness'::"text", 'update'::"text"))) WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('fitness'::"text", 'update'::"text")));
 
 
 
@@ -951,7 +988,7 @@ CREATE POLICY "fitness_test_sessions: admin delete" ON "public"."fitness_test_se
 
 
 
-CREATE POLICY "fitness_test_sessions: insert" ON "public"."fitness_test_sessions" FOR INSERT WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+CREATE POLICY "fitness_test_sessions: insert" ON "public"."fitness_test_sessions" FOR INSERT WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('fitness'::"text", 'create'::"text")));
 
 
 
@@ -959,7 +996,7 @@ CREATE POLICY "fitness_test_sessions: read" ON "public"."fitness_test_sessions" 
 
 
 
-CREATE POLICY "fitness_test_sessions: update" ON "public"."fitness_test_sessions" FOR UPDATE USING (("auth"."role"() = 'authenticated'::"text")) WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+CREATE POLICY "fitness_test_sessions: update" ON "public"."fitness_test_sessions" FOR UPDATE USING ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('fitness'::"text", 'update'::"text"))) WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('fitness'::"text", 'update'::"text")));
 
 
 
@@ -970,7 +1007,7 @@ CREATE POLICY "inbody_records: admin delete" ON "public"."inbody_records" FOR DE
 
 
 
-CREATE POLICY "inbody_records: insert" ON "public"."inbody_records" FOR INSERT WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+CREATE POLICY "inbody_records: insert" ON "public"."inbody_records" FOR INSERT WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('inbody'::"text", 'create'::"text")));
 
 
 
@@ -978,7 +1015,7 @@ CREATE POLICY "inbody_records: read" ON "public"."inbody_records" FOR SELECT USI
 
 
 
-CREATE POLICY "inbody_records: update" ON "public"."inbody_records" FOR UPDATE USING (("auth"."role"() = 'authenticated'::"text")) WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+CREATE POLICY "inbody_records: update" ON "public"."inbody_records" FOR UPDATE USING ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('inbody'::"text", 'update'::"text"))) WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('inbody'::"text", 'update'::"text")));
 
 
 
@@ -989,7 +1026,7 @@ CREATE POLICY "physio_cases: admin delete" ON "public"."physio_cases" FOR DELETE
 
 
 
-CREATE POLICY "physio_cases: insert" ON "public"."physio_cases" FOR INSERT WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+CREATE POLICY "physio_cases: insert" ON "public"."physio_cases" FOR INSERT WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('physio_cases'::"text", 'create'::"text")));
 
 
 
@@ -997,7 +1034,7 @@ CREATE POLICY "physio_cases: read" ON "public"."physio_cases" FOR SELECT USING (
 
 
 
-CREATE POLICY "physio_cases: update" ON "public"."physio_cases" FOR UPDATE USING (("auth"."role"() = 'authenticated'::"text")) WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+CREATE POLICY "physio_cases: update" ON "public"."physio_cases" FOR UPDATE USING ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('physio_cases'::"text", 'update'::"text"))) WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('physio_cases'::"text", 'update'::"text")));
 
 
 
@@ -1008,7 +1045,7 @@ CREATE POLICY "physio_slots: admin delete" ON "public"."physio_slots" FOR DELETE
 
 
 
-CREATE POLICY "physio_slots: insert" ON "public"."physio_slots" FOR INSERT WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+CREATE POLICY "physio_slots: insert" ON "public"."physio_slots" FOR INSERT WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('physio'::"text", 'create'::"text")));
 
 
 
@@ -1016,7 +1053,7 @@ CREATE POLICY "physio_slots: read" ON "public"."physio_slots" FOR SELECT USING (
 
 
 
-CREATE POLICY "physio_slots: update" ON "public"."physio_slots" FOR UPDATE USING (("auth"."role"() = 'authenticated'::"text")) WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+CREATE POLICY "physio_slots: update" ON "public"."physio_slots" FOR UPDATE USING ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('physio'::"text", 'update'::"text"))) WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('physio'::"text", 'update'::"text")));
 
 
 
@@ -1027,7 +1064,11 @@ CREATE POLICY "profiles: admin write" ON "public"."profiles" FOR UPDATE USING ((
 
 
 
-CREATE POLICY "profiles: read" ON "public"."profiles" FOR SELECT USING (("auth"."role"() = 'authenticated'::"text"));
+CREATE POLICY "profiles: read" ON "public"."profiles" FOR SELECT USING ((("id" = "auth"."uid"()) OR ("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"]))));
+
+
+
+CREATE POLICY "profiles: self update" ON "public"."profiles" FOR UPDATE USING (("id" = "auth"."uid"())) WITH CHECK ((("id" = "auth"."uid"()) AND ("role" = ( SELECT "profiles_1"."role" FROM "public"."profiles" "profiles_1" WHERE ("profiles_1"."id" = "auth"."uid"()))) AND ("module_permissions" = ( SELECT "profiles_1"."module_permissions" FROM "public"."profiles" "profiles_1" WHERE ("profiles_1"."id" = "auth"."uid"())))));
 
 
 
@@ -1038,7 +1079,7 @@ CREATE POLICY "psychology_ratings: admin delete" ON "public"."psychology_ratings
 
 
 
-CREATE POLICY "psychology_ratings: insert" ON "public"."psychology_ratings" FOR INSERT WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+CREATE POLICY "psychology_ratings: insert" ON "public"."psychology_ratings" FOR INSERT WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('psychology'::"text", 'create'::"text")));
 
 
 
@@ -1046,7 +1087,7 @@ CREATE POLICY "psychology_ratings: read" ON "public"."psychology_ratings" FOR SE
 
 
 
-CREATE POLICY "psychology_ratings: update" ON "public"."psychology_ratings" FOR UPDATE USING (("auth"."role"() = 'authenticated'::"text")) WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+CREATE POLICY "psychology_ratings: update" ON "public"."psychology_ratings" FOR UPDATE USING ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('psychology'::"text", 'update'::"text"))) WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('psychology'::"text", 'update'::"text")));
 
 
 
@@ -1057,7 +1098,7 @@ CREATE POLICY "sc_programs: admin delete" ON "public"."sc_programs" FOR DELETE U
 
 
 
-CREATE POLICY "sc_programs: insert" ON "public"."sc_programs" FOR INSERT WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+CREATE POLICY "sc_programs: insert" ON "public"."sc_programs" FOR INSERT WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('strength'::"text", 'create'::"text")));
 
 
 
@@ -1065,7 +1106,7 @@ CREATE POLICY "sc_programs: read" ON "public"."sc_programs" FOR SELECT USING (("
 
 
 
-CREATE POLICY "sc_programs: update" ON "public"."sc_programs" FOR UPDATE USING (("auth"."role"() = 'authenticated'::"text")) WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+CREATE POLICY "sc_programs: update" ON "public"."sc_programs" FOR UPDATE USING ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('strength'::"text", 'update'::"text"))) WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('strength'::"text", 'update'::"text")));
 
 
 
@@ -1098,7 +1139,7 @@ CREATE POLICY "strength_conditioning: admin delete" ON "public"."strength_condit
 
 
 
-CREATE POLICY "strength_conditioning: insert" ON "public"."strength_conditioning" FOR INSERT WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+CREATE POLICY "strength_conditioning: insert" ON "public"."strength_conditioning" FOR INSERT WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('strength'::"text", 'create'::"text")));
 
 
 
@@ -1106,7 +1147,7 @@ CREATE POLICY "strength_conditioning: read" ON "public"."strength_conditioning" 
 
 
 
-CREATE POLICY "strength_conditioning: update" ON "public"."strength_conditioning" FOR UPDATE USING (("auth"."role"() = 'authenticated'::"text")) WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+CREATE POLICY "strength_conditioning: update" ON "public"."strength_conditioning" FOR UPDATE USING ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('strength'::"text", 'update'::"text"))) WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('strength'::"text", 'update'::"text")));
 
 
 
@@ -1117,7 +1158,7 @@ CREATE POLICY "supplement_requests: admin update" ON "public"."supplement_reques
 
 
 
-CREATE POLICY "supplement_requests: coordinator update" ON "public"."supplement_requests" FOR UPDATE USING (("auth"."role"() = 'authenticated'::"text")) WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND ("status" = ANY (ARRAY['pending'::"text", 'semakan_lulus'::"text", 'semakan_tolak'::"text"]))));
+CREATE POLICY "supplement_requests: coordinator update" ON "public"."supplement_requests" FOR UPDATE USING ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('supplement_coordinator'::"text"))) WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('supplement_coordinator'::"text") AND ("requested_by" <> "auth"."uid"()) AND ("status" = ANY (ARRAY['pending'::"text", 'semakan_lulus'::"text", 'semakan_tolak'::"text"]))));
 
 
 
@@ -1129,7 +1170,7 @@ CREATE POLICY "supplement_requests: read" ON "public"."supplement_requests" FOR 
 
 
 
-CREATE POLICY "supplement_requests: supporter update" ON "public"."supplement_requests" FOR UPDATE USING (("auth"."role"() = 'authenticated'::"text")) WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND ("status" = 'semakan_lulus'::"text")));
+CREATE POLICY "supplement_requests: supporter update" ON "public"."supplement_requests" FOR UPDATE USING ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('supplement_supporter'::"text"))) WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('supplement_supporter'::"text") AND ("requested_by" <> "auth"."uid"()) AND ("status" = 'semakan_lulus'::"text")));
 
 
 
@@ -1150,6 +1191,43 @@ CREATE POLICY "supplements: admin write" ON "public"."supplements" FOR INSERT WI
 
 CREATE POLICY "supplements: read" ON "public"."supplements" FOR SELECT USING (("auth"."role"() = 'authenticated'::"text"));
 
+
+
+-- Storage buckets used by src/pages/athletes/AthletesPage.tsx and
+-- src/pages/performance/inbody/InBodyPage.tsx. Both buckets are private;
+-- the frontend reads objects exclusively via createSignedUrl(s), never
+-- getPublicUrl(). Access is gated by the same module_permissions flags
+-- that already gate the corresponding pages' UI (athletes / inbody).
+
+INSERT INTO "storage"."buckets" ("id", "name", "public")
+VALUES
+  ('athlete-photos', 'athlete-photos', false),
+  ('inbody_diet_plans', 'inbody_diet_plans', false)
+ON CONFLICT ("id") DO NOTHING;
+
+
+CREATE POLICY "athlete-photos: read" ON "storage"."objects" FOR SELECT USING ((("bucket_id" = 'athlete-photos'::"text") AND ("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('athletes'::"text", 'read'::"text")));
+
+
+CREATE POLICY "athlete-photos: write" ON "storage"."objects" FOR INSERT WITH CHECK ((("bucket_id" = 'athlete-photos'::"text") AND ("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('athletes'::"text", 'create'::"text")));
+
+
+CREATE POLICY "athlete-photos: update" ON "storage"."objects" FOR UPDATE USING ((("bucket_id" = 'athlete-photos'::"text") AND ("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('athletes'::"text", 'update'::"text")));
+
+
+CREATE POLICY "athlete-photos: delete" ON "storage"."objects" FOR DELETE USING ((("bucket_id" = 'athlete-photos'::"text") AND ("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('athletes'::"text", 'delete'::"text")));
+
+
+CREATE POLICY "inbody_diet_plans: read" ON "storage"."objects" FOR SELECT USING ((("bucket_id" = 'inbody_diet_plans'::"text") AND ("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('inbody'::"text", 'read'::"text")));
+
+
+CREATE POLICY "inbody_diet_plans: write" ON "storage"."objects" FOR INSERT WITH CHECK ((("bucket_id" = 'inbody_diet_plans'::"text") AND ("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('inbody'::"text", 'create'::"text")));
+
+
+CREATE POLICY "inbody_diet_plans: update" ON "storage"."objects" FOR UPDATE USING ((("bucket_id" = 'inbody_diet_plans'::"text") AND ("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('inbody'::"text", 'update'::"text")));
+
+
+CREATE POLICY "inbody_diet_plans: delete" ON "storage"."objects" FOR DELETE USING ((("bucket_id" = 'inbody_diet_plans'::"text") AND ("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('inbody'::"text", 'delete'::"text")));
 
 
 
@@ -1318,6 +1396,15 @@ GRANT ALL ON FUNCTION "public"."approve_supplement_request"("p_request_id" "uuid
 
 GRANT ALL ON FUNCTION "public"."get_my_role"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_my_role"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_coaches"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_coaches"() TO "service_role";
+
+
+GRANT ALL ON FUNCTION "public"."has_module_permission"("mod" "text", "action" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."has_module_permission"("mod" "text", "action" "text") TO "service_role";
 
 
 
