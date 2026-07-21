@@ -1119,7 +1119,7 @@ CREATE POLICY "supplement_requests: admin update" ON "public"."supplement_reques
 
 
 
-CREATE POLICY "supplement_requests: coordinator update" ON "public"."supplement_requests" FOR UPDATE USING (("auth"."role"() = 'authenticated'::"text")) WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND ("status" = ANY (ARRAY['pending'::"text", 'semakan_lulus'::"text", 'semakan_tolak'::"text"]))));
+CREATE POLICY "supplement_requests: coordinator update" ON "public"."supplement_requests" FOR UPDATE USING ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('supplement_coordinator'::"text"))) WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('supplement_coordinator'::"text") AND ("requested_by" <> "auth"."uid"()) AND ("status" = ANY (ARRAY['pending'::"text", 'semakan_lulus'::"text", 'semakan_tolak'::"text"]))));
 
 
 
@@ -1131,7 +1131,7 @@ CREATE POLICY "supplement_requests: read" ON "public"."supplement_requests" FOR 
 
 
 
-CREATE POLICY "supplement_requests: supporter update" ON "public"."supplement_requests" FOR UPDATE USING (("auth"."role"() = 'authenticated'::"text")) WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND ("status" = 'semakan_lulus'::"text")));
+CREATE POLICY "supplement_requests: supporter update" ON "public"."supplement_requests" FOR UPDATE USING ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('supplement_supporter'::"text"))) WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('supplement_supporter'::"text") AND ("requested_by" <> "auth"."uid"()) AND ("status" = 'semakan_lulus'::"text")));
 
 
 
@@ -1152,6 +1152,43 @@ CREATE POLICY "supplements: admin write" ON "public"."supplements" FOR INSERT WI
 
 CREATE POLICY "supplements: read" ON "public"."supplements" FOR SELECT USING (("auth"."role"() = 'authenticated'::"text"));
 
+
+
+-- Storage buckets used by src/pages/athletes/AthletesPage.tsx and
+-- src/pages/performance/inbody/InBodyPage.tsx. Both buckets are private;
+-- the frontend reads objects exclusively via createSignedUrl(s), never
+-- getPublicUrl(). Access is gated by the same module_permissions flags
+-- that already gate the corresponding pages' UI (athletes / inbody).
+
+INSERT INTO "storage"."buckets" ("id", "name", "public")
+VALUES
+  ('athlete-photos', 'athlete-photos', false),
+  ('inbody_diet_plans', 'inbody_diet_plans', false)
+ON CONFLICT ("id") DO NOTHING;
+
+
+CREATE POLICY "athlete-photos: read" ON "storage"."objects" FOR SELECT USING ((("bucket_id" = 'athlete-photos'::"text") AND ("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('athletes'::"text", 'read'::"text")));
+
+
+CREATE POLICY "athlete-photos: write" ON "storage"."objects" FOR INSERT WITH CHECK ((("bucket_id" = 'athlete-photos'::"text") AND ("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('athletes'::"text", 'create'::"text")));
+
+
+CREATE POLICY "athlete-photos: update" ON "storage"."objects" FOR UPDATE USING ((("bucket_id" = 'athlete-photos'::"text") AND ("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('athletes'::"text", 'update'::"text")));
+
+
+CREATE POLICY "athlete-photos: delete" ON "storage"."objects" FOR DELETE USING ((("bucket_id" = 'athlete-photos'::"text") AND ("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('athletes'::"text", 'delete'::"text")));
+
+
+CREATE POLICY "inbody_diet_plans: read" ON "storage"."objects" FOR SELECT USING ((("bucket_id" = 'inbody_diet_plans'::"text") AND ("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('inbody'::"text", 'read'::"text")));
+
+
+CREATE POLICY "inbody_diet_plans: write" ON "storage"."objects" FOR INSERT WITH CHECK ((("bucket_id" = 'inbody_diet_plans'::"text") AND ("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('inbody'::"text", 'create'::"text")));
+
+
+CREATE POLICY "inbody_diet_plans: update" ON "storage"."objects" FOR UPDATE USING ((("bucket_id" = 'inbody_diet_plans'::"text") AND ("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('inbody'::"text", 'update'::"text")));
+
+
+CREATE POLICY "inbody_diet_plans: delete" ON "storage"."objects" FOR DELETE USING ((("bucket_id" = 'inbody_diet_plans'::"text") AND ("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('inbody'::"text", 'delete'::"text")));
 
 
 

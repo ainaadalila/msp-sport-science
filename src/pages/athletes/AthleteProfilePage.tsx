@@ -109,6 +109,7 @@ export default function AthleteProfilePage() {
   const { can } = usePermissions()
 
   const [athlete, setAthlete] = useState<Athlete | null>(null)
+  const [photoSignedUrl, setPhotoSignedUrl] = useState<string | null>(null)
   const [inbody, setInbody] = useState<InBodyRecord | null>(null)
   const [fitness, setFitness] = useState<FitnessTest | null>(null)
   const [fitnessResults, setFitnessResults] = useState<FitnessTestResult[]>([])
@@ -129,6 +130,12 @@ export default function AthleteProfilePage() {
     const { data: athData } = await supabase.from('athletes').select('id, name, ic_number, sport_id, sport:sports!sport_id(name), status, gender, date_of_birth, weight, height, is_elite, photo_url, category, created_at').eq('id', athleteId).single() as any
     if (!athData) { navigate('/athletes', { replace: true }); return }
     setAthlete(athData)
+    if (athData.photo_url) {
+      const { data: signed } = await supabase.storage.from('athlete-photos').createSignedUrl(athData.photo_url, 3600)
+      setPhotoSignedUrl(signed?.signedUrl ?? null)
+    } else {
+      setPhotoSignedUrl(null)
+    }
 
     // Run all remaining queries in parallel
     const [inbodyRes, fitnessSessionRes, scRes, physioRes, fitnessResultsRes] = await Promise.all([
@@ -213,7 +220,7 @@ export default function AthleteProfilePage() {
 
       {/* Hero card */}
       <div className="bg-white rounded-2xl border border-gray-200 p-6 flex items-start gap-6">
-        <Avatar name={athlete.name} url={athlete.photo_url} size={80} />
+        <Avatar name={athlete.name} url={photoSignedUrl} size={80} />
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div>
