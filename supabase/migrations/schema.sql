@@ -108,6 +108,31 @@ $$;
 ALTER FUNCTION "public"."get_my_role"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."has_module_permission"("mod" "text", "action" "text" DEFAULT 'read') RETURNS boolean
+    LANGUAGE "sql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+  -- module_permissions stores two shapes: a plain boolean for
+  -- supplement_coordinator/supplement_supporter/supplement_approver, and a
+  -- {read,create,update,delete} object for every other module key. Handle
+  -- both rather than assuming one shape, since casting a JSON object
+  -- directly to boolean raises a hard Postgres error instead of failing
+  -- closed.
+  select coalesce(
+    case jsonb_typeof(module_permissions -> mod)
+      when 'boolean' then (module_permissions ->> mod)::boolean
+      when 'object' then (module_permissions -> mod ->> action)::boolean
+      else false
+    end,
+    false
+  )
+  from profiles where id = auth.uid();
+$$;
+
+
+ALTER FUNCTION "public"."has_module_permission"("mod" "text", "action" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."handle_new_user"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -1129,6 +1154,43 @@ CREATE POLICY "supplements: read" ON "public"."supplements" FOR SELECT USING (("
 
 
 
+-- Storage buckets used by src/pages/athletes/AthletesPage.tsx and
+-- src/pages/performance/inbody/InBodyPage.tsx. Both buckets are private;
+-- the frontend reads objects exclusively via createSignedUrl(s), never
+-- getPublicUrl(). Access is gated by the same module_permissions flags
+-- that already gate the corresponding pages' UI (athletes / inbody).
+
+INSERT INTO "storage"."buckets" ("id", "name", "public")
+VALUES
+  ('athlete-photos', 'athlete-photos', false),
+  ('inbody_diet_plans', 'inbody_diet_plans', false)
+ON CONFLICT ("id") DO NOTHING;
+
+
+CREATE POLICY "athlete-photos: read" ON "storage"."objects" FOR SELECT USING ((("bucket_id" = 'athlete-photos'::"text") AND ("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('athletes'::"text", 'read'::"text")));
+
+
+CREATE POLICY "athlete-photos: write" ON "storage"."objects" FOR INSERT WITH CHECK ((("bucket_id" = 'athlete-photos'::"text") AND ("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('athletes'::"text", 'create'::"text")));
+
+
+CREATE POLICY "athlete-photos: update" ON "storage"."objects" FOR UPDATE USING ((("bucket_id" = 'athlete-photos'::"text") AND ("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('athletes'::"text", 'update'::"text")));
+
+
+CREATE POLICY "athlete-photos: delete" ON "storage"."objects" FOR DELETE USING ((("bucket_id" = 'athlete-photos'::"text") AND ("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('athletes'::"text", 'delete'::"text")));
+
+
+CREATE POLICY "inbody_diet_plans: read" ON "storage"."objects" FOR SELECT USING ((("bucket_id" = 'inbody_diet_plans'::"text") AND ("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('inbody'::"text", 'read'::"text")));
+
+
+CREATE POLICY "inbody_diet_plans: write" ON "storage"."objects" FOR INSERT WITH CHECK ((("bucket_id" = 'inbody_diet_plans'::"text") AND ("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('inbody'::"text", 'create'::"text")));
+
+
+CREATE POLICY "inbody_diet_plans: update" ON "storage"."objects" FOR UPDATE USING ((("bucket_id" = 'inbody_diet_plans'::"text") AND ("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('inbody'::"text", 'update'::"text")));
+
+
+CREATE POLICY "inbody_diet_plans: delete" ON "storage"."objects" FOR DELETE USING ((("bucket_id" = 'inbody_diet_plans'::"text") AND ("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('inbody'::"text", 'delete'::"text")));
+
+
 
 
 ALTER PUBLICATION "supabase_realtime" OWNER TO "postgres";
@@ -1295,6 +1357,11 @@ GRANT ALL ON FUNCTION "public"."approve_supplement_request"("p_request_id" "uuid
 
 GRANT ALL ON FUNCTION "public"."get_my_role"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_my_role"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."has_module_permission"("mod" "text", "action" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."has_module_permission"("mod" "text", "action" "text") TO "service_role";
 
 
 
