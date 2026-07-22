@@ -30,13 +30,13 @@ export default function Layout() {
   useInactivityLogout()
   const { pathname } = useLocation()
   const navigate = useNavigate()
-  const { profile, signOut } = useAuth()
+  const { profile, signOut, user } = useAuth()
   const [alerts, setAlerts] = useState<AlertCounts>({ injured: 0, pendingSupplements: 0 })
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
   const [userOpen, setUserOpen] = useState(false)
   const [changePasswordOpen, setChangePasswordOpen] = useState(false)
-  const [cpForm, setCpForm] = useState({ password: '', confirm: '', showPw: false })
+  const [cpForm, setCpForm] = useState({ currentPassword: '', password: '', confirm: '', showPw: false })
   const [signingOut, setSigningOut] = useState(false)
   const [cpLoading, setCpLoading] = useState(false)
   const [cpError, setCpError] = useState<string | null>(null)
@@ -86,6 +86,11 @@ export default function Layout() {
   async function handleChangePassword() {
     setCpError(null)
 
+    if (!cpForm.currentPassword) {
+      setCpError('Sila masukkan kata laluan semasa.')
+      return
+    }
+
     // Validate password strength
     if (!isPasswordValid(cpForm.password)) {
       const strength = validatePassword(cpForm.password)
@@ -99,6 +104,24 @@ export default function Layout() {
     }
 
     setCpLoading(true)
+
+    // An active session alone must not be enough to change the account's
+    // password — re-verify the current password first, the same way F-15's
+    // superadmin-creation step-up auth does. Otherwise a hijacked session
+    // (e.g. via XSS, or a stolen token) can silently lock the real owner
+    // out by setting a new password with nothing but the session itself.
+    if (user?.email) {
+      const { error: reauthErr } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: cpForm.currentPassword,
+      })
+      if (reauthErr) {
+        setCpLoading(false)
+        setCpError('Kata laluan semasa tidak tepat.')
+        return
+      }
+    }
+
     const { error } = await supabase.auth.updateUser({ password: cpForm.password })
     setCpLoading(false)
     if (error) {
@@ -277,12 +300,23 @@ export default function Layout() {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
             <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
               <h3 className="font-bold text-[#111]">Tukar Kata Laluan</h3>
-              <button onClick={() => { setChangePasswordOpen(false); setCpForm({ password: '', confirm: '', showPw: false }); setCpError(null); setCpSuccess(false) }}
+              <button onClick={() => { setChangePasswordOpen(false); setCpForm({ currentPassword: '', password: '', confirm: '', showPw: false }); setCpError(null); setCpSuccess(false) }}
                 className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
             </div>
             <div className="px-6 py-5 space-y-4">
               {cpError && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-600">{cpError}</div>}
               {cpSuccess && <div className="px-4 py-3 bg-green-50 border border-green-200 rounded-lg text-[13px] text-green-700">Kata laluan berjaya dikemas kini.</div>}
+
+              <div>
+                <label className="block text-[10px] font-semibold uppercase tracking-widest text-[#888] mb-1.5">Kata Laluan Semasa</label>
+                <input
+                  type={cpForm.showPw ? 'text' : 'password'}
+                  value={cpForm.currentPassword}
+                  onChange={e => setCpForm(f => ({ ...f, currentPassword: e.target.value }))}
+                  placeholder="••••••••"
+                  className="w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2.5 text-sm text-[#111] outline-none transition focus:border-[#F56A00] focus:bg-white"
+                />
+              </div>
 
               <div>
                 <label className="block text-[10px] font-semibold uppercase tracking-widest text-[#888] mb-1.5">Kata Laluan Baharu</label>
@@ -317,7 +351,7 @@ export default function Layout() {
             </div>
             {!cpSuccess && (
               <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
-                <button onClick={() => { setChangePasswordOpen(false); setCpForm({ password: '', confirm: '', showPw: false }); setCpError(null); setCpSuccess(false) }} className="px-4 py-2 text-sm text-[#888] hover:text-[#111] transition">Batal</button>
+                <button onClick={() => { setChangePasswordOpen(false); setCpForm({ currentPassword: '', password: '', confirm: '', showPw: false }); setCpError(null); setCpSuccess(false) }} className="px-4 py-2 text-sm text-[#888] hover:text-[#111] transition">Batal</button>
                 <button onClick={handleChangePassword} disabled={cpLoading || cpSuccess} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
                   {cpLoading ? 'Menyimpan...' : 'Simpan'}
                 </button>
