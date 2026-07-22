@@ -98,6 +98,28 @@ $$;
 ALTER FUNCTION "public"."approve_supplement_request"("p_request_id" "uuid", "p_status" "text", "p_approved_quantity" integer, "p_notes" "text") OWNER TO "postgres";
 
 
+-- Backstops the coordinator/supporter/admin UPDATE policies: once a
+-- request reaches a final status (approved, partial, semakan_tolak), its
+-- status can never change again, regardless of which role or policy the
+-- update goes through. Without this, an admin/superadmin — whose UPDATE
+-- policy has no status restriction at all — could still PATCH a
+-- terminal request's status back to semakan_lulus and re-run
+-- approve_supplement_request for a second stock decrement.
+CREATE OR REPLACE FUNCTION "public"."prevent_supplement_request_reopen"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+  IF OLD.status = ANY (ARRAY['approved', 'partial', 'semakan_tolak']) AND NEW.status IS DISTINCT FROM OLD.status THEN
+    RAISE EXCEPTION 'Cannot change status of a request that has already reached a final state (%)', OLD.status;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."prevent_supplement_request_reopen"() OWNER TO "postgres";
+
+
 -- Reads role from the profiles table specifically, never from
 -- auth.users.raw_user_meta_data / JWT user_metadata. That field is
 -- writable by the user themselves via the client SDK (see F-28) — it's
@@ -545,6 +567,9 @@ ALTER TABLE "public"."supplement_requests" OWNER TO "postgres";
 
 
 COMMENT ON COLUMN "public"."supplement_requests"."pemohon_name" IS 'Name of the person requesting the supplement (applicant name)';
+
+
+CREATE TRIGGER "supplement_requests_prevent_reopen" BEFORE UPDATE ON "public"."supplement_requests" FOR EACH ROW EXECUTE FUNCTION "public"."prevent_supplement_request_reopen"();
 
 
 
