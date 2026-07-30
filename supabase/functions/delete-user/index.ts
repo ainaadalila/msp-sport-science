@@ -3,7 +3,7 @@
 // client-side deleteUserAdmin() that used the service role key directly in
 // the browser bundle.
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient } from '../_shared/vendor/supabase-js.js'
 import { corsHeaders } from '../_shared/cors.ts'
 
 Deno.serve(async (req: Request) => {

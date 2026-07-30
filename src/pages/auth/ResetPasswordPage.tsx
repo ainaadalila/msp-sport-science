@@ -54,11 +54,22 @@ export default function ResetPasswordPage() {
     }
 
     setLoading(true)
-    const { error: err } = await supabase.auth.updateUser({ password })
+    // Goes through the change-password Edge Function rather than
+    // supabase.auth.updateUser() directly — see change-password/index.ts
+    // for why: the raw PUT /auth/v1/user endpoint that updateUser() calls
+    // accepts a password change from any valid session with no proof it
+    // actually came from a genuine recovery link (REHACK retest finding
+    // #3). The function verifies that server-side via the JWT's own amr
+    // claim instead of trusting the frontend's PASSWORD_RECOVERY event
+    // listener alone, which could be bypassed by calling the raw API.
+    const { error: err } = await supabase.functions.invoke('change-password', {
+      body: { new_password: password },
+    })
     setLoading(false)
 
     if (err) {
-      setError(err.message)
+      const detail = await err.context?.clone().json().catch(() => null)
+      setError(detail?.error || 'Ralat berlaku. Sila cuba lagi.')
       return
     }
 

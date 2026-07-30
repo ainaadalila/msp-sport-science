@@ -30,7 +30,7 @@ export default function Layout() {
   useInactivityLogout()
   const { pathname } = useLocation()
   const navigate = useNavigate()
-  const { profile, signOut, user } = useAuth()
+  const { profile, signOut } = useAuth()
   const [alerts, setAlerts] = useState<AlertCounts>({ injured: 0, pendingSupplements: 0 })
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
@@ -105,31 +105,29 @@ export default function Layout() {
 
     setCpLoading(true)
 
-    // An active session alone must not be enough to change the account's
-    // password — re-verify the current password first, the same way F-15's
-    // superadmin-creation step-up auth does. Otherwise a hijacked session
-    // (e.g. via XSS, or a stolen token) can silently lock the real owner
-    // out by setting a new password with nothing but the session itself.
-    if (user?.email) {
-      const { error: reauthErr } = await supabase.auth.signInWithPassword({
-        email: user.email,
-        password: cpForm.currentPassword,
-      })
-      if (reauthErr) {
-        setCpLoading(false)
-        setCpError('Kata laluan semasa tidak tepat.')
-        return
-      }
-    }
-
-    const { error } = await supabase.auth.updateUser({ password: cpForm.password })
+    // Password changes go through the change-password Edge Function, not
+    // supabase.auth.updateUser() directly. Calling updateUser() hits
+    // Supabase Auth's raw PUT /auth/v1/user endpoint, which — as REHACK's
+    // retest proved — accepts a password change from any valid session
+    // token with zero verification, regardless of what checks the
+    // frontend does first (a stolen/replayed token was enough). The
+    // Edge Function re-verifies the current password server-side, where
+    // it can't be bypassed by calling the endpoint directly with curl.
+    const { error } = await supabase.functions.invoke('change-password', {
+      body: {
+        current_password: cpForm.currentPassword,
+        new_password: cpForm.password,
+      },
+    })
     setCpLoading(false)
     if (error) {
-      setCpError(error.message)
+      // error.message from invoke() is just a generic "non-2xx status
+      // code" string — the actual message our function returns
+      // (e.g. "Kata laluan semasa tidak tepat.") is in the response body,
+      // reachable via error.context.
+      const detail = await error.context?.clone().json().catch(() => null)
+      setCpError(detail?.error || 'Kata laluan semasa tidak tepat.')
       return
-    }
-    if (profile) {
-      await logAction(profile.id, 'change_password')
     }
     setCpSuccess(true)
   }

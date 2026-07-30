@@ -5,16 +5,27 @@
 // vulnerability — anyone could pull the key from the deployed JS and get
 // full, unrestricted DB + Auth admin access, bypassing RLS entirely).
 //
-// The service role key now lives ONLY here, server-side. Supabase injects
-// SUPABASE_URL / SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY into every
-// Edge Function automatically at runtime — nothing to configure manually.
+// The service role key now lives ONLY here, server-side. On Supabase Cloud,
+// SUPABASE_URL / SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY are injected
+// into every Edge Function automatically at runtime. Self-hosted (this
+// deployment's actual target) does NOT do this — these three must be set
+// manually as env vars on the `functions` service in docker-compose.yml.
 //
 // Authorization model: RLS on `profiles` only requires an authenticated
 // user (see Skema Pangkalan Data doc, section 5), so it does NOT stop a
 // non-admin from calling this function. The role check below is what
 // actually protects this — do not remove it.
+//
+// `createClient` is imported from a local vendored copy
+// (_shared/vendor/supabase-js.js), not the usual `https://esm.sh/...` URL.
+// This self-hosted server has no outbound internet access, so a live
+// esm.sh fetch on every cold start hangs indefinitely — this caused
+// create-user/delete-user to 504 in production. The vendored file was
+// built via `esbuild` (bundle, platform=browser, format=esm) from the real
+// npm package on a machine with internet, then copied in. Re-run that
+// build if the Supabase JS client version ever needs bumping.
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient } from '../_shared/vendor/supabase-js.js'
 import { corsHeaders } from '../_shared/cors.ts'
 
 Deno.serve(async (req: Request) => {
@@ -112,8 +123,12 @@ Deno.serve(async (req: Request) => {
       return json({ error: createErr?.message ?? 'Failed to create auth user' }, 400)
     }
 
-    // 6. Create the matching profile row.
-    const { error: insertErr } = await adminClient.from('profiles').insert({
+    // 6. Set the profile row's real values. The `handle_new_user` trigger
+    // (fires AFTER INSERT ON auth.users) already created a `profiles` row
+    // for this user with default/placeholder values by the time we get
+    // here — so this must be an upsert (update-on-conflict), not a plain
+    // insert, or it collides with the trigger's row on the primary key.
+    const { error: insertErr } = await adminClient.from('profiles').upsert({
       id: created.user.id,
       full_name,
       role,
