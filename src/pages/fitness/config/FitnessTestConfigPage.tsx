@@ -21,6 +21,7 @@ export default function FitnessTestConfigPage() {
   const [sportTests, setSportTests] = useState<SportFitnessTest[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
@@ -74,9 +75,11 @@ export default function FitnessTestConfigPage() {
     if (!isAdded && !can('fitness_config', 'create')) return
 
     setSaving(true)
+    setError(null)
     if (isAdded) {
       const { error } = await supabase.from('sport_fitness_tests').delete().eq('sport', selectedSport).eq('test_id', testId)
-      if (!error) fetchSportTests(selectedSport)
+      if (error) setError(`Gagal membuang ujian: ${error.message}`)
+      else fetchSportTests(selectedSport)
     } else {
       const { error } = await supabase.from('sport_fitness_tests').insert({
         sport: selectedSport,
@@ -84,7 +87,8 @@ export default function FitnessTestConfigPage() {
         is_mandatory: false,
         created_by: profile?.id,
       })
-      if (!error) fetchSportTests(selectedSport)
+      if (error) setError(`Gagal menambah ujian: ${error.message}`)
+      else fetchSportTests(selectedSport)
     }
     setSaving(false)
   }
@@ -147,6 +151,12 @@ export default function FitnessTestConfigPage() {
           {sportTests.length} ujian dipilih untuk {selectedSport}
         </p>
       </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">
+          {error}
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-4">
         {/* Categories and Tests */}

@@ -1,4 +1,4 @@
-export type UserRole = 'superadmin' | 'admin' | 'coach' | 'physio' | 'psikologis' | 'penolong_pegawai' | 'pegawai_belia_sukan'
+export type UserRole = 'superadmin' | 'admin' | 'coach' | 'physio' | 'psikologis' | 'penolong_pegawai' | 'pegawai_belia_sukan' | 'pengguna_biasa'
 
 export interface SubmoduleCRUD {
   read: boolean

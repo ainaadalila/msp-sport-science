@@ -47,6 +47,7 @@ const ROLE_COLORS: Record<UserRole, string> = {
   psikologis: 'bg-pink-100 text-pink-700 border-pink-200',
   penolong_pegawai: 'bg-gray-100 text-gray-700 border-gray-200',
   pegawai_belia_sukan: 'bg-gray-100 text-gray-700 border-gray-200',
+  pengguna_biasa: 'bg-gray-100 text-gray-700 border-gray-200',
 }
 
 const ROLE_LABELS: Record<UserRole, string> = {
@@ -56,7 +57,8 @@ const ROLE_LABELS: Record<UserRole, string> = {
   physio: 'Fisioterapi',
   psikologis: 'Psikologi',
   penolong_pegawai: 'Penolong Pegawai',
-  pegawai_belia_sukan: 'Pegawai Belia & Sukan',
+  pegawai_belia_sukan: 'Pegawai',
+  pengguna_biasa: 'Pengguna Biasa',
 }
 
 export default function AuditLogPage() {

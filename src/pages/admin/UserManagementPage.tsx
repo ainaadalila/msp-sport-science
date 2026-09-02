@@ -14,12 +14,13 @@ interface UserProfile {
   created_at: string
 }
 
-const ROLES = ['superadmin', 'admin', 'coach', 'physio', 'psikologis', 'penolong_pegawai', 'pegawai_belia_sukan'] as const
+const ROLES = ['superadmin', 'admin', 'coach', 'physio', 'psikologis', 'penolong_pegawai', 'pegawai_belia_sukan', 'pengguna_biasa'] as const
 type Role = typeof ROLES[number]
 
 const roleLabel: Record<string, string> = {
   superadmin: 'Superadmin', admin: 'Admin', coach: 'Jurulatih',
-  physio: 'Fisioterapis', psikologis: 'Psikologis', penolong_pegawai: 'Penolong Pegawai Belia & Sukan', pegawai_belia_sukan: 'Pegawai Belia & Sukan',
+  physio: 'Fisioterapis', psikologis: 'Psikologis', penolong_pegawai: 'Penolong Pegawai', pegawai_belia_sukan: 'Pegawai',
+  pengguna_biasa: 'Pengguna Biasa',
 }
 const roleStyle: Record<string, string> = {
   superadmin: 'bg-purple-50 text-purple-700 border border-purple-200',
@@ -29,6 +30,7 @@ const roleStyle: Record<string, string> = {
   psikologis: 'bg-pink-50 text-pink-700 border border-pink-200',
   penolong_pegawai: 'bg-indigo-50 text-indigo-700 border border-indigo-200',
   pegawai_belia_sukan: 'bg-cyan-50 text-cyan-700 border border-cyan-200',
+  pengguna_biasa: 'bg-slate-50 text-slate-700 border border-slate-200',
 }
 
 export default function UserManagementPage() {
@@ -115,6 +117,10 @@ export default function UserManagementPage() {
         psychology: readOnlyPermission,
         reports: readOnlyPermission,
       }
+    } else if (role === 'pengguna_biasa') {
+      // Minimal starting point: read-only athletes + reports (from `base`).
+      // Superadmin tunes the rest via the permission checkboxes below.
+      return base
     }
 
     return base

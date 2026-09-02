@@ -244,7 +244,8 @@ export default function Sidebar({ onSignOut, isOpen, onClose }: { onSignOut?: ()
 
 const roleLabel: Record<string, string> = {
   superadmin: 'Superadmin', admin: 'Admin', coach: 'Jurulatih',
-  physio: 'Fisioterapis', psikologis: 'Psikologis', penolong_pegawai: 'Penolong Pegawai Belia & Sukan', pegawai_belia_sukan: 'Pegawai Belia & Sukan',
+  physio: 'Fisioterapis', psikologis: 'Psikologis', penolong_pegawai: 'Penolong Pegawai', pegawai_belia_sukan: 'Pegawai',
+  pengguna_biasa: 'Pengguna Biasa',
 }
 
 const groupLabelCls = 'text-[10px] font-semibold uppercase tracking-widest text-[#aaa] px-3 mb-1'

@@ -70,8 +70,8 @@ export default function LoginPage() {
             Majlis Sukan Pahang
           </p>
           <h1 className="text-4xl font-bold text-white leading-tight mb-2">
-            Sistem <span className="text-[#F56A00]">Sains Sukan</span>
-            <br />Atlet Pahang
+            Sistem Profil Atlet <span className="text-[#F56A00]">Sains Sukan</span>
+            <br />Majlis Sukan Pahang
           </h1>
           <p className="text-[13px] text-white/55 leading-relaxed">
             Platform pengurusan data prestasi,<br />

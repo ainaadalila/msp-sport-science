@@ -17,6 +17,7 @@ const roleModuleMap: Record<UserRole, (keyof ModulePermissions)[]> = {
   psikologis: ['athletes', 'psychology'],
   penolong_pegawai: ['athletes'],
   pegawai_belia_sukan: ['athletes'],
+  pengguna_biasa: ['athletes'],
 }
 
 export function ProtectedRoute({ children, roles, module }: Props) {
