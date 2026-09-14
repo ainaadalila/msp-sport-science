@@ -308,7 +308,49 @@ export default function PsychologyRatingPage() {
     return { cognitive, somatic, self_conf }
   }
 
-  const parseFile = (file: File, onMissing: (athletes: string[]) => void) => {
+  const normalizeHeader = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase()
+
+  const normalizePhases = (raw: string): Array<'persediaan' | 'pertandingan' | 'pemulihan'> => {
+    const found = new Set<'persediaan' | 'pertandingan' | 'pemulihan'>()
+    for (const part of raw.split(';')) {
+      const p = part
+        .toLowerCase()
+        .replace(/fasa\s+/i, '')
+        .replace(/\([^)]*\)/g, '')
+        .replace(/\s+/g, '')
+        .trim()
+      if (p === 'persediaan' || p === 'pertandingan' || p === 'pemulihan') found.add(p)
+    }
+    return Array.from(found)
+  }
+
+  const QUESTION_HEADERS = [
+    '1. Saya rasa bimbang tentang pertandingan',
+    '2. Saya rasa gementar',
+    '3. Saya rasa tenang (R)',
+    '4. Saya mempunyai keyakinan terhadap diri sendiri',
+    '5. Saya rasa gelisah',
+    '6. Saya bimbang jika tidak dapat lakukan yang terbaik',
+    '7. Badan saya terasa tegang',
+    '8. Saya rasa ragu-ragu tentang kemampuan saya',
+    '9. Saya rasa yakin pada diri sendiri',
+    '10. Perut saya terasa tidak selesa',
+    '11. Saya rasa takut jika saya akan tewas',
+    '12. Jantung saya berdegup kencang',
+    '13. Saya rasa mampu menangani tekanan pertandingan ini',
+    '14. Tangan saya berpeluh',
+    '15. Saya bimbang saya akan mengecewakan orang lain',
+    '16. Saya rasa bersemangat untuk bertanding',
+    '17. Saya rasa otot-otot saya menggeletar',
+  ].map(normalizeHeader)
+
+  interface UploadIssues {
+    missing: string[]
+    duplicates: string[]
+    skippedInvalid: number
+  }
+
+  const parseFile = (file: File, onIssues: (issues: UploadIssues) => void) => {
     return new Promise<ParsedAssessment[]>((resolve, reject) => {
       const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls')
 
@@ -320,7 +362,7 @@ export default function PsychologyRatingPage() {
             const workbook = XLSX.read(data, { type: 'array' })
             const worksheet = workbook.Sheets[workbook.SheetNames[0]]
             const rows = XLSX.utils.sheet_to_json(worksheet) as CSVRow[]
-            await processRows(rows, resolve, reject, onMissing)
+            await processRows(rows, resolve, reject, onIssues)
           } catch (err) {
             reject(err)
           }
@@ -332,7 +374,7 @@ export default function PsychologyRatingPage() {
           header: true,
           skipEmptyLines: true,
           complete: async (results) => {
-            await processRows(results.data as CSVRow[], resolve, reject, onMissing)
+            await processRows(results.data as CSVRow[], resolve, reject, onIssues)
           },
           error: (error) => reject(error),
         })
@@ -344,110 +386,91 @@ export default function PsychologyRatingPage() {
     rows: CSVRow[],
     resolve: (value: ParsedAssessment[]) => void,
     reject: (reason?: unknown) => void,
-    onMissing: (athletes: string[]) => void
+    onIssues: (issues: UploadIssues) => void
   ) => {
     try {
       const parsed: ParsedAssessment[] = []
       const duplicates: string[] = []
       const missing: string[] = []
+      let skippedInvalid = 0
 
       for (const row of rows) {
-        const athleteName = row['NAMA ATLET'] || row['Nama Atlet'] || ''
-        const faseRaw = row['FASA'] || row['Fasa'] || ''
-        const phase = faseRaw
-          .toLowerCase()
-          .replace(/fasa\s+/i, '')
-          .replace(/\s+/g, '') as 'persediaan' | 'pertandingan' | 'pemulihan'
+        const normalizedRow: Record<string, string> = {}
+        for (const key of Object.keys(row)) {
+          normalizedRow[normalizeHeader(key)] = row[key]
+        }
 
-        if (!athleteName || !['persediaan', 'pertandingan', 'pemulihan'].includes(phase)) {
+        const athleteName = String(normalizedRow[normalizeHeader('NAMA ATLET')] || '').trim()
+        const faseRaw = String(normalizedRow[normalizeHeader('FASA')] || '')
+        const phases = normalizePhases(faseRaw)
+
+        if (!athleteName || phases.length === 0) {
+          skippedInvalid++
           continue
         }
 
         try {
-          let icNumber = String(row['NO. KAD PENGENALAN'] || '').trim()
+          const rawIc = String(normalizedRow[normalizeHeader('NO. KAD PENGENALAN')] || '').trim()
+          let digits = rawIc.replace(/\D/g, '')
+          if (digits.length === 11) digits = '0' + digits
 
-          if (!icNumber) {
+          if (digits.length !== 12) {
+            skippedInvalid++
             continue
           }
 
-          if (!icNumber.startsWith('0') && icNumber.length === 11) {
-            icNumber = '0' + icNumber
-          }
+          // Stored ic_number isn't guaranteed to include dashes, so match on
+          // digits only, tolerating a dash (or nothing) between the groups.
+          const icPattern = `${digits.slice(0, 6)}%${digits.slice(6, 8)}%${digits.slice(8)}`
 
-          const icWithDashes = icNumber.length === 12 && !icNumber.includes('-')
-            ? `${icNumber.substring(0, 6)}-${icNumber.substring(6, 8)}-${icNumber.substring(8)}`
-            : icNumber
-
-          let { data: athleteData } = await supabase
+          const { data: athleteData } = await supabase
             .from('athletes')
             .select('id')
-            .eq('ic_number', icWithDashes)
+            .ilike('ic_number', icPattern)
             .single()
 
           if (!athleteData) {
-            missing.push(`${athleteName} (IC: ${icNumber})`)
-            continue
-          }
-
-          const { data: existingRecord } = await supabase
-            .from('psychology_ratings')
-            .select('id')
-            .eq('athlete_id', athleteData.id)
-            .eq('phase', phase)
-            .single()
-
-          if (existingRecord) {
-            duplicates.push(`${athleteName} - ${PHASE_LABEL[phase]}`)
+            missing.push(`${athleteName} (IC: ${digits})`)
             continue
           }
 
           const responses: Record<string, number> = {}
-
-          const questionMappings = [
-            '1. Saya rasa bimbang tentang pertandingan',
-            '2. Saya rasa gementar',
-            '3. Saya rasa tenang (R)',
-            '4. Saya mempunyai keyakinan terhadap diri sendiri',
-            '5. Saya rasa gelisah',
-            '6. Saya bimbang jika tidak dapat lakukan yang terbaik',
-            '7. Badan saya terasa tegang',
-            '8. Saya rasa ragu-ragu tentang kemampuan saya',
-            '9. Saya rasa yakin pada diri sendiri',
-            '10. Perut saya terasa tidak selese',
-            '11. Saya rasa takut jika saya akan tewas',
-            '12. Jantung saya berdegup kencang',
-            '13. Saya rasa mampu menangani tekanan pertandingan ini',
-            '14. Tangan saya berpeluh',
-            '15. Saya bimbang saya akan mengecewakan orang lain',
-            '16. Saya rasa bersemangat untuk bertanding',
-            '17. Saya rasa otot-otot saya menggeletar',
-          ]
-
           for (let i = 1; i <= 17; i++) {
-            const colName = questionMappings[i - 1]
-            const answer = row[colName] || ''
+            const answer = normalizedRow[QUESTION_HEADERS[i - 1]] ?? ''
             responses[`q${i}`] = parseInt(String(answer), 10) || 0
           }
 
           const { cognitive, somatic, self_conf } = calculateScores(responses)
 
-          parsed.push({
-            athlete_id: athleteData.id,
-            athlete_name: athleteName,
-            phase,
-            responses,
-            cognitive_anxiety_score: cognitive,
-            somatic_anxiety_score: somatic,
-            self_confidence_score: self_conf,
-          })
+          for (const phase of phases) {
+            const { data: existingRecord } = await supabase
+              .from('psychology_ratings')
+              .select('id')
+              .eq('athlete_id', athleteData.id)
+              .eq('phase', phase)
+              .single()
+
+            if (existingRecord) {
+              duplicates.push(`${athleteName} - ${PHASE_LABEL[phase]}`)
+              continue
+            }
+
+            parsed.push({
+              athlete_id: athleteData.id,
+              athlete_name: athleteName,
+              phase,
+              responses,
+              cognitive_anxiety_score: cognitive,
+              somatic_anxiety_score: somatic,
+              self_confidence_score: self_conf,
+            })
+          }
         } catch (err) {
           if (import.meta.env.DEV) console.error(`Error processing athlete ${athleteName}:`, err)
         }
       }
 
-      if (missing.length > 0) onMissing(missing)
-      if (duplicates.length > 0) if (import.meta.env.DEV) console.warn(`Skipped ${duplicates.length} duplicate entries`)
-
+      onIssues({ missing, duplicates, skippedInvalid })
       resolve(parsed)
     } catch (err) {
       reject(err)
@@ -463,8 +486,18 @@ export default function PsychologyRatingPage() {
       setUploadError('')
       setUploadWarning('')
 
-      const assessments = await parseFile(file, (missingAthletes) => {
-        setUploadWarning(`⚠ ${missingAthletes.length} atlet tidak dijumpai dalam sistem:\n${missingAthletes.join('\n')}`)
+      const assessments = await parseFile(file, ({ missing, duplicates, skippedInvalid }) => {
+        const parts: string[] = []
+        if (missing.length > 0) {
+          parts.push(`⚠ ${missing.length} atlet tidak dijumpai dalam sistem:\n${missing.join('\n')}`)
+        }
+        if (duplicates.length > 0) {
+          parts.push(`⚠ ${duplicates.length} rekod dilangkau kerana sudah wujud:\n${duplicates.join('\n')}`)
+        }
+        if (skippedInvalid > 0) {
+          parts.push(`⚠ ${skippedInvalid} baris dilangkau kerana FASA atau No. Kad Pengenalan tidak sah/kosong`)
+        }
+        if (parts.length > 0) setUploadWarning(parts.join('\n\n'))
       })
 
       if (assessments.length === 0) {
