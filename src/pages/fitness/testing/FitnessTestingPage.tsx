@@ -40,6 +40,20 @@ const formatTestName = (name: string) => {
     .trim()
 }
 
+const PHASE_ORDER: Record<string, number> = { 'Fasa 1': 1, 'Fasa 2': 2, 'Fasa 3': 3, 'Fasa 4': 4 }
+
+// Chronological history for one test: sorted by phase (year, then Fasa 1→4), not by
+// recorded_date/created_at — sessions are often entered/edited out of phase order.
+function getTestHistory(sessionsWithResults: SessionWithResults[], testId: string | null | undefined) {
+  return sessionsWithResults
+    .map(s => {
+      const result = s.results.find(r => r.test_id === testId)
+      return result ? { session: s.session, result } : null
+    })
+    .filter((x): x is { session: FitnessTestSession; result: SessionResult } => x !== null)
+    .sort((a, b) => (a.session.year - b.session.year) || ((PHASE_ORDER[a.session.session] ?? 0) - (PHASE_ORDER[b.session.session] ?? 0)))
+}
+
 export default function FitnessTestingPage() {
   const { profile } = useAuth()
   const { can } = usePermissions()
@@ -160,10 +174,7 @@ export default function FitnessTestingPage() {
 
     const ROW_H = 11
     allTestsForPrint.forEach(test => {
-      const hist = sessionsWithResults
-        .map(s => { const r = s.results.find(x => x.test_id === test.test_id); return r ? { session: s.session, result: r } : null })
-        .filter((x): x is { session: FitnessTestSession; result: SessionResult } => x !== null)
-        .reverse()
+      const hist = getTestHistory(sessionsWithResults, test.test_id)
       const latest = hist[hist.length - 1]?.result
       const prev = hist[hist.length - 2]?.result
       const change = latest && prev ? latest.result_value - prev.result_value : null
@@ -240,10 +251,7 @@ export default function FitnessTestingPage() {
 
     for (let i = 0; i < allTestsForPrint.length; i++) {
       const test = allTestsForPrint[i]
-      const hist = sessionsWithResults
-        .map(s => { const r = s.results.find(x => x.test_id === test.test_id); return r ? { session: s.session, result: r } : null })
-        .filter((x): x is { session: FitnessTestSession; result: SessionResult } => x !== null)
-        .reverse()
+      const hist = getTestHistory(sessionsWithResults, test.test_id)
       if (hist.length === 0) continue
 
       const isLeft = i % 2 === 0
@@ -728,13 +736,7 @@ export default function FitnessTestingPage() {
                 const currentTest = allTests.get(currentTestId)
 
                 // Get all results for the selected test across sessions
-                const testHistory = sessionsWithResults
-                  .map(s => {
-                    const result = s.results.find(r => r.test_id === currentTestId)
-                    return result ? { session: s.session, result } : null
-                  })
-                  .filter((x): x is { session: FitnessTestSession; result: SessionResult } => x !== null)
-                  .reverse() // Show oldest to newest
+                const testHistory = getTestHistory(sessionsWithResults, currentTestId)
 
                 // Calculate improvement
                 const latestResult = testHistory[testHistory.length - 1]?.result
@@ -769,13 +771,7 @@ export default function FitnessTestingPage() {
                           </thead>
                           <tbody>
                             {testsArray.slice(0, 10).map(test => {
-                              const history = sessionsWithResults
-                                .map(s => {
-                                  const result = s.results.find(r => r.test_id === test.test_id)
-                                  return result ? { session: s.session, result } : null
-                                })
-                                .filter((x): x is { session: FitnessTestSession; result: SessionResult } => x !== null)
-                                .reverse()
+                              const history = getTestHistory(sessionsWithResults, test.test_id)
 
                               const latest = history[history.length - 1]?.result
                               const previous = history[history.length - 2]?.result
@@ -1388,10 +1384,7 @@ export default function FitnessTestingPage() {
               </thead>
               <tbody>
                 {allTestsForPrint.map(test => {
-                  const hist = sessionsWithResults
-                    .map(s => { const r = s.results.find(x => x.test_id === test.test_id); return r ? { session: s.session, result: r } : null })
-                    .filter((x): x is { session: FitnessTestSession; result: SessionResult } => x !== null)
-                    .reverse()
+                  const hist = getTestHistory(sessionsWithResults, test.test_id)
                   const latest = hist[hist.length - 1]?.result
                   const prev = hist[hist.length - 2]?.result
                   const change = latest && prev ? latest.result_value - prev.result_value : null
@@ -1430,10 +1423,7 @@ export default function FitnessTestingPage() {
             <p style={{ fontSize: '11px', fontWeight: 700, color: '#888', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '12px' }}>Graf Perkembangan Ujian</p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0' }}>
               {allTestsForPrint.map((test, i) => {
-                const hist = sessionsWithResults
-                  .map(s => { const r = s.results.find(x => x.test_id === test.test_id); return r ? { session: s.session, result: r } : null })
-                  .filter((x): x is { session: FitnessTestSession; result: SessionResult } => x !== null)
-                  .reverse()
+                const hist = getTestHistory(sessionsWithResults, test.test_id)
                 if (hist.length === 0) return null
                 const maxVal = Math.max(...hist.map(h => h.result.result_value)) * 1.1
                 const CHART_H = 110
