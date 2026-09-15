@@ -438,7 +438,7 @@ export default function FitnessTestingPage() {
 
   function calculateRating(testId: string, value: number): 'baik' | 'sederhana' | 'lemah' | 'tidak_dinilai' {
     const norm = norms.get(testId)
-    if (!norm || !value) return 'tidak_dinilai'
+    if (!norm) return 'tidak_dinilai'
 
     const { rating_direction } = norm
 
@@ -455,7 +455,7 @@ export default function FitnessTestingPage() {
 
   async function handleSave() {
     if (!selectedAthlete) return
-    if (results.some(r => !r.result_value)) {
+    if (results.some(r => r.result_value === '')) {
       setError('Sila isi semua nilai ujian sebelum menyimpan.')
       return
     }
@@ -783,8 +783,8 @@ export default function FitnessTestingPage() {
                               return (
                                 <tr key={test.test_id} className="border-b border-gray-100 hover:bg-gray-50 transition">
                                   <td className="px-4 py-3 font-semibold text-[#111]">{formatTestName(test.test_name)}</td>
-                                  <td className="px-4 py-3 text-right text-[#888]">{previous?.result_value || '-'}</td>
-                                  <td className="px-4 py-3 text-right font-semibold text-[#111]">{latest?.result_value || '-'}</td>
+                                  <td className="px-4 py-3 text-right text-[#888]">{previous?.result_value ?? '-'}</td>
+                                  <td className="px-4 py-3 text-right font-semibold text-[#111]">{latest?.result_value ?? '-'}</td>
                                   <td className="px-4 py-3 text-right">
                                     {change !== null ? (
                                       <span className={isGoodChange === null ? 'text-gray-600' : isGoodChange ? 'text-green-600' : 'text-red-600'}>
@@ -894,7 +894,7 @@ export default function FitnessTestingPage() {
                                           </span>
                                         )
                                       })()}
-                                      {improvement !== 0 && (
+                                      {improvement !== 0 && previousResult.result_value !== 0 && (
                                         <span className="text-xs text-[#888]">
                                           ({((improvement / previousResult.result_value) * 100).toFixed(1)}%)
                                         </span>
@@ -1079,7 +1079,7 @@ export default function FitnessTestingPage() {
                       <div className="p-4 space-y-3">
                         {group.tests.map(({ st, idx }) => {
                           const result = results[idx]
-                          const rating = result?.result_value ? calculateRating(st.test_id, result.result_value as number) : 'not_rated'
+                          const rating = result && result.result_value !== '' ? calculateRating(st.test_id, result.result_value as number) : 'tidak_dinilai'
                           const norm = norms.get(st.test_id)
 
                           return (
@@ -1112,7 +1112,7 @@ export default function FitnessTestingPage() {
                                   </label>
                                   <input
                                     type="number"
-                                    value={result?.result_value || ''}
+                                    value={result?.result_value ?? ''}
                                     onChange={e =>
                                       setResults(r => [
                                         ...r.slice(0, idx),
@@ -1182,7 +1182,7 @@ export default function FitnessTestingPage() {
                 </button>
                 <button
                   onClick={() => handleSave()}
-                  disabled={saving || results.every(r => !r.result_value) || (!isEditing && sessionsWithResults.some(s => s.session.session === session && s.session.year === year))}
+                  disabled={saving || results.every(r => r.result_value === '') || (!isEditing && sessionsWithResults.some(s => s.session.session === session && s.session.year === year))}
                   className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition"
                 >
                   {saving ? 'Menyimpan...' : 'Simpan'}

@@ -343,7 +343,7 @@ CREATE TABLE IF NOT EXISTS "public"."fitness_test_results" (
     "rating" "text",
     "notes" "text",
     "created_at" timestamp with time zone DEFAULT "now"(),
-    CONSTRAINT "fitness_test_results_rating_check" CHECK (("rating" = ANY (ARRAY['baik'::"text", 'sederhana'::"text", 'lemah'::"text", 'not_rated'::"text"])))
+    CONSTRAINT "fitness_test_results_rating_check" CHECK (("rating" = ANY (ARRAY['baik'::"text", 'sederhana'::"text", 'lemah'::"text", 'tidak_dinilai'::"text"])))
 );
 
 
