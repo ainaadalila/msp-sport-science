@@ -40,6 +40,14 @@ const statusStyle: Record<string, string> = {
   closed: 'bg-gray-100 text-[#888]',
 }
 
+const attendanceLabel: Record<string, string> = { scheduled: '-', arrived: 'Hadir', completed: 'Selesai', no_show: 'Tidak Hadir' }
+const attendanceStyle: Record<string, string> = {
+  scheduled: 'bg-gray-100 text-[#888]',
+  arrived: 'bg-blue-50 text-[#3A7EC8]',
+  completed: 'bg-green-50 text-green-700',
+  no_show: 'bg-red-50 text-[#D44040]',
+}
+
 function fmtDate(d: string) {
   return new Date(d + 'T00:00:00').toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric' })
 }
@@ -334,7 +342,7 @@ export default function PhysioCasePage() {
         doc.setFont('', 'normal')
         const sessionInfo = [
           `Tarikh: ${fmtDate(slot.slot_date)}`,
-          `Kehadiran: ${slot.attendance_status || '—'}`,
+          `Kehadiran: ${attendanceLabel[slot.attendance_status ?? 'scheduled']}`,
           ...(slot.pain_scale !== null ? [`Kesakitan: ${slot.pain_scale}/10`] : []),
         ]
         sessionInfo.forEach((info) => {
@@ -644,7 +652,11 @@ export default function PhysioCasePage() {
                                 <span className="text-[#888]">—</span>
                               )}
                             </td>
-                            <td className="px-3 py-2 text-[#888]">{s.attendance_status ?? '—'}</td>
+                            <td className="px-3 py-2">
+                              <span className={`inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded ${attendanceStyle[s.attendance_status ?? 'scheduled']}`}>
+                                {attendanceLabel[s.attendance_status ?? 'scheduled']}
+                              </span>
+                            </td>
                             <td className="px-3 py-2">
                               {s.pain_scale !== null ? (
                                 <span className={`inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded ${getPainColor(s.pain_scale)}`}>

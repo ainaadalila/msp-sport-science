@@ -66,7 +66,7 @@ type AssessmentFormState = {
   attendance_status: 'scheduled' | 'arrived' | 'completed' | 'no_show'
 }
 
-const attendanceLabel: Record<string, string> = { scheduled: 'Dijadual', arrived: 'Hadir', completed: 'Selesai', no_show: 'Tidak Hadir' }
+const attendanceLabel: Record<string, string> = { scheduled: '-', arrived: 'Hadir', completed: 'Selesai', no_show: 'Tidak Hadir' }
 const attendanceStyle: Record<string, string> = {
   scheduled: 'bg-gray-100 text-[#888]',
   arrived: 'bg-blue-50 text-[#3A7EC8]',
@@ -137,7 +137,7 @@ function handlePrintCatatan(slot: PhysioSlot) {
 
   // Stats row
   const hasScale = slot.pain_scale !== null
-  const statusLabel: Record<string, string> = { scheduled: 'Dijadual', arrived: 'Hadir', completed: 'Selesai', no_show: 'Tidak Hadir' }
+  const statusLabel: Record<string, string> = { scheduled: '-', arrived: 'Hadir', completed: 'Selesai', no_show: 'Tidak Hadir' }
   const colW = (CW - 4) / 2
   if (hasScale) {
     pdf.setFillColor(245, 245, 247); pdf.roundedRect(M, y, colW, 14, 1.5, 1.5, 'F')
@@ -727,6 +727,7 @@ export default function PhysioPage() {
                   </Field>
                   <Field label="Status Kehadiran">
                     <select value={assessmentForm.attendance_status} onChange={e => setAssessmentField('attendance_status', e.target.value as AssessmentFormState['attendance_status'])} className={inputCls}>
+                      <option value="scheduled">-</option>
                       <option value="arrived">Hadir</option>
                       <option value="no_show">Tidak Hadir</option>
                     </select>
