@@ -15,6 +15,7 @@ interface TestResultInput {
   result_value: number | ''
   notes?: string
   test_name?: string
+  unit?: string
 }
 
 interface SessionResult {
@@ -54,16 +55,48 @@ function getTestHistory(sessionsWithResults: SessionWithResults[], testId: strin
     .sort((a, b) => (a.session.year - b.session.year) || ((PHASE_ORDER[a.session.session] ?? 0) - (PHASE_ORDER[b.session.session] ?? 0)))
 }
 
-// Groups a sport's configured tests by category, preserving each test's index in
-// sportTests (used to key into the parallel `results` array during recording/editing).
+// Groups a sport's configured tests by category. Tests are matched to their
+// result by test_id (not array position) wherever this grouping is consumed.
 function groupTestsByCategory(sportTests: SportFitnessTest[]) {
-  return sportTests.reduce((acc, st, idx) => {
+  return sportTests.reduce((acc, st) => {
     const category = (st.test as any)?.category || 'other'
     const group = acc.find(g => g.category === category)
-    if (group) group.tests.push({ st, idx })
-    else acc.push({ category, tests: [{ st, idx }] })
+    if (group) group.tests.push(st)
+    else acc.push({ category, tests: [st] })
     return acc
-  }, [] as Array<{ category: string; tests: Array<{ st: SportFitnessTest; idx: number }> }>)
+  }, [] as Array<{ category: string; tests: SportFitnessTest[] }>)
+}
+
+// Typed as `string`, not a literal, so it can be compared against the
+// FitnessTestDefinition category union (which doesn't itself include it)
+// without a type-narrowing error.
+const INACTIVE_TEST_CATEGORY: string = 'inactive'
+
+// The record/edit form needs a field for every test the sport currently has
+// configured, PLUS any test a historical session actually has a saved result
+// for even if that test has since been removed from the sport's config —
+// otherwise an old result becomes invisible/uneditable once the config
+// changes (e.g. a sport swaps one cardio test for another). Synthesizes a
+// placeholder SportFitnessTest for each such "orphaned" result, grouped into
+// its own category so it's visually distinct from the sport's active tests.
+function buildEditableSportTests(sportTests: SportFitnessTest[], results: TestResultInput[]): SportFitnessTest[] {
+  const orphaned = results
+    .filter(r => !sportTests.some(st => st.test_id === r.test_id))
+    .map(r => ({
+      id: r.test_id,
+      sport: '',
+      test_id: r.test_id,
+      is_mandatory: false,
+      created_at: '',
+      test: {
+        id: r.test_id,
+        test_name: r.test_name || '',
+        category: INACTIVE_TEST_CATEGORY,
+        unit: r.unit || '',
+        created_at: '',
+      },
+    }) as unknown as SportFitnessTest)
+  return [...sportTests, ...orphaned]
 }
 
 // Single source of test ordering, shared by the comparison table, chart selector,
@@ -71,7 +104,7 @@ function groupTestsByCategory(sportTests: SportFitnessTest[]) {
 // form groups them, instead of each deriving its own order independently.
 function getOrderedTests(sportTests: SportFitnessTest[]) {
   return groupTestsByCategory(sportTests).flatMap(g =>
-    g.tests.map(({ st }) => ({
+    g.tests.map(st => ({
       test_id: st.test_id,
       test_name: st.test?.test_name || '',
       unit: st.test?.unit || '',
@@ -589,6 +622,7 @@ export default function FitnessTestingPage() {
     coordination: 'Coordination',
     balance: 'Balance',
     martial_arts: 'Martial Arts (Power Kube)',
+    [INACTIVE_TEST_CATEGORY]: 'Ujian Lain (Tiada Dalam Konfigurasi Semasa)',
   }
 
 
@@ -1055,7 +1089,10 @@ export default function FitnessTestingPage() {
 
           <div className="space-y-2">
             {(() => {
-              const grouped = groupTestsByCategory(sportTests)
+              // Union of the sport's current config and any test a historical
+              // session actually has a result for, so editing an old session
+              // never hides a value just because the sport's config changed since.
+              const grouped = groupTestsByCategory(buildEditableSportTests(sportTests, results))
 
               return grouped.map(group => {
                 const isExpanded = expandedCategories[group.category] ?? true
@@ -1079,18 +1116,34 @@ export default function FitnessTestingPage() {
 
                     {isExpanded && (
                       <div className="p-4 space-y-3">
-                        {group.tests.map(({ st, idx }) => {
-                          const result = results[idx]
+                        {group.tests.map(st => {
+                          // Matched by test_id, not array position — a session's saved
+                          // results don't necessarily line up 1:1 with sportTests' order.
+                          const result = results.find(r => r.test_id === st.test_id)
                           const rating = result && result.result_value !== '' ? calculateRating(st.test_id, result.result_value as number) : 'tidak_dinilai'
                           const norm = norms.get(st.test_id)
+                          const isInactive = st.test?.category === INACTIVE_TEST_CATEGORY
+
+                          const updateResult = (patch: Partial<TestResultInput>) => {
+                            setResults(r =>
+                              r.some(x => x.test_id === st.test_id)
+                                ? r.map(x => (x.test_id === st.test_id ? { ...x, ...patch } : x))
+                                : [...r, { test_id: st.test_id, result_value: '', notes: '', test_name: (st.test as any)?.test_name, unit: (st.test as any)?.unit, ...patch }]
+                            )
+                          }
 
                           return (
-                            <div key={st.test_id} className="bg-gray-50 rounded-lg border border-gray-200 p-4">
+                            <div key={st.test_id} className={`bg-gray-50 rounded-lg border p-4 ${isInactive ? 'border-amber-300' : 'border-gray-200'}`}>
                               <div className="flex items-start justify-between mb-3">
                                 <div>
                                   <p className="font-semibold text-sm text-[#111]">{(st.test as any)?.test_name}</p>
                                   <p className="text-xs text-[#888]">Unit: {(st.test as any)?.unit}</p>
                                   {st.is_mandatory && <span className="text-[10px] text-[#F56A00] font-semibold mt-1 block">WAJIB</span>}
+                                  {isInactive && (
+                                    <span className="text-[10px] text-amber-600 font-semibold mt-1 block">
+                                      TIADA DALAM KONFIGURASI UJIAN SEMASA UNTUK SUKAN INI
+                                    </span>
+                                  )}
                                 </div>
                                 {rating !== 'tidak_dinilai' && (
                                   <span
@@ -1115,13 +1168,7 @@ export default function FitnessTestingPage() {
                                   <input
                                     type="number"
                                     value={result?.result_value ?? ''}
-                                    onChange={e =>
-                                      setResults(r => [
-                                        ...r.slice(0, idx),
-                                        { ...(result || { test_id: st.test_id, result_value: '', notes: '', test_name: (st.test as any)?.test_name }), result_value: e.target.value ? parseFloat(e.target.value) : '' },
-                                        ...r.slice(idx + 1),
-                                      ])
-                                    }
+                                    onChange={e => updateResult({ result_value: e.target.value ? parseFloat(e.target.value) : '' })}
                                     placeholder="Masukkan nilai"
                                     className="w-full bg-white border border-[#E8E8E8] rounded-lg px-3 py-2 text-sm"
                                     step="0.01"
@@ -1155,7 +1202,7 @@ export default function FitnessTestingPage() {
                                 <label className="block text-[10px] font-bold uppercase tracking-widest text-[#888] mb-1">Catatan</label>
                                 <textarea
                                   value={result?.notes || ''}
-                                  onChange={e => setResults(r => [...r.slice(0, idx), { ...(result || { test_id: st.test_id, result_value: '', notes: '', test_name: (st.test as any)?.test_name }), notes: e.target.value }, ...r.slice(idx + 1)])}
+                                  onChange={e => updateResult({ notes: e.target.value })}
                                   placeholder="Catatan tambahan (pilihan)"
                                   className="w-full bg-white border border-[#E8E8E8] rounded-lg px-3 py-2 text-sm resize-none"
                                   rows={2}
@@ -1245,6 +1292,7 @@ export default function FitnessTestingPage() {
                           result_value: r.result_value,
                           notes: r.notes || undefined,
                           test_name: r.test_name,
+                          unit: r.unit,
                         })))
                       }
                       setSession(viewedSession!.session.session)
@@ -1310,6 +1358,7 @@ export default function FitnessTestingPage() {
                                     result_value: r.result_value,
                                     notes: r.notes || undefined,
                                     test_name: r.test_name,
+                                    unit: r.unit,
                                   })))
                                   setSession(sessionResult.session.session)
                                   setYear(sessionResult.session.year)
