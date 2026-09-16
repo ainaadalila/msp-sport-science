@@ -54,6 +54,31 @@ function getTestHistory(sessionsWithResults: SessionWithResults[], testId: strin
     .sort((a, b) => (a.session.year - b.session.year) || ((PHASE_ORDER[a.session.session] ?? 0) - (PHASE_ORDER[b.session.session] ?? 0)))
 }
 
+// Groups a sport's configured tests by category, preserving each test's index in
+// sportTests (used to key into the parallel `results` array during recording/editing).
+function groupTestsByCategory(sportTests: SportFitnessTest[]) {
+  return sportTests.reduce((acc, st, idx) => {
+    const category = (st.test as any)?.category || 'other'
+    const group = acc.find(g => g.category === category)
+    if (group) group.tests.push({ st, idx })
+    else acc.push({ category, tests: [{ st, idx }] })
+    return acc
+  }, [] as Array<{ category: string; tests: Array<{ st: SportFitnessTest; idx: number }> }>)
+}
+
+// Single source of test ordering, shared by the comparison table, chart selector,
+// and PDF/print export — so they always list tests the same way the record/edit
+// form groups them, instead of each deriving its own order independently.
+function getOrderedTests(sportTests: SportFitnessTest[]) {
+  return groupTestsByCategory(sportTests).flatMap(g =>
+    g.tests.map(({ st }) => ({
+      test_id: st.test_id,
+      test_name: st.test?.test_name || '',
+      unit: st.test?.unit || '',
+    }))
+  )
+}
+
 export default function FitnessTestingPage() {
   const { profile } = useAuth()
   const { can } = usePermissions()
@@ -90,15 +115,7 @@ export default function FitnessTestingPage() {
   const [selectedTestId, setSelectedTestId] = useState<string | null>(null)
   const [selectedAthletesGender, setSelectedAthletesGender] = useState<'M' | 'F' | null>(null)
 
-  const allTestsForPrint = useMemo(() => {
-    const map = new Map<string, { test_id: string; test_name: string; unit: string }>()
-    sessionsWithResults.forEach(s => {
-      s.results.forEach(r => {
-        if (!map.has(r.test_id)) map.set(r.test_id, { test_id: r.test_id, test_name: r.test_name, unit: r.unit })
-      })
-    })
-    return Array.from(map.values())
-  }, [sessionsWithResults])
+  const allTestsForPrint = useMemo(() => getOrderedTests(sportTests), [sportTests])
 
   function handlePrint() {
     if (!selectedAthlete || allTestsForPrint.length === 0) return
@@ -719,21 +736,12 @@ export default function FitnessTestingPage() {
           {viewMode === 'view_dashboard' && sessionsWithResults.length > 0 && (
             <div className="space-y-4" ref={chartRef}>
               {(() => {
-                // Get all unique tests across all sessions
-                const allTests = new Map<string, { test_id: string; test_name: string; unit: string }>()
-                sessionsWithResults.forEach(s => {
-                  s.results.forEach(r => {
-                    if (!allTests.has(r.test_id)) {
-                      allTests.set(r.test_id, { test_id: r.test_id, test_name: r.test_name, unit: r.unit })
-                    }
-                  })
-                })
-
-                // If no test selected, select the first one with results
-                const testsArray = Array.from(allTests.values())
+                // Same test list/order as the record/edit form (grouped by category
+                // from sportTests), so this view and the edit view never disagree.
+                const testsArray = getOrderedTests(sportTests)
                 const defaultTestId = testsArray[0]?.test_id
                 const currentTestId = selectedTestId || defaultTestId
-                const currentTest = allTests.get(currentTestId)
+                const currentTest = testsArray.find(t => t.test_id === currentTestId)
 
                 // Get all results for the selected test across sessions
                 const testHistory = getTestHistory(sessionsWithResults, currentTestId)
@@ -1047,13 +1055,7 @@ export default function FitnessTestingPage() {
 
           <div className="space-y-2">
             {(() => {
-              const grouped = sportTests.reduce((acc, st, idx) => {
-                const category = (st.test as any)?.category || 'other'
-                const group = acc.find(g => g.category === category)
-                if (group) group.tests.push({ st, idx })
-                else acc.push({ category, tests: [{ st, idx }] })
-                return acc
-              }, [] as Array<{ category: string; tests: Array<{ st: SportFitnessTest; idx: number }> }>)
+              const grouped = groupTestsByCategory(sportTests)
 
               return grouped.map(group => {
                 const isExpanded = expandedCategories[group.category] ?? true
