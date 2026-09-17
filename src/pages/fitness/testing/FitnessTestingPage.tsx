@@ -43,6 +43,15 @@ const formatTestName = (name: string) => {
 
 const PHASE_ORDER: Record<string, number> = { 'Fasa 1': 1, 'Fasa 2': 2, 'Fasa 3': 3, 'Fasa 4': 4 }
 
+// Sorts sessions by (year, phase number) rather than recorded_date/created_at —
+// sessions are often entered/edited out of phase order (e.g. Fasa 4 saved before
+// Fasa 3), but should always be listed Fasa 1→4 regardless of when each was saved.
+function sortSessionsByPhase(sessions: SessionWithResults[]) {
+  return [...sessions].sort(
+    (a, b) => (a.session.year - b.session.year) || ((PHASE_ORDER[a.session.session] ?? 0) - (PHASE_ORDER[b.session.session] ?? 0))
+  )
+}
+
 // Chronological history for one test: sorted by phase (year, then Fasa 1→4), not by
 // recorded_date/created_at — sessions are often entered/edited out of phase order.
 function getTestHistory(sessionsWithResults: SessionWithResults[], testId: string | null | undefined) {
@@ -483,7 +492,7 @@ export default function FitnessTestingPage() {
       return { session: sess, results }
     })
 
-    setSessionsWithResults(withResults)
+    setSessionsWithResults(sortSessionsByPhase(withResults))
   }
 
   function calculateRating(testId: string, value: number): 'baik' | 'sederhana' | 'lemah' | 'tidak_dinilai' {
@@ -574,12 +583,12 @@ export default function FitnessTestingPage() {
       // Update sessions list — replace in place if editing, prepend if new
       if (isEditing) {
         setSessions(sessions.map(s => s.id === sessionData.id ? sessionData : s))
-        setSessionsWithResults(sessionsWithResults.map(s =>
+        setSessionsWithResults(sortSessionsByPhase(sessionsWithResults.map(s =>
           s.session.id === sessionData.id ? { session: sessionData, results: savedResults } : s
-        ))
+        )))
       } else {
         setSessions([sessionData, ...sessions])
-        setSessionsWithResults([{ session: sessionData, results: savedResults }, ...sessionsWithResults])
+        setSessionsWithResults(sortSessionsByPhase([{ session: sessionData, results: savedResults }, ...sessionsWithResults]))
       }
       setIsEditing(false)
       setResults([])
@@ -1332,7 +1341,7 @@ export default function FitnessTestingPage() {
                   </div>
                 ) : (
                   <div className="divide-y divide-gray-100">
-                    {[...sessionsWithResults].reverse().map(sessionResult => (
+                    {sessionsWithResults.map(sessionResult => (
                       <div key={sessionResult.session.id} className="p-4 hover:bg-gray-50 transition">
                         <div className="flex items-center justify-between mb-3">
                           <div className="flex-1 cursor-pointer" onClick={() => {
