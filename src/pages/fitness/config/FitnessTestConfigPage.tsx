@@ -81,12 +81,20 @@ export default function FitnessTestConfigPage() {
       if (error) setError(`Gagal membuang ujian: ${error.message}`)
       else fetchSportTests(selectedSport)
     } else {
-      const { error } = await supabase.from('sport_fitness_tests').insert({
-        sport: selectedSport,
-        test_id: testId,
-        is_mandatory: false,
-        created_by: profile?.id,
-      })
+      // upsert + ignoreDuplicates instead of a plain insert: two tabs/admins
+      // toggling the same test around the same time (or a retried request)
+      // would otherwise both succeed and create a duplicate config row,
+      // which breaks saving fitness test results for every athlete in that
+      // sport later on. This makes adding a test idempotent.
+      const { error } = await supabase.from('sport_fitness_tests').upsert(
+        {
+          sport: selectedSport,
+          test_id: testId,
+          is_mandatory: false,
+          created_by: profile?.id,
+        },
+        { onConflict: 'sport,test_id', ignoreDuplicates: true }
+      )
       if (error) setError(`Gagal menambah ujian: ${error.message}`)
       else fetchSportTests(selectedSport)
     }
