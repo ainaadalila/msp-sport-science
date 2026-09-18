@@ -64,6 +64,21 @@ function getTestHistory(sessionsWithResults: SessionWithResults[], testId: strin
     .sort((a, b) => (a.session.year - b.session.year) || ((PHASE_ORDER[a.session.session] ?? 0) - (PHASE_ORDER[b.session.session] ?? 0)))
 }
 
+// Keeps the first config row for each test_id. A sport's test config should
+// never have the same test_id twice (there's a DB uniqueness constraint for
+// it), but if one ever slips through, rendering/saving with a duplicate in
+// the list is what causes "ON CONFLICT DO UPDATE... row a second time" when
+// the session's results are saved — so this is applied before that list is
+// used anywhere.
+function dedupeByTestId(sportTests: SportFitnessTest[]) {
+  const seen = new Set<string>()
+  return sportTests.filter(st => {
+    if (seen.has(st.test_id)) return false
+    seen.add(st.test_id)
+    return true
+  })
+}
+
 // Groups a sport's configured tests by category. Tests are matched to their
 // result by test_id (not array position) wherever this grouping is consumed.
 function groupTestsByCategory(sportTests: SportFitnessTest[]) {
@@ -405,7 +420,11 @@ export default function FitnessTestingPage() {
       .select('id, sport, test_id, is_mandatory, created_at, test:test_id(id, test_name, unit, category, created_at)')
       .eq('sport', athlete.sport?.name)
 
-    const sportTestsData = (testsRes.data ?? []) as unknown as SportFitnessTest[]
+    // A sport's config can end up with the same test_id twice (e.g. added from
+    // two tabs/sessions around the same time, before the DB uniqueness
+    // constraint was in place) — de-duping here means a stray duplicate row
+    // shows up once instead of breaking every save for that sport's athletes.
+    const sportTestsData = dedupeByTestId((testsRes.data ?? []) as unknown as SportFitnessTest[])
     setSportTests(sportTestsData)
 
     // Initialize expanded categories
@@ -541,16 +560,22 @@ export default function FitnessTestingPage() {
 
       if (sessionError) throw sessionError
 
-      // Upsert results
-      const resultsPayload = results
-        .filter(r => r.result_value !== '')
-        .map(r => ({
-          session_id: sessionData.id,
-          test_id: r.test_id,
-          result_value: r.result_value,
-          rating: calculateRating(r.test_id, r.result_value as number),
-          notes: r.notes || null,
-        }))
+      // Upsert results. De-duped by test_id as a last line of defense — a
+      // batch upsert with two rows sharing the same (session_id, test_id)
+      // fails outright ("ON CONFLICT DO UPDATE... row a second time"), which
+      // is exactly what a stray duplicate sport_fitness_tests config row
+      // causes upstream if it's ever not caught before results here.
+      const resultsByTestId = new Map<string, TestResultInput>()
+      for (const r of results) {
+        if (r.result_value !== '') resultsByTestId.set(r.test_id, r)
+      }
+      const resultsPayload = Array.from(resultsByTestId.values()).map(r => ({
+        session_id: sessionData.id,
+        test_id: r.test_id,
+        result_value: r.result_value,
+        rating: calculateRating(r.test_id, r.result_value as number),
+        notes: r.notes || null,
+      }))
 
       if (resultsPayload.length > 0) {
         const { error: resultsError } = await supabase.from('fitness_test_results').upsert(resultsPayload, {
