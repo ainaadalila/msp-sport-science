@@ -110,7 +110,7 @@ export default function PsychologyRatingPage() {
   const [editingCatatan, setEditingCatatan] = useState<{ id: string; text: string } | null>(null)
   const [savingCatatan, setSavingCatatan] = useState(false)
 
-  const [editingRating, setEditingRating] = useState<{ id: string; athleteName: string; phase: string; responses: Record<string, number> } | null>(null)
+  const [editingRating, setEditingRating] = useState<{ id: string; athleteName: string; phase: 'persediaan' | 'pertandingan' | 'pemulihan'; responses: Record<string, number> } | null>(null)
   const [savingRating, setSavingRating] = useState(false)
   const [editRatingError, setEditRatingError] = useState('')
   const [confirmDeleteRating, setConfirmDeleteRating] = useState<PhysioRating | null>(null)
@@ -347,7 +347,7 @@ export default function PsychologyRatingPage() {
     setEditingRating({
       id: r.id,
       athleteName: r.athlete?.name ?? 'Unknown',
-      phase: PHASE_LABEL[r.phase],
+      phase: r.phase,
       responses,
     })
   }
@@ -361,6 +361,7 @@ export default function PsychologyRatingPage() {
       const { error } = await supabase
         .from('psychology_ratings')
         .update({
+          phase: editingRating.phase,
           raw_responses: editingRating.responses,
           cognitive_anxiety_score: cognitive,
           somatic_anxiety_score: somatic,
@@ -1084,9 +1085,22 @@ export default function PsychologyRatingPage() {
               <div className="flex items-center justify-between p-6 border-b border-gray-200">
                 <div>
                   <h2 className="text-lg font-bold text-[#111]">Edit Penilaian Psikologi</h2>
-                  <p className="text-sm text-[#888] mt-1">{editingRating.athleteName} — {editingRating.phase}</p>
+                  <p className="text-sm text-[#888] mt-1">{editingRating.athleteName}</p>
                 </div>
                 <button onClick={() => setEditingRating(null)} className="text-[#888] hover:text-[#111] text-2xl leading-none">×</button>
+              </div>
+
+              <div className="px-6 pt-4">
+                <label className="text-[10px] font-semibold uppercase tracking-wider text-[#888] block mb-1">Fasa</label>
+                <select
+                  value={editingRating.phase}
+                  onChange={e => setEditingRating({ ...editingRating, phase: e.target.value as 'persediaan' | 'pertandingan' | 'pemulihan' })}
+                  className="w-full sm:w-56 bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-[#444] outline-none focus:border-[#F56A00]"
+                >
+                  {(['persediaan', 'pertandingan', 'pemulihan'] as const).map(ph => (
+                    <option key={ph} value={ph}>{PHASE_LABEL[ph]}</option>
+                  ))}
+                </select>
               </div>
 
               <div className="px-6 py-4 overflow-y-auto space-y-3">
