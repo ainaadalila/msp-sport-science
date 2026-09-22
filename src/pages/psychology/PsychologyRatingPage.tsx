@@ -110,7 +110,7 @@ export default function PsychologyRatingPage() {
   const [editingCatatan, setEditingCatatan] = useState<{ id: string; text: string } | null>(null)
   const [savingCatatan, setSavingCatatan] = useState(false)
 
-  const [editingRating, setEditingRating] = useState<{ id: string; athleteName: string; phase: 'persediaan' | 'pertandingan' | 'pemulihan'; responses: Record<string, number> } | null>(null)
+  const [editingRating, setEditingRating] = useState<{ id: string; athleteName: string; phase: 'persediaan' | 'pertandingan' | 'pemulihan'; cognitive: number; somatic: number; confidence: number } | null>(null)
   const [savingRating, setSavingRating] = useState(false)
   const [editRatingError, setEditRatingError] = useState('')
   const [confirmDeleteRating, setConfirmDeleteRating] = useState<PhysioRating | null>(null)
@@ -339,16 +339,14 @@ export default function PsychologyRatingPage() {
   }
 
   const openEditRating = (r: PhysioRating) => {
-    const responses: Record<string, number> = {}
-    for (let i = 1; i <= 17; i++) {
-      responses[`q${i}`] = r.raw_responses?.[`q${i}`] ?? 1
-    }
     setEditRatingError('')
     setEditingRating({
       id: r.id,
       athleteName: r.athlete?.name ?? 'Unknown',
       phase: r.phase,
-      responses,
+      cognitive: r.cognitive_anxiety_score ?? 0,
+      somatic: r.somatic_anxiety_score ?? 0,
+      confidence: r.self_confidence_score ?? 0,
     })
   }
 
@@ -357,15 +355,13 @@ export default function PsychologyRatingPage() {
     try {
       setSavingRating(true)
       setEditRatingError('')
-      const { cognitive, somatic, self_conf } = calculateScores(editingRating.responses)
       const { error } = await supabase
         .from('psychology_ratings')
         .update({
           phase: editingRating.phase,
-          raw_responses: editingRating.responses,
-          cognitive_anxiety_score: cognitive,
-          somatic_anxiety_score: somatic,
-          self_confidence_score: self_conf,
+          cognitive_anxiety_score: editingRating.cognitive,
+          somatic_anxiety_score: editingRating.somatic,
+          self_confidence_score: editingRating.confidence,
         })
         .eq('id', editingRating.id)
 
@@ -1075,25 +1071,24 @@ export default function PsychologyRatingPage() {
       )}
 
       {/* Rating Edit Modal */}
-      {editingRating && (() => {
-        const { cognitive, somatic, self_conf } = calculateScores(editingRating.responses)
-        return (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl shadow-lg w-full max-w-2xl mx-4 max-h-[85vh] flex flex-col">
-              <div className="flex items-center justify-between p-6 border-b border-gray-200">
-                <div>
-                  <h2 className="text-lg font-bold text-[#111]">Edit Penilaian Psikologi</h2>
-                  <p className="text-sm text-[#888] mt-1">{editingRating.athleteName}</p>
-                </div>
-                <button onClick={() => setEditingRating(null)} className="text-[#888] hover:text-[#111] text-2xl leading-none">×</button>
+      {editingRating && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-md mx-4">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <div>
+                <h2 className="text-lg font-bold text-[#111]">Edit Penilaian Psikologi</h2>
+                <p className="text-sm text-[#888] mt-1">{editingRating.athleteName}</p>
               </div>
+              <button onClick={() => setEditingRating(null)} className="text-[#888] hover:text-[#111] text-2xl leading-none">×</button>
+            </div>
 
-              <div className="px-6 pt-4">
+            <div className="p-6 space-y-4">
+              <div>
                 <label className="text-[10px] font-semibold uppercase tracking-wider text-[#888] block mb-1">Fasa</label>
                 <select
                   value={editingRating.phase}
                   onChange={e => setEditingRating({ ...editingRating, phase: e.target.value as 'persediaan' | 'pertandingan' | 'pemulihan' })}
-                  className="w-full sm:w-56 bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-[#444] outline-none focus:border-[#F56A00]"
+                  className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-[#444] outline-none focus:border-[#F56A00]"
                 >
                   {(['persediaan', 'pertandingan', 'pemulihan'] as const).map(ph => (
                     <option key={ph} value={ph}>{PHASE_LABEL[ph]}</option>
@@ -1101,71 +1096,51 @@ export default function PsychologyRatingPage() {
                 </select>
               </div>
 
-              <div className="px-6 py-4 overflow-y-auto space-y-3">
-                {QUESTION_LABELS.map((label, idx) => {
-                  const qKey = `q${idx + 1}`
-                  return (
-                    <div key={qKey} className="flex items-center justify-between gap-3">
-                      <span className="text-xs text-[#444] flex-1">{label}</span>
-                      <div className="flex gap-1 shrink-0">
-                        {[1, 2, 3, 4].map(v => (
-                          <button
-                            key={v}
-                            onClick={() => setEditingRating({
-                              ...editingRating,
-                              responses: { ...editingRating.responses, [qKey]: v },
-                            })}
-                            className={`w-8 h-8 text-xs font-semibold rounded-lg border transition ${
-                              editingRating.responses[qKey] === v
-                                ? 'bg-[#F56A00] text-white border-[#F56A00]'
-                                : 'border-gray-200 text-[#666] hover:bg-gray-50'
-                            }`}
-                          >
-                            {v}
-                          </button>
-                        ))}
-                      </div>
+              {([
+                { key: 'cognitive' as const, label: 'Kebimbangan Kognitif', type: 'cognitive' as const },
+                { key: 'somatic' as const, label: 'Kebimbangan Somatik', type: 'somatic' as const },
+                { key: 'confidence' as const, label: 'Keyakinan Diri', type: 'confidence' as const },
+              ]).map(({ key, label, type }) => {
+                const insight = getScoreInsight(type, editingRating[key])
+                return (
+                  <div key={key}>
+                    <label className="text-[10px] font-semibold uppercase tracking-wider text-[#888] block mb-1">{label}</label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="number"
+                        value={editingRating[key]}
+                        onChange={e => setEditingRating({ ...editingRating, [key]: parseInt(e.target.value, 10) || 0 })}
+                        className="w-24 bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-[#444] outline-none focus:border-[#F56A00]"
+                      />
+                      {insight.label !== '-' && (
+                        <span className={`text-xs font-semibold ${insight.color}`}>{insight.label}</span>
+                      )}
                     </div>
-                  )
-                })}
-              </div>
+                  </div>
+                )
+              })}
+            </div>
 
-              <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 grid grid-cols-3 gap-3">
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[#888]">Keb. Kognitif</p>
-                  <p className="text-lg font-bold text-[#111]">{cognitive}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[#888]">Keb. Somatik</p>
-                  <p className="text-lg font-bold text-[#111]">{somatic}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[#888]">Keyakinan Diri</p>
-                  <p className="text-lg font-bold text-[#111]">{self_conf}</p>
-                </div>
-              </div>
+            {editRatingError && <p className="px-6 pb-2 text-red-600 text-sm">{editRatingError}</p>}
 
-              {editRatingError && <p className="px-6 pt-3 text-red-600 text-sm">{editRatingError}</p>}
-
-              <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-2">
-                <button
-                  onClick={() => setEditingRating(null)}
-                  className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-semibold rounded-lg transition"
-                >
-                  Batal
-                </button>
-                <button
-                  onClick={saveEditRating}
-                  disabled={savingRating}
-                  className="px-4 py-2 bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold rounded-lg transition disabled:opacity-50"
-                >
-                  {savingRating ? 'Menyimpan...' : 'Simpan'}
-                </button>
-              </div>
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-2">
+              <button
+                onClick={() => setEditingRating(null)}
+                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-semibold rounded-lg transition"
+              >
+                Batal
+              </button>
+              <button
+                onClick={saveEditRating}
+                disabled={savingRating}
+                className="px-4 py-2 bg-[#F56A00] hover:bg-[#D45A00] text-white text-sm font-semibold rounded-lg transition disabled:opacity-50"
+              >
+                {savingRating ? 'Menyimpan...' : 'Simpan'}
+              </button>
             </div>
           </div>
-        )
-      })()}
+        </div>
+      )}
 
       {/* Delete Confirmation */}
       {confirmDeleteRating && (
