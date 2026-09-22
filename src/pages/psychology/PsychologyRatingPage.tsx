@@ -885,14 +885,17 @@ export default function PsychologyRatingPage() {
                                           </td>
                                           <td className="px-3 py-2">
                                             <div className="flex items-center justify-between gap-2">
-                                              <span className="text-[#666] max-w-xs truncate text-[10px]">{r.catatan || '—'}</span>
+                                              {r.catatan && <span className="text-[#666] max-w-xs truncate text-[10px]">{r.catatan}</span>}
                                               {can('psychology', 'update') && (
                                                 <button
                                                   onClick={() => setEditingCatatan({ id: r.id, text: r.catatan || '' })}
-                                                  className="text-[#F56A00] hover:underline text-[10px] font-semibold whitespace-nowrap"
+                                                  className="text-[#F56A00] hover:underline text-[10px] font-semibold whitespace-nowrap ml-auto"
                                                 >
-                                                  Edit
+                                                  {r.catatan ? 'Edit Catatan' : 'Tambah Catatan'}
                                                 </button>
+                                              )}
+                                              {!can('psychology', 'update') && !r.catatan && (
+                                                <span className="text-[#888] text-[10px]">—</span>
                                               )}
                                             </div>
                                           </td>
