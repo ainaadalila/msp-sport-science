@@ -1233,15 +1233,15 @@ CREATE POLICY "supplement_requests: supporter update" ON "public"."supplement_re
 ALTER TABLE "public"."supplements" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "supplements: admin delete" ON "public"."supplements" FOR DELETE USING (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])));
+CREATE POLICY "supplements: delete" ON "public"."supplements" FOR DELETE USING ((("auth"."role"() = 'authenticated'::"text") AND (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])) OR "public"."has_module_permission"('supplement'::"text", 'delete'::"text"))));
 
 
 
-CREATE POLICY "supplements: admin update" ON "public"."supplements" FOR UPDATE USING (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"]))) WITH CHECK (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])));
+CREATE POLICY "supplements: update" ON "public"."supplements" FOR UPDATE USING ((("auth"."role"() = 'authenticated'::"text") AND (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])) OR "public"."has_module_permission"('supplement'::"text", 'update'::"text")))) WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])) OR "public"."has_module_permission"('supplement'::"text", 'update'::"text"))));
 
 
 
-CREATE POLICY "supplements: admin write" ON "public"."supplements" FOR INSERT WITH CHECK (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])));
+CREATE POLICY "supplements: insert" ON "public"."supplements" FOR INSERT WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])) OR "public"."has_module_permission"('supplement'::"text", 'create'::"text"))));
 
 
 
