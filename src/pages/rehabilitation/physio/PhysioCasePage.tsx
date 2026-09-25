@@ -106,9 +106,10 @@ export default function PhysioCasePage() {
 
   const [search, setSearch] = useState('')
   const [filterSport, setFilterSport] = useState('')
+  const [filterReferred, setFilterReferred] = useState<'' | 'yes' | 'no'>('')
 
   useEffect(() => { fetchAll() }, [])
-  useEffect(() => { setCurrentPage(1) }, [tab, search, filterSport])
+  useEffect(() => { setCurrentPage(1) }, [tab, search, filterSport, filterReferred])
 
   async function fetchAll() {
     setLoading(true)
@@ -379,7 +380,8 @@ export default function PhysioCasePage() {
     const q = search.toLowerCase()
     const matchSearch = !q || (c.athlete?.name ?? '').toLowerCase().includes(q)
     const matchSport = !filterSport || c.athlete?.sport?.name === filterSport
-    return matchSearch && matchSport
+    const matchReferred = !filterReferred || (filterReferred === 'yes' ? c.referred_to_doctor : !c.referred_to_doctor)
+    return matchSearch && matchSport && matchReferred
   })
   const totalPages = Math.ceil(displayCases.length / CASES_PER_PAGE)
   const pagedCases = displayCases.slice((currentPage - 1) * CASES_PER_PAGE, currentPage * CASES_PER_PAGE)
@@ -425,6 +427,11 @@ export default function PhysioCasePage() {
           <option value="">Semua Sukan</option>
           {allSports.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
+        <select value={filterReferred} onChange={e => setFilterReferred(e.target.value as '' | 'yes' | 'no')} className={filterCls}>
+          <option value="">Semua Status</option>
+          <option value="yes">Dirujuk Doktor</option>
+          <option value="no">Belum Dirujuk</option>
+        </select>
         <input
           type="text"
           placeholder="Cari nama atlet..."
@@ -432,9 +439,9 @@ export default function PhysioCasePage() {
           onChange={e => setSearch(e.target.value)}
           className={`${filterCls} min-w-[200px]`}
         />
-        {(search || filterSport) && (
+        {(search || filterSport || filterReferred) && (
           <button
-            onClick={() => { setSearch(''); setFilterSport('') }}
+            onClick={() => { setSearch(''); setFilterSport(''); setFilterReferred('') }}
             className="px-3 py-2 text-xs text-[#888] hover:text-[#F56A00] border border-gray-200 rounded-lg transition"
           >
             Kosongkan Penapis
@@ -450,7 +457,7 @@ export default function PhysioCasePage() {
             <div className="py-16 text-center text-[#888] text-sm">
               {cases.length === 0
                 ? 'Tiada kes lagi.'
-                : search || filterSport
+                : search || filterSport || filterReferred
                   ? 'Tiada kes sepadan penapis.'
                   : `Tiada kes di tab "${tab === 'active' ? 'Aktif' : 'Ditutup'}".`}
             </div>
