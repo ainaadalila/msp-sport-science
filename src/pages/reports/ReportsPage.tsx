@@ -367,22 +367,62 @@ export default function ReportsPage() {
             if (error) throw error
             const coachMap = new Map((coachList ?? []).map((c: any) => [c.id, c.full_name]))
             const monthNames = ['Januari', 'Februari', 'Mac', 'April', 'Mei', 'Jun', 'Julai', 'Ogos', 'September', 'Oktober', 'November', 'Disember']
-            setData((programs ?? [])
-              .filter((p: any) => !filterSport || p.sport === filterSport)
-              .map((p: any) => {
-                const structured = p.structured_data as any
-                return {
-                  'Sukan': p.sport ?? '—',
-                  'Bulan': monthNames[p.month - 1] ?? '—',
-                  'Tahun': p.year,
-                  'Fasa': structured?.phase ?? '—',
-                  'Bilangan Sesi': structured?.sessions?.length ?? 0,
-                  'Jurulatih': (p.coach_id && coachMap.get(p.coach_id)) ?? '—',
-                  'Tarikh Mula': p.start_date ?? '—',
-                  'Tarikh Tamat': p.end_date ?? '—',
+            const formatWeek = (week: { sets: string; reps: string; rest: string; intensity: string }) => {
+              const parts = [
+                week.reps && week.sets ? `${week.reps}x${week.sets}` : (week.reps || week.sets || ''),
+                week.rest,
+                week.intensity,
+              ].filter(Boolean)
+              return parts.join(' / ') || '—'
+            }
+            const rows: Record<string, unknown>[] = []
+            for (const p of (programs ?? [])) {
+              if (filterSport && p.sport !== filterSport) continue
+              const structured = p.structured_data as any
+              const base = {
+                'Sukan': p.sport ?? '—',
+                'Bulan': monthNames[p.month - 1] ?? '—',
+                'Tahun': p.year,
+                'Fasa': structured?.phase ?? '—',
+                'Matlamat Latihan': (structured?.training_goals ?? []).filter(Boolean).join('; ') || '—',
+                'Bilangan Sesi': structured?.sessions?.length ?? 0,
+                'Jurulatih': (p.coach_id && coachMap.get(p.coach_id)) ?? '—',
+                'Tarikh Mula': p.start_date ?? '—',
+                'Tarikh Tamat': p.end_date ?? '—',
+              }
+              const sessions = structured?.sessions ?? []
+              if (sessions.length === 0) {
+                rows.push({ ...base, 'Sesi': '—', 'Hari': '—', 'Jenis Sesi': '—', 'Pemanasan': '—', 'Latihan': '—', 'Minggu 1': '—', 'Minggu 2': '—', 'Minggu 3': '—', 'Minggu 4': '—', 'Core': '—' })
+                continue
+              }
+              for (const session of sessions) {
+                const sessionBase = {
+                  ...base,
+                  'Sesi': session.session_number,
+                  'Hari': session.day || '—',
+                  'Jenis Sesi': session.session_type || '—',
+                  'Pemanasan': (session.warmup ?? []).filter(Boolean).join('; ') || '—',
+                  'Core': (session.core ?? []).filter(Boolean).join('; ') || '—',
                 }
-              })
-            )
+                const exercises = session.exercises ?? []
+                if (exercises.length === 0) {
+                  rows.push({ ...sessionBase, 'Latihan': '—', 'Minggu 1': '—', 'Minggu 2': '—', 'Minggu 3': '—', 'Minggu 4': '—' })
+                  continue
+                }
+                for (const ex of exercises) {
+                  const weeks = ex.weeks ?? []
+                  rows.push({
+                    ...sessionBase,
+                    'Latihan': ex.name || '—',
+                    'Minggu 1': weeks[0] ? formatWeek(weeks[0]) : '—',
+                    'Minggu 2': weeks[1] ? formatWeek(weeks[1]) : '—',
+                    'Minggu 3': weeks[2] ? formatWeek(weeks[2]) : '—',
+                    'Minggu 4': weeks[3] ? formatWeek(weeks[3]) : '—',
+                  })
+                }
+              }
+            }
+            setData(rows)
           }
         } else if (active === 'supplement') {
           if (supplementMode === 'stok') {
