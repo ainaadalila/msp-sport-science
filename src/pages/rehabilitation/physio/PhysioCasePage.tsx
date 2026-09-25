@@ -104,8 +104,12 @@ export default function PhysioCasePage() {
   const [caseActionLoading, setCaseActionLoading] = useState(false)
   const [caseActionError, setCaseActionError] = useState<string | null>(null)
 
+  const [search, setSearch] = useState('')
+  const [filterSport, setFilterSport] = useState('')
+  const [filterReferred, setFilterReferred] = useState<'' | 'yes' | 'no'>('')
+
   useEffect(() => { fetchAll() }, [])
-  useEffect(() => { setCurrentPage(1) }, [tab])
+  useEffect(() => { setCurrentPage(1) }, [tab, search, filterSport, filterReferred])
 
   async function fetchAll() {
     setLoading(true)
@@ -371,7 +375,14 @@ export default function PhysioCasePage() {
     })
   const activeCases = sortCases(cases.filter(c => c.status === 'active'))
   const closedCases = sortCases(cases.filter(c => c.status === 'closed'))
-  const displayCases = tab === 'active' ? activeCases : closedCases
+  const tabCases = tab === 'active' ? activeCases : closedCases
+  const displayCases = tabCases.filter(c => {
+    const q = search.toLowerCase()
+    const matchSearch = !q || (c.athlete?.name ?? '').toLowerCase().includes(q)
+    const matchSport = !filterSport || c.athlete?.sport?.name === filterSport
+    const matchReferred = !filterReferred || (filterReferred === 'yes' ? c.referred_to_doctor : !c.referred_to_doctor)
+    return matchSearch && matchSport && matchReferred
+  })
   const totalPages = Math.ceil(displayCases.length / CASES_PER_PAGE)
   const pagedCases = displayCases.slice((currentPage - 1) * CASES_PER_PAGE, currentPage * CASES_PER_PAGE)
 
@@ -410,13 +421,45 @@ export default function PhysioCasePage() {
         ))}
       </div>
 
+      {/* Filters */}
+      <div className="flex flex-wrap gap-2">
+        <select value={filterSport} onChange={e => setFilterSport(e.target.value)} className={filterCls}>
+          <option value="">Semua Sukan</option>
+          {allSports.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <select value={filterReferred} onChange={e => setFilterReferred(e.target.value as '' | 'yes' | 'no')} className={filterCls}>
+          <option value="">Semua Status</option>
+          <option value="yes">Dirujuk Doktor</option>
+          <option value="no">Belum Dirujuk</option>
+        </select>
+        <input
+          type="text"
+          placeholder="Cari nama atlet..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className={`${filterCls} min-w-[200px]`}
+        />
+        {(search || filterSport || filterReferred) && (
+          <button
+            onClick={() => { setSearch(''); setFilterSport(''); setFilterReferred('') }}
+            className="px-3 py-2 text-xs text-[#888] hover:text-[#F56A00] border border-gray-200 rounded-lg transition"
+          >
+            Kosongkan Penapis
+          </button>
+        )}
+      </div>
+
       {loading ? (
         <div className="py-16 text-center text-[#888] text-sm">Memuatkan...</div>
       ) : (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           {displayCases.length === 0 ? (
             <div className="py-16 text-center text-[#888] text-sm">
-              {cases.length === 0 ? 'Tiada kes lagi.' : `Tiada kes di tab "${tab === 'active' ? 'Aktif' : 'Ditutup'}".`}
+              {cases.length === 0
+                ? 'Tiada kes lagi.'
+                : search || filterSport || filterReferred
+                  ? 'Tiada kes sepadan penapis.'
+                  : `Tiada kes di tab "${tab === 'active' ? 'Aktif' : 'Ditutup'}".`}
             </div>
           ) : (
             <table className="w-full text-sm">
@@ -805,3 +848,5 @@ export default function PhysioCasePage() {
     </div>
   )
 }
+
+const filterCls = 'bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-[#444] outline-none focus:border-[#F56A00]'
