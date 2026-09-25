@@ -85,10 +85,13 @@ export default function DashboardPage() {
     }
     async function fetchDashboard() {
       try {
-        const [totalRes, activeRes, injuredRes, pendingRes, logsRes] = await Promise.all([
+        const [totalRes, activeRes, injuredCasesRes, pendingRes, logsRes] = await Promise.all([
           supabase.from('athletes').select('*', { count: 'exact', head: true }),
           supabase.from('athletes').select('*', { count: 'exact', head: true }).eq('status', 'active'),
-          supabase.from('athletes').select('*', { count: 'exact', head: true }).eq('status', 'injured'),
+          // Mirrors AthletesPage: counts athletes with an active physio case
+          // rather than the manually-set athletes.status field, so it moves
+          // automatically as cases open and close/get referred out.
+          supabase.from('physio_cases').select('athlete_id').eq('status', 'active'),
           supabase.from('supplement_requests').select('count', { count: 'exact' }).eq('status', 'pending'),
           supabase.from('audit_logs').select('id, action, created_at, profile:user_id(full_name)').order('created_at', { ascending: false }).limit(5),
         ])
@@ -96,7 +99,7 @@ export default function DashboardPage() {
         setStats({
           totalAthletes: totalRes.count ?? 0,
           activeAthletes: activeRes.count ?? 0,
-          injuredAthletes: injuredRes.count ?? 0,
+          injuredAthletes: new Set((injuredCasesRes.data ?? []).map((c: { athlete_id: string }) => c.athlete_id)).size,
           pendingSupplements: pendingRes.count ?? 0,
         })
 
