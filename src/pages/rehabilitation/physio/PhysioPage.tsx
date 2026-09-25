@@ -425,6 +425,13 @@ export default function PhysioPage() {
   const filteredIds = useMemo(() => new Set(filteredAthletes.map(a => a.id)), [filteredAthletes])
   const filteredSlots = useMemo(() => slots.filter(s => s.athlete_id && filteredIds.has(s.athlete_id)), [slots, filteredIds])
   const filteredActiveCases = useMemo(() => cases.filter(c => c.athlete_id && filteredIds.has(c.athlete_id)), [cases, filteredIds])
+  // Counts distinct athletes, not case rows, so this matches the Kecederaan
+  // stat elsewhere — an athlete with two concurrent active cases should only
+  // move this number by one.
+  const filteredActiveCaseAthleteCount = useMemo(
+    () => new Set(filteredActiveCases.map(c => c.athlete_id)).size,
+    [filteredActiveCases]
+  )
 
   const allSports = [...new Set(athletes.map(a => a.sport?.name))].filter(Boolean).sort()
   const modalAthletes = formSport ? athletes.filter(a => a.sport?.name === formSport) : athletes
@@ -453,7 +460,7 @@ export default function PhysioPage() {
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-white rounded-xl border border-gray-200 p-5">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-[#888] mb-2">Kes Aktif</p>
-            <p className="text-3xl font-bold text-[#111]">{filteredActiveCases.length}</p>
+            <p className="text-3xl font-bold text-[#111]">{filteredActiveCaseAthleteCount}</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-5">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-[#888] mb-2">Jumlah Sesi</p>

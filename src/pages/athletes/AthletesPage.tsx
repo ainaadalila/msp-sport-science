@@ -176,13 +176,16 @@ export default function AthletesPage() {
 
   async function fetchAthletes() {
     setLoading(true)
-    const [listRes, totalRes, maleRes, femaleRes, activeRes, injuredRes] = await Promise.all([
+    const [listRes, totalRes, maleRes, femaleRes, activeRes, injuredCasesRes] = await Promise.all([
       supabase.from('athletes').select('id, name, ic_number, sport_id, status, gender, date_of_birth, weight, height, is_elite, photo_url, category, created_at, sport:sports!sport_id(name)').order('name').limit(5000),
       supabase.from('athletes').select('*', { count: 'exact', head: true }),
       supabase.from('athletes').select('*', { count: 'exact', head: true }).eq('gender', 'M'),
       supabase.from('athletes').select('*', { count: 'exact', head: true }).eq('gender', 'F'),
       supabase.from('athletes').select('*', { count: 'exact', head: true }).eq('status', 'active'),
-      supabase.from('athletes').select('*', { count: 'exact', head: true }).eq('status', 'injured'),
+      // Kecederaan counter reflects athletes with an active physio case, not the
+      // manually-set athlete status field, so it moves automatically as cases
+      // open/close rather than needing someone to remember to flip a status.
+      supabase.from('physio_cases').select('athlete_id').eq('status', 'active'),
     ]) as any
     if (!listRes.error) {
       const list = (listRes.data ?? []) as Athlete[]
@@ -201,7 +204,7 @@ export default function AthletesPage() {
     setMaleCount(maleRes.count ?? 0)
     setFemaleCount(femaleRes.count ?? 0)
     setActiveCount(activeRes.count ?? 0)
-    setInjuredCount(injuredRes.count ?? 0)
+    setInjuredCount(new Set((injuredCasesRes.data ?? []).map((c: { athlete_id: string }) => c.athlete_id)).size)
     setLoading(false)
     invalidateAthletesCache()
   }
