@@ -169,6 +169,8 @@ export default function FitnessTestingPage() {
   const [viewMode, setViewMode] = useState<'select_athlete' | 'view_dashboard' | 'record_tests' | 'view_results' | 'view_history'>('select_athlete')
   const [viewedSession, setViewedSession] = useState<SessionWithResults | null>(null)
   const [sessionsWithResults, setSessionsWithResults] = useState<SessionWithResults[]>([])
+  const [confirmDeleteSession, setConfirmDeleteSession] = useState<SessionWithResults | null>(null)
+  const [deletingSession, setDeletingSession] = useState(false)
   const [selectedTestId, setSelectedTestId] = useState<string | null>(null)
   const [selectedAthletesGender, setSelectedAthletesGender] = useState<'M' | 'F' | null>(null)
 
@@ -512,6 +514,24 @@ export default function FitnessTestingPage() {
     })
 
     setSessionsWithResults(sortSessionsByPhase(withResults))
+  }
+
+  async function handleDeleteSession() {
+    if (!confirmDeleteSession || !selectedAthlete) return
+    try {
+      setDeletingSession(true)
+      const { error: deleteError } = await supabase
+        .from('fitness_test_sessions')
+        .delete()
+        .eq('id', confirmDeleteSession.session.id)
+      if (deleteError) throw deleteError
+      setConfirmDeleteSession(null)
+      await fetchSessionsWithResults(selectedAthlete.id)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Gagal memadam sesi ujian')
+    } finally {
+      setDeletingSession(false)
+    }
   }
 
   function calculateRating(testId: string, value: number): 'baik' | 'sederhana' | 'lemah' | 'tidak_dinilai' {
@@ -1402,6 +1422,14 @@ export default function FitnessTestingPage() {
                                 Edit
                               </button>
                             )}
+                            {can('fitness', 'delete') && (
+                              <button
+                                onClick={() => setConfirmDeleteSession(sessionResult)}
+                                className="px-3 py-1 text-xs font-semibold text-[#D44040] border border-[#D44040] rounded hover:bg-[#D44040] hover:text-white transition"
+                              >
+                                Padam
+                              </button>
+                            )}
                           </div>
                         </div>
                         <div className="space-y-2">
@@ -1549,6 +1577,22 @@ export default function FitnessTestingPage() {
           </div>
         )}
       </div>
+
+      {/* Delete Session Confirmation */}
+      {confirmDeleteSession && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 text-center">
+            <p className="text-sm font-semibold text-[#111] mb-1">Padam sesi ujian ini?</p>
+            <p className="text-[13px] text-[#888] mb-6">
+              {selectedAthlete?.name} — {confirmDeleteSession.session.session} {confirmDeleteSession.session.year} ({confirmDeleteSession.results.length} ujian)
+            </p>
+            <div className="flex gap-3 justify-center">
+              <button onClick={() => setConfirmDeleteSession(null)} className="px-4 py-2 text-sm text-[#888] border border-gray-200 rounded-lg hover:border-gray-400 transition">Batal</button>
+              <button onClick={handleDeleteSession} disabled={deletingSession} className="px-4 py-2 text-sm font-semibold text-white bg-[#D44040] hover:bg-red-700 disabled:opacity-60 rounded-lg transition">{deletingSession ? 'Padam...' : 'Padam'}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

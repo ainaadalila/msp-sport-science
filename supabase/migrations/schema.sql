@@ -1030,7 +1030,7 @@ CREATE POLICY "fitness_test_results: update" ON "public"."fitness_test_results" 
 ALTER TABLE "public"."fitness_test_sessions" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "fitness_test_sessions: admin delete" ON "public"."fitness_test_sessions" FOR DELETE USING (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])));
+CREATE POLICY "fitness_test_sessions: delete" ON "public"."fitness_test_sessions" FOR DELETE USING ((("auth"."role"() = 'authenticated'::"text") AND (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])) OR "public"."has_module_permission"('fitness'::"text", 'delete'::"text"))));
 
 
 
@@ -1121,7 +1121,7 @@ CREATE POLICY "profiles: self update" ON "public"."profiles" FOR UPDATE USING ((
 ALTER TABLE "public"."psychology_ratings" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "psychology_ratings: admin delete" ON "public"."psychology_ratings" FOR DELETE USING (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])));
+CREATE POLICY "psychology_ratings: delete" ON "public"."psychology_ratings" FOR DELETE USING ((("auth"."role"() = 'authenticated'::"text") AND (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])) OR "public"."has_module_permission"('psychology'::"text", 'delete'::"text"))));
 
 
 
