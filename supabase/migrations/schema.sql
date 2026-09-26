@@ -255,7 +255,7 @@ CREATE TABLE IF NOT EXISTS "public"."audit_logs" (
     "created_at" timestamp with time zone DEFAULT "now"(),
     CONSTRAINT "audit_logs_action_check" CHECK (("action" = ANY (ARRAY[
         'login'::"text", 'logout'::"text", 'change_password'::"text",
-        'create_user'::"text", 'edit_user'::"text", 'delete_user'::"text", 'update_own_profile'::"text",
+        'create_user'::"text", 'create_superadmin_user'::"text", 'edit_user'::"text", 'delete_user'::"text", 'update_own_profile'::"text",
         'create_athlete'::"text", 'update_athlete'::"text", 'delete_athlete'::"text",
         'create_coach_schedule'::"text", 'update_coach_schedule'::"text", 'delete_coach_schedule'::"text", 'delete_coach_schedule_slot'::"text", 'create_coach_assignment'::"text", 'update_coach_assignment'::"text",
         'create_sc_session'::"text", 'update_sc_session'::"text", 'create_sc_program'::"text", 'update_sc_program'::"text",
@@ -264,7 +264,7 @@ CREATE TABLE IF NOT EXISTS "public"."audit_logs" (
         'create_inbody'::"text", 'update_inbody'::"text", 'upload_inbody_diet_plan'::"text", 'delete_inbody_diet_plan'::"text",
         'create_supplement'::"text", 'update_supplement'::"text", 'delete_supplement'::"text", 'submit_supplement_request'::"text", 'edit_supplement_request'::"text", 'delete_supplement_request'::"text",
         'koordinator_approve_supplement'::"text", 'koordinator_reject_supplement'::"text", 'approve_supplement'::"text", 'approve_supplement_partial'::"text", 'supporter_approve_supplement'::"text", 'supporter_reject_supplement'::"text",
-        'submit_fitness_tests'::"text"
+        'submit_fitness_tests'::"text", 'draft_fitness_tests'::"text"
     ])))
 );
 
