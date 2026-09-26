@@ -373,8 +373,14 @@ export default function UserManagementPage() {
                 <select
                   value={editForm.role}
                   onChange={e => {
-                    const newRole = e.target.value as Role
-                    setEditForm(f => ({ ...f, role: newRole, module_permissions: getDefaultModulesByRole(newRole) }))
+                    // Only the role changes here — module_permissions is left
+                    // exactly as-is. Resetting it to the new role's bland
+                    // defaults would silently wipe out every checkbox a
+                    // superadmin already configured for this user (e.g.
+                    // switching someone to "Penolong Pegawai", which has no
+                    // tailored default, would zero out their Suplemen access
+                    // without any warning).
+                    setEditForm(f => ({ ...f, role: e.target.value as Role }))
                   }}
                   className={inputCls}
                 >
