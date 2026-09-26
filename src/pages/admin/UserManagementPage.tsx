@@ -761,7 +761,7 @@ const moduleLabel: Record<string, string> = {
   reports: 'Laporan',
   psychology: 'Penilaian Psikologi',
   supplement_coordinator: 'Penyelaras Semak',
-  supplement_supporter: 'Penyokong',
+  supplement_supporter: 'Pegawai Penyokong',
   supplement_approver: 'Pegawai Pelulus',
 }
 

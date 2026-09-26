@@ -939,7 +939,7 @@ export default function SupplementPage() {
               <div className="border-l-2 pl-4" style={{ borderColor: (timelineRequest.supporter_status || timelineRequest.status === 'semakan_tolak') ? '#F56A00' : '#E8E8E8' }}>
                 <div className="flex items-center gap-3 mb-2">
                   <div className={`w-3 h-3 rounded-full ${(timelineRequest.supporter_status || timelineRequest.status === 'semakan_tolak') ? 'bg-[#F56A00]' : 'bg-[#E8E8E8]'}`} />
-                  <p className="text-sm font-semibold text-[#111]">Penyokong</p>
+                  <p className="text-sm font-semibold text-[#111]">Pegawai Penyokong</p>
                   {(timelineRequest.supporter_status || timelineRequest.status === 'semakan_tolak') && (
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${timelineRequest.supporter_status !== 'sokong' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
                       {timelineRequest.supporter_status !== 'sokong' ? 'Tidak Sokong' : 'Sokong'}
@@ -1000,7 +1000,7 @@ export default function SupplementPage() {
               {approvalError && <div className="px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-600">{approvalError}</div>}
               {approvalRequest.supporter_notes && (
                 <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-purple-600 mb-1">Ulasan Penyokong</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-purple-600 mb-1">Ulasan Pegawai Penyokong</p>
                   <p className="text-[13px] text-purple-900">"{approvalRequest.supporter_notes}"</p>
                 </div>
               )}
