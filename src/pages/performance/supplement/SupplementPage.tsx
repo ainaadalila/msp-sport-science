@@ -193,7 +193,11 @@ export default function SupplementPage() {
     try {
       const { error } = await supabase.from('supplements').delete().eq('id', s.id)
       if (error) {
-        setSupError(`Failed to delete: ${error.message}`)
+        setSupError(
+          error.code === '23503'
+            ? 'Tidak boleh memadam suplemen ini kerana ia mempunyai sejarah permohonan. Kemaskini stok kepada 0 sebagai alternatif.'
+            : `Gagal memadam: ${error.message}`
+        )
         setDeleteSup(false)
         return
       }
@@ -454,7 +458,7 @@ export default function SupplementPage() {
                     <td className="px-5 py-3">
                       <div className="flex gap-3 justify-end">
                         {can('supplement', 'update') && <button onClick={() => openEditSup(s)} className="text-xs text-[#F56A00] hover:underline font-medium">Edit</button>}
-                        {can('supplement', 'delete') && <button onClick={() => setConfirmDelSup(s)} className="text-xs text-[#D44040] hover:underline font-medium">Padam</button>}
+                        {can('supplement', 'delete') && <button onClick={() => { setSupError(null); setConfirmDelSup(s) }} className="text-xs text-[#D44040] hover:underline font-medium">Padam</button>}
                       </div>
                     </td>
                   </tr>
@@ -766,6 +770,7 @@ export default function SupplementPage() {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 text-center">
             <p className="text-sm font-semibold text-[#111] mb-1">Padam suplemen ini?</p>
             <p className="text-[13px] text-[#888] mb-6">{confirmDelSup.name}</p>
+            {supError && <p className="text-red-600 text-xs mb-4">{supError}</p>}
             <div className="flex gap-3 justify-center">
               <button onClick={() => setConfirmDelSup(null)} disabled={deletingSup} className="px-4 py-2 text-sm text-[#888] border border-gray-200 rounded-lg hover:border-gray-400 transition disabled:opacity-50">Batal</button>
               <button onClick={() => handleDelSup(confirmDelSup)} disabled={deletingSup} className="px-4 py-2 text-sm font-semibold text-white bg-[#D44040] hover:bg-red-700 rounded-lg transition disabled:opacity-60">{deletingSup ? 'Padam...' : 'Padam'}</button>
