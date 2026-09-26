@@ -24,8 +24,6 @@ interface SupplementRequest {
   status: 'pending' | 'semakan_lulus' | 'semakan_tolak' | 'approved' | 'partial'
   requested_by: string | null
   reviewed_by: string | null
-  coordinator_id: string | null
-  coordinator_notes: string | null
   supporter_id: string | null
   supporter_status: 'sokong' | 'tidak_sokong' | null
   supporter_notes: string | null
@@ -54,7 +52,6 @@ function fmtDate(d: string) {
 export default function SupplementPage() {
   const { profile } = useAuth()
   const { can } = usePermissions()
-  const isCoordinator = profile?.module_permissions?.supplement_coordinator ?? false
   const isSupporter = profile?.module_permissions?.supplement_supporter ?? false
   const isApprover = profile?.module_permissions?.supplement_approver ?? false
 
@@ -100,13 +97,6 @@ export default function SupplementPage() {
   // Partial quantity for approval
   const [partialQuantity, setPartialQuantity] = useState(0)
 
-  // Coordinator notes modal
-  const [coordNotesModal, setCoordNotesModal] = useState(false)
-  const [coordNotesRequest, setCoordNotesRequest] = useState<SupplementRequest | null>(null)
-  const [coordNotesForm, setCoordNotesForm] = useState({ notes: '', decision: 'lulus' as 'lulus' | 'tolak' })
-  const [coordNotesSaving, setCoordNotesSaving] = useState(false)
-  const [coordNotesError, setCoordNotesError] = useState<string | null>(null)
-
   // Supporter action modal
   const [supporterModal, setSupporterModal] = useState(false)
   const [supporterRequest, setSupporterRequest] = useState<SupplementRequest | null>(null)
@@ -146,7 +136,7 @@ export default function SupplementPage() {
     const [supRes, reqRes] = await Promise.all([
       supabase.from('supplements').select('id, name, stock, unit, expiry_date').order('name').limit(1000),
       supabase.from('supplement_requests')
-        .select('id, sport, supplement_id, quantity, request_date, status, requested_by, reviewed_by, coordinator_id, coordinator_notes, supporter_id, supporter_status, supporter_notes, supporter_reviewed_at, approved_quantity, created_at, supplement:supplement_id(name, unit)')
+        .select('id, sport, supplement_id, quantity, request_date, status, requested_by, reviewed_by, supporter_id, supporter_status, supporter_notes, supporter_reviewed_at, approved_quantity, created_at, supplement:supplement_id(name, unit)')
         .order('created_at', { ascending: sortBy === 'date_asc' }).limit(5000),
     ]) as any
     setSupplements(supRes.data ?? [])
@@ -319,17 +309,6 @@ export default function SupplementPage() {
     await fetchAll()
   }
 
-  async function handleCoordinatorReview(id: string, decision: 'lulus' | 'tolak', notes?: string) {
-    setProcessingId(id)
-    const status = (decision === 'lulus' ? 'semakan_lulus' : 'semakan_tolak') as SupplementRequest['status']
-    const patch = { status, coordinator_id: profile?.id, coordinator_notes: notes || null }
-    const { error } = await supabase.from('supplement_requests').update(patch).eq('id', id)
-    if (error) throw error
-    await logAction(profile!.id, decision === 'lulus' ? 'koordinator_approve_supplement' : 'koordinator_reject_supplement', 'supplement_requests', id)
-    await fetchAll()
-    setProcessingId(null)
-  }
-
   async function handleApproval(id: string, status: 'approved' | 'partial', approvedQuantity?: number, notes?: string) {
     setProcessingId(id)
 
@@ -359,7 +338,12 @@ export default function SupplementPage() {
 
   async function handleSupporterAction(id: string, decision: 'sokong' | 'tidak_sokong', notes?: string) {
     setProcessingId(id)
+    // Penyelaras Semak no longer exists, so Penyokong now sets status
+    // directly: 'sokong' moves it to semakan_lulus (unchanged downstream —
+    // Pegawai Pelulus still keys off that), 'tidak_sokong' moves it straight
+    // to the terminal semakan_tolak.
     const patch = {
+      status: (decision === 'sokong' ? 'semakan_lulus' : 'semakan_tolak') as SupplementRequest['status'],
       supporter_id: profile?.id,
       supporter_status: decision,
       supporter_notes: notes || null,
@@ -386,8 +370,8 @@ export default function SupplementPage() {
   }
 
   function getDisplayStatus(r: SupplementRequest): string {
-    if (r.status === 'pending') return 'Menunggu Semakan'
-    if (r.status === 'semakan_tolak') return 'Ditolak (Penyelaras)'
+    if (r.status === 'pending') return 'Menunggu Sokongan'
+    if (r.status === 'semakan_tolak') return 'Tidak Disokong'
     if (r.status === 'semakan_lulus') {
       if (!r.supporter_status) return 'Menunggu Sokongan'
       if (r.supporter_status === 'sokong') return 'Menunggu Kelulusan'
@@ -407,14 +391,13 @@ export default function SupplementPage() {
     ? ['', 'pending', 'sokongan', 'kelulusan', 'selesai']
     : [
         '',
-        ...(isCoordinator ? ['pending'] : []),
-        ...(isSupporter ? ['sokongan'] : []),
+        ...(isSupporter ? ['pending', 'sokongan'] : []),
         ...(isApprover ? ['kelulusan'] : []),
         'selesai',
       ]
   const statusButtonLabel: Record<string, string> = {
     '': 'Semua',
-    pending: 'Menunggu Semakan',
+    pending: 'Menunggu Sokongan',
     sokongan: 'Menunggu Sokongan',
     kelulusan: 'Menunggu Kelulusan',
     selesai: 'Selesai',
@@ -609,25 +592,7 @@ export default function SupplementPage() {
                           >
                             Lihat
                           </button>
-                          {r.status === 'pending' && isCoordinator && (
-                            <>
-                              <button
-                                onClick={() => { setCoordNotesRequest(r); setCoordNotesForm({ notes: r.coordinator_notes || '', decision: 'lulus' }); setCoordNotesError(null); setCoordNotesModal(true) }}
-                                disabled={processingId === r.id}
-                                className="text-xs font-semibold text-white bg-yellow-600 hover:bg-yellow-700 disabled:bg-yellow-400 disabled:cursor-wait px-2.5 py-1 rounded-md transition"
-                              >
-                                {processingId === r.id ? 'Memproses...' : 'Sahkan'}
-                              </button>
-                              <button
-                                onClick={() => { setCoordNotesRequest(r); setCoordNotesForm({ notes: r.coordinator_notes || '', decision: 'tolak' }); setCoordNotesError(null); setCoordNotesModal(true) }}
-                                disabled={processingId === r.id}
-                                className="text-xs font-semibold text-red-600 border border-red-200 hover:bg-red-50 disabled:opacity-60 disabled:cursor-wait px-2.5 py-1 rounded-md transition"
-                              >
-                                {processingId === r.id ? 'Memproses...' : 'Tolak'}
-                              </button>
-                            </>
-                          )}
-                          {r.status === 'semakan_lulus' && !r.supporter_status && isSupporter && (
+                          {(r.status === 'pending' || r.status === 'semakan_lulus') && !r.supporter_status && isSupporter && (
                             <>
                               <button
                                 onClick={() => { setSupporterRequest(r); setSupporterForm({ notes: '', decision: 'sokong' }); setSupporterError(null); setSupporterModal(true) }}
@@ -909,55 +874,6 @@ export default function SupplementPage() {
         </div>
       )}
 
-      {/* Coordinator Notes Modal */}
-      {coordNotesModal && coordNotesRequest && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4">
-            <div className="px-6 py-4 border-b border-gray-100">
-              <p className="text-sm font-semibold text-[#111]">{coordNotesForm.decision === 'lulus' ? 'Sahkan' : 'Tolak'} Permohonan</p>
-              <div className="mt-2 space-y-1">
-                <p className="text-[13px] text-[#444] font-medium">{coordNotesRequest.supplement?.name}</p>
-                <p className="text-[12px] text-[#888]">Sukan: <span className="font-semibold text-[#111]">{coordNotesRequest.sport}</span></p>
-                <p className="text-[12px] text-[#888]">Kuantiti: <span className="font-semibold text-[#111]">{coordNotesRequest.quantity} {coordNotesRequest.supplement?.unit}</span></p>
-              </div>
-            </div>
-            <div className="px-6 py-4 space-y-4">
-              {coordNotesError && <div className="px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-600">{coordNotesError}</div>}
-              <div>
-                <label className="block text-[12px] font-semibold text-[#888] uppercase mb-2">Ulasan (Pilihan)</label>
-                <textarea
-                  value={coordNotesForm.notes}
-                  onChange={e => setCoordNotesForm(f => ({ ...f, notes: e.target.value.toUpperCase() }))}
-                  placeholder="Masukkan ulasan anda..."
-                  className="w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2 text-sm resize-none h-24 outline-none transition focus:border-[#F56A00] focus:bg-white uppercase"
-                />
-              </div>
-            </div>
-            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
-              <button onClick={() => setCoordNotesModal(false)} disabled={coordNotesSaving} className="px-4 py-2 text-sm text-[#888] hover:text-[#111] transition">Batal</button>
-              <button
-                onClick={async () => {
-                  setCoordNotesSaving(true)
-                  setCoordNotesError(null)
-                  try {
-                    await handleCoordinatorReview(coordNotesRequest.id, coordNotesForm.decision, coordNotesForm.notes)
-                    setCoordNotesModal(false)
-                  } catch (err) {
-                    setCoordNotesError(err instanceof Error ? err.message : 'Ralat semasa menyimpan')
-                  } finally {
-                    setCoordNotesSaving(false)
-                  }
-                }}
-                disabled={coordNotesSaving}
-                className={`px-5 py-2 text-white text-sm font-semibold rounded-lg transition disabled:opacity-60 ${coordNotesForm.decision === 'lulus' ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-red-600 hover:bg-red-700'}`}
-              >
-                {coordNotesSaving ? 'Menyimpan...' : (coordNotesForm.decision === 'lulus' ? 'Sahkan' : 'Tolak')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Supporter Action Modal */}
       {supporterModal && supporterRequest && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
@@ -972,12 +888,6 @@ export default function SupplementPage() {
             </div>
             <div className="px-6 py-4 space-y-4">
               {supporterError && <div className="px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-600">{supporterError}</div>}
-              {supporterRequest.coordinator_notes && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-blue-600 mb-1">Ulasan Penyelaras Semak</p>
-                  <p className="text-[13px] text-blue-900">"{supporterRequest.coordinator_notes}"</p>
-                </div>
-              )}
               <div>
                 <label className="block text-[12px] font-semibold text-[#888] uppercase mb-2">Ulasan Anda (Pilihan)</label>
                 <textarea
@@ -1025,34 +935,14 @@ export default function SupplementPage() {
               <button onClick={() => setTimelineModal(false)} className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
             </div>
             <div className="px-6 py-5 overflow-y-auto flex-1 space-y-5">
-              {/* Step 1: Penyelaras Semak */}
-              <div className="border-l-2 pl-4" style={{ borderColor: timelineRequest.status !== 'pending' ? '#F56A00' : '#E8E8E8' }}>
+              {/* Step 1: Penyokong */}
+              <div className="border-l-2 pl-4" style={{ borderColor: (timelineRequest.supporter_status || timelineRequest.status === 'semakan_tolak') ? '#F56A00' : '#E8E8E8' }}>
                 <div className="flex items-center gap-3 mb-2">
-                  <div className={`w-3 h-3 rounded-full ${timelineRequest.status !== 'pending' ? 'bg-[#F56A00]' : 'bg-[#E8E8E8]'}`} />
-                  <p className="text-sm font-semibold text-[#111]">Penyelaras Semak</p>
-                  {timelineRequest.status !== 'pending' && (
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${timelineRequest.status === 'semakan_tolak' ? 'bg-red-50 text-red-600' : 'bg-yellow-50 text-yellow-600'}`}>
-                      {timelineRequest.status === 'semakan_tolak' ? 'Ditolak' : 'Lulus'}
-                    </span>
-                  )}
-                </div>
-                {timelineRequest.status !== 'pending' && (
-                  <div className="text-[13px] text-[#888] space-y-1">
-                    <p>Keputusan pada: {fmtDate(timelineRequest.request_date)}</p>
-                    {timelineRequest.coordinator_notes && <p className="italic text-[#444]">"{timelineRequest.coordinator_notes}"</p>}
-                  </div>
-                )}
-                {timelineRequest.status === 'pending' && <p className="text-[13px] text-[#888]">Menunggu semakan...</p>}
-              </div>
-
-              {/* Step 2: Penyokong */}
-              <div className="border-l-2 pl-4" style={{ borderColor: timelineRequest.supporter_status ? '#F56A00' : '#E8E8E8' }}>
-                <div className="flex items-center gap-3 mb-2">
-                  <div className={`w-3 h-3 rounded-full ${timelineRequest.supporter_status ? 'bg-[#F56A00]' : 'bg-[#E8E8E8]'}`} />
+                  <div className={`w-3 h-3 rounded-full ${(timelineRequest.supporter_status || timelineRequest.status === 'semakan_tolak') ? 'bg-[#F56A00]' : 'bg-[#E8E8E8]'}`} />
                   <p className="text-sm font-semibold text-[#111]">Penyokong</p>
-                  {timelineRequest.supporter_status && (
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${timelineRequest.supporter_status === 'tidak_sokong' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
-                      {timelineRequest.supporter_status === 'tidak_sokong' ? 'Tidak Sokong' : 'Sokong'}
+                  {(timelineRequest.supporter_status || timelineRequest.status === 'semakan_tolak') && (
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${timelineRequest.supporter_status !== 'sokong' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
+                      {timelineRequest.supporter_status !== 'sokong' ? 'Tidak Sokong' : 'Sokong'}
                     </span>
                   )}
                 </div>
@@ -1062,11 +952,11 @@ export default function SupplementPage() {
                     {timelineRequest.supporter_notes && <p className="italic text-[#444]">"{timelineRequest.supporter_notes}"</p>}
                   </div>
                 )}
-                {timelineRequest.status === 'semakan_lulus' && !timelineRequest.supporter_status && <p className="text-[13px] text-[#888]">Menunggu sokongan...</p>}
-                {(timelineRequest.status === 'pending' || timelineRequest.status === 'semakan_tolak') && <p className="text-[13px] text-[#888]">Belum dimulai</p>}
+                {!timelineRequest.supporter_status && timelineRequest.status === 'semakan_tolak' && <p className="text-[13px] text-[#888]">Ditolak.</p>}
+                {!timelineRequest.supporter_status && timelineRequest.status !== 'semakan_tolak' && <p className="text-[13px] text-[#888]">Menunggu sokongan...</p>}
               </div>
 
-              {/* Step 3: Pegawai Pelulus */}
+              {/* Step 2: Pegawai Pelulus */}
               <div className="border-l-2 pl-4" style={{ borderColor: timelineRequest.status === 'approved' || timelineRequest.status === 'partial' ? '#F56A00' : '#E8E8E8' }}>
                 <div className="flex items-center gap-3 mb-2">
                   <div className={`w-3 h-3 rounded-full ${timelineRequest.status === 'approved' || timelineRequest.status === 'partial' ? 'bg-[#F56A00]' : 'bg-[#E8E8E8]'}`} />
@@ -1083,8 +973,8 @@ export default function SupplementPage() {
                   </div>
                 )}
                 {timelineRequest.status === 'semakan_lulus' && timelineRequest.supporter_status === 'sokong' && <p className="text-[13px] text-[#888]">Menunggu kelulusan...</p>}
-                {(timelineRequest.status === 'pending' || timelineRequest.status === 'semakan_tolak' || (timelineRequest.status === 'semakan_lulus' && !timelineRequest.supporter_status)) && <p className="text-[13px] text-[#888]">Belum dimulai</p>}
-                {timelineRequest.status === 'semakan_lulus' && timelineRequest.supporter_status === 'tidak_sokong' && <p className="text-[13px] text-[#888]">Tidak dilanjutkan</p>}
+                {timelineRequest.status === 'semakan_tolak' && <p className="text-[13px] text-[#888]">Tidak dilanjutkan</p>}
+                {(timelineRequest.status === 'pending' || (timelineRequest.status === 'semakan_lulus' && !timelineRequest.supporter_status)) && <p className="text-[13px] text-[#888]">Belum dimulai</p>}
               </div>
             </div>
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end">
@@ -1108,12 +998,6 @@ export default function SupplementPage() {
             </div>
             <div className="px-6 py-4 space-y-4">
               {approvalError && <div className="px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-600">{approvalError}</div>}
-              {approvalRequest.coordinator_notes && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-blue-600 mb-1">Ulasan Penyelaras Semak</p>
-                  <p className="text-[13px] text-blue-900">"{approvalRequest.coordinator_notes}"</p>
-                </div>
-              )}
               {approvalRequest.supporter_notes && (
                 <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
                   <p className="text-[11px] font-semibold uppercase tracking-widest text-purple-600 mb-1">Ulasan Penyokong</p>

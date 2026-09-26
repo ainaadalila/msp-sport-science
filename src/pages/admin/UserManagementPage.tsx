@@ -468,8 +468,8 @@ export default function UserManagementPage() {
 
                 {/* Supplement Workflow Permissions */}
                 <p className="text-[11px] font-semibold text-[#888] uppercase tracking-widest mt-4">Kebenaran Aliran Suplemen</p>
-                <div className="grid grid-cols-3 gap-2">
-                  {(['supplement_coordinator', 'supplement_supporter', 'supplement_approver'] as const).map(m => {
+                <div className="grid grid-cols-2 gap-2">
+                  {(['supplement_supporter', 'supplement_approver'] as const).map(m => {
                     const isChecked = editForm.module_permissions[m] || false
                     return (
                       <label key={m} className="flex items-center gap-2 cursor-pointer">
@@ -715,8 +715,8 @@ export default function UserManagementPage() {
 
                     {/* Supplement Workflow Permissions */}
                     <p className="text-[11px] font-semibold text-[#888] uppercase tracking-widest mt-4">Kebenaran Aliran Suplemen</p>
-                    <div className="grid grid-cols-3 gap-2">
-                      {(['supplement_coordinator', 'supplement_supporter', 'supplement_approver'] as const).map(m => {
+                    <div className="grid grid-cols-2 gap-2">
+                      {(['supplement_supporter', 'supplement_approver'] as const).map(m => {
                         const isChecked = createForm.module_permissions[m] || false
                         return (
                           <label key={m} className="flex items-center gap-2 cursor-pointer">

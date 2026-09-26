@@ -54,7 +54,10 @@ DECLARE
   v_quantity int;
   v_new_stock int;
 BEGIN
-  IF get_my_role() NOT IN ('superadmin', 'admin') THEN
+  -- Was admin/superadmin-only, which meant a non-admin "Pegawai Pelulus"
+  -- (supplement_approver) could never actually call this despite the UI
+  -- showing them the Lulus Penuh/Lulus Sebahagian buttons.
+  IF get_my_role() NOT IN ('superadmin', 'admin') AND NOT has_module_permission('supplement_approver') THEN
     RAISE EXCEPTION 'Unauthorized';
   END IF;
 
@@ -1204,16 +1207,6 @@ CREATE POLICY "supplement_requests: admin update" ON "public"."supplement_reques
 
 
 
--- USING checks the row's status as it stood *before* this update (not the
--- incoming value) — restricting it to 'pending' is what stops a coordinator
--- from resetting an already-processed request (approved/partial/rejected)
--- back into the workflow to trigger another approve_supplement_request run
--- and a second stock decrement, since only pending requests can be touched
--- via this policy at all.
-CREATE POLICY "supplement_requests: coordinator update" ON "public"."supplement_requests" FOR UPDATE USING ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('supplement_coordinator'::"text") AND ("status" = 'pending'::"text"))) WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('supplement_coordinator'::"text") AND ("requested_by" <> "auth"."uid"()) AND ("status" = ANY (ARRAY['semakan_lulus'::"text", 'semakan_tolak'::"text"]))));
-
-
-
 CREATE POLICY "supplement_requests: delete" ON "public"."supplement_requests" FOR DELETE USING ((("auth"."role"() = 'authenticated'::"text") AND (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])) OR "public"."has_module_permission"('supplement'::"text", 'delete'::"text"))));
 
 
@@ -1237,11 +1230,15 @@ CREATE POLICY "supplement_requests: read" ON "public"."supplement_requests" FOR 
 
 
 
--- Same guard as the coordinator policy above: USING pins this to rows that
--- are currently 'semakan_lulus', so a supporter can never touch a request
--- that's already terminal (approved/partial/semakan_tolak) — closing off
--- the same reset-and-reprocess race even though no PoC exercised this side.
-CREATE POLICY "supplement_requests: supporter update" ON "public"."supplement_requests" FOR UPDATE USING ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('supplement_supporter'::"text") AND ("status" = 'semakan_lulus'::"text"))) WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('supplement_supporter'::"text") AND ("requested_by" <> "auth"."uid"()) AND ("status" = 'semakan_lulus'::"text")));
+-- Penyelaras Semak (coordinator) was removed from the workflow -- Penyokong
+-- now acts directly on 'pending' requests. USING also still allows
+-- 'semakan_lulus' so any request that already passed the old coordinator
+-- step before this change keeps working. WITH CHECK allows the result to be
+-- either 'semakan_lulus' (sokong) or the terminal 'semakan_tolak' (tidak
+-- sokong) -- closing off the same reset-and-reprocess race as before: this
+-- policy can never touch a row that's already terminal (approved/partial/
+-- semakan_tolak) because USING doesn't list those as an allowed starting state.
+CREATE POLICY "supplement_requests: supporter update" ON "public"."supplement_requests" FOR UPDATE USING ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('supplement_supporter'::"text") AND ("status" = ANY (ARRAY['pending'::"text", 'semakan_lulus'::"text"])))) WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('supplement_supporter'::"text") AND ("requested_by" <> "auth"."uid"()) AND ("status" = ANY (ARRAY['semakan_lulus'::"text", 'semakan_tolak'::"text"]))));
 
 
 
