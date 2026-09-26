@@ -255,16 +255,16 @@ CREATE TABLE IF NOT EXISTS "public"."audit_logs" (
     "created_at" timestamp with time zone DEFAULT "now"(),
     CONSTRAINT "audit_logs_action_check" CHECK (("action" = ANY (ARRAY[
         'login'::"text", 'logout'::"text", 'change_password'::"text",
-        'create_user'::"text", 'edit_user'::"text", 'delete_user'::"text", 'update_own_profile'::"text",
+        'create_user'::"text", 'create_superadmin_user'::"text", 'edit_user'::"text", 'delete_user'::"text", 'update_own_profile'::"text",
         'create_athlete'::"text", 'update_athlete'::"text", 'delete_athlete'::"text",
         'create_coach_schedule'::"text", 'update_coach_schedule'::"text", 'delete_coach_schedule'::"text", 'delete_coach_schedule_slot'::"text", 'create_coach_assignment'::"text", 'update_coach_assignment'::"text",
         'create_sc_session'::"text", 'update_sc_session'::"text", 'create_sc_program'::"text", 'update_sc_program'::"text",
         'create_physio_slot'::"text", 'update_physio_slot'::"text", 'delete_physio_slot'::"text", 'mark_arrived_physio_slot'::"text",
         'create_physio_case'::"text", 'close_physio_case'::"text", 'delete_physio_case'::"text", 'open_physio_case'::"text", 'refer_physio_case'::"text",
         'create_inbody'::"text", 'update_inbody'::"text", 'upload_inbody_diet_plan'::"text", 'delete_inbody_diet_plan'::"text",
-        'create_supplement'::"text", 'update_supplement'::"text", 'delete_supplement'::"text", 'submit_supplement_request'::"text",
+        'create_supplement'::"text", 'update_supplement'::"text", 'delete_supplement'::"text", 'submit_supplement_request'::"text", 'edit_supplement_request'::"text", 'delete_supplement_request'::"text",
         'koordinator_approve_supplement'::"text", 'koordinator_reject_supplement'::"text", 'approve_supplement'::"text", 'approve_supplement_partial'::"text", 'supporter_approve_supplement'::"text", 'supporter_reject_supplement'::"text",
-        'submit_fitness_tests'::"text"
+        'submit_fitness_tests'::"text", 'draft_fitness_tests'::"text"
     ])))
 );
 
@@ -1214,6 +1214,21 @@ CREATE POLICY "supplement_requests: coordinator update" ON "public"."supplement_
 
 
 
+CREATE POLICY "supplement_requests: delete" ON "public"."supplement_requests" FOR DELETE USING ((("auth"."role"() = 'authenticated'::"text") AND (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])) OR "public"."has_module_permission"('supplement'::"text", 'delete'::"text"))));
+
+
+
+-- General edit of a request's own details (sport/supplement/quantity/pemohon)
+-- via the Pengurusan Suplemen "Kemaskini" checkbox -- distinct from the
+-- coordinator/supporter update policies above, which only move status
+-- forward through the approval workflow. USING+WITH CHECK both pin this to
+-- 'pending' so this policy can never be used to edit a request that's
+-- already been reviewed, which would make an earlier approval decision
+-- apply to a different item/quantity than what was actually reviewed.
+CREATE POLICY "supplement_requests: general update" ON "public"."supplement_requests" FOR UPDATE USING ((("auth"."role"() = 'authenticated'::"text") AND ("status" = 'pending'::"text") AND (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])) OR "public"."has_module_permission"('supplement'::"text", 'update'::"text")))) WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND ("status" = 'pending'::"text") AND (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])) OR "public"."has_module_permission"('supplement'::"text", 'update'::"text"))));
+
+
+
 CREATE POLICY "supplement_requests: insert own" ON "public"."supplement_requests" FOR INSERT WITH CHECK ((("requested_by" = "auth"."uid"()) AND ("auth"."role"() = 'authenticated'::"text")));
 
 
@@ -1233,15 +1248,15 @@ CREATE POLICY "supplement_requests: supporter update" ON "public"."supplement_re
 ALTER TABLE "public"."supplements" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "supplements: admin delete" ON "public"."supplements" FOR DELETE USING (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])));
+CREATE POLICY "supplements: delete" ON "public"."supplements" FOR DELETE USING ((("auth"."role"() = 'authenticated'::"text") AND (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])) OR "public"."has_module_permission"('supplement'::"text", 'delete'::"text"))));
 
 
 
-CREATE POLICY "supplements: admin update" ON "public"."supplements" FOR UPDATE USING (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"]))) WITH CHECK (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])));
+CREATE POLICY "supplements: update" ON "public"."supplements" FOR UPDATE USING ((("auth"."role"() = 'authenticated'::"text") AND (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])) OR "public"."has_module_permission"('supplement'::"text", 'update'::"text")))) WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])) OR "public"."has_module_permission"('supplement'::"text", 'update'::"text"))));
 
 
 
-CREATE POLICY "supplements: admin write" ON "public"."supplements" FOR INSERT WITH CHECK (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])));
+CREATE POLICY "supplements: insert" ON "public"."supplements" FOR INSERT WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])) OR "public"."has_module_permission"('supplement'::"text", 'create'::"text"))));
 
 
 
