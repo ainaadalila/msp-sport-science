@@ -262,7 +262,7 @@ CREATE TABLE IF NOT EXISTS "public"."audit_logs" (
         'create_physio_slot'::"text", 'update_physio_slot'::"text", 'delete_physio_slot'::"text", 'mark_arrived_physio_slot'::"text",
         'create_physio_case'::"text", 'close_physio_case'::"text", 'delete_physio_case'::"text", 'open_physio_case'::"text", 'refer_physio_case'::"text",
         'create_inbody'::"text", 'update_inbody'::"text", 'upload_inbody_diet_plan'::"text", 'delete_inbody_diet_plan'::"text",
-        'create_supplement'::"text", 'update_supplement'::"text", 'delete_supplement'::"text", 'submit_supplement_request'::"text",
+        'create_supplement'::"text", 'update_supplement'::"text", 'delete_supplement'::"text", 'submit_supplement_request'::"text", 'edit_supplement_request'::"text", 'delete_supplement_request'::"text",
         'koordinator_approve_supplement'::"text", 'koordinator_reject_supplement'::"text", 'approve_supplement'::"text", 'approve_supplement_partial'::"text", 'supporter_approve_supplement'::"text", 'supporter_reject_supplement'::"text",
         'submit_fitness_tests'::"text"
     ])))
@@ -1211,6 +1211,21 @@ CREATE POLICY "supplement_requests: admin update" ON "public"."supplement_reques
 -- and a second stock decrement, since only pending requests can be touched
 -- via this policy at all.
 CREATE POLICY "supplement_requests: coordinator update" ON "public"."supplement_requests" FOR UPDATE USING ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('supplement_coordinator'::"text") AND ("status" = 'pending'::"text"))) WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND "public"."has_module_permission"('supplement_coordinator'::"text") AND ("requested_by" <> "auth"."uid"()) AND ("status" = ANY (ARRAY['semakan_lulus'::"text", 'semakan_tolak'::"text"]))));
+
+
+
+CREATE POLICY "supplement_requests: delete" ON "public"."supplement_requests" FOR DELETE USING ((("auth"."role"() = 'authenticated'::"text") AND (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])) OR "public"."has_module_permission"('supplement'::"text", 'delete'::"text"))));
+
+
+
+-- General edit of a request's own details (sport/supplement/quantity/pemohon)
+-- via the Pengurusan Suplemen "Kemaskini" checkbox -- distinct from the
+-- coordinator/supporter update policies above, which only move status
+-- forward through the approval workflow. USING+WITH CHECK both pin this to
+-- 'pending' so this policy can never be used to edit a request that's
+-- already been reviewed, which would make an earlier approval decision
+-- apply to a different item/quantity than what was actually reviewed.
+CREATE POLICY "supplement_requests: general update" ON "public"."supplement_requests" FOR UPDATE USING ((("auth"."role"() = 'authenticated'::"text") AND ("status" = 'pending'::"text") AND (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])) OR "public"."has_module_permission"('supplement'::"text", 'update'::"text")))) WITH CHECK ((("auth"."role"() = 'authenticated'::"text") AND ("status" = 'pending'::"text") AND (("public"."get_my_role"() = ANY (ARRAY['superadmin'::"text", 'admin'::"text"])) OR "public"."has_module_permission"('supplement'::"text", 'update'::"text"))));
 
 
 

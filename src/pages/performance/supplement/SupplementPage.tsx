@@ -85,6 +85,18 @@ export default function SupplementPage() {
   const [reqSaving, setReqSaving] = useState(false)
   const [reqError, setReqError] = useState<string | null>(null)
 
+  // Edit request modal (pending requests only)
+  const [editReqModal, setEditReqModal] = useState(false)
+  const [editingReq, setEditingReq] = useState<SupplementRequest | null>(null)
+  const [editReqForm, setEditReqForm] = useState({ sport: '', supplement_id: '', quantity: 1 })
+  const [editReqSaving, setEditReqSaving] = useState(false)
+  const [editReqError, setEditReqError] = useState<string | null>(null)
+
+  // Delete request confirmation
+  const [confirmDelReq, setConfirmDelReq] = useState<SupplementRequest | null>(null)
+  const [deletingReq, setDeletingReq] = useState(false)
+  const [delReqError, setDelReqError] = useState<string | null>(null)
+
   // Partial quantity for approval
   const [partialQuantity, setPartialQuantity] = useState(0)
 
@@ -263,6 +275,48 @@ export default function SupplementPage() {
       const rest = prev.filter(r => !newIds.includes(r.id))
       return [...newOnes, ...rest]
     })
+  }
+
+  function openEditReq(r: SupplementRequest) {
+    setEditingReq(r)
+    setEditReqForm({ sport: r.sport, supplement_id: r.supplement_id, quantity: r.quantity })
+    setEditReqError(null)
+    setEditReqModal(true)
+  }
+
+  async function handleSaveEditReq() {
+    if (!editingReq) return
+    if (!editReqForm.sport) { setEditReqError('Sukan wajib dipilih.'); return }
+    if (!editReqForm.supplement_id) { setEditReqError('Suplemen wajib dipilih.'); return }
+    if (editReqForm.quantity < 1) { setEditReqError('Kuantiti mesti sekurang-kurangnya 1.'); return }
+    setEditReqSaving(true)
+    setEditReqError(null)
+    const { error } = await supabase.from('supplement_requests').update({
+      sport: editReqForm.sport,
+      supplement_id: editReqForm.supplement_id,
+      quantity: editReqForm.quantity,
+    }).eq('id', editingReq.id)
+    if (error) { setEditReqError(error.message); setEditReqSaving(false); return }
+    await logAction(profile!.id, 'edit_supplement_request', 'supplement_requests', editingReq.id)
+    setEditReqSaving(false)
+    setEditReqModal(false)
+    setEditingReq(null)
+    await fetchAll()
+  }
+
+  async function handleDeleteReq(r: SupplementRequest) {
+    setDeletingReq(true)
+    setDelReqError(null)
+    const { error } = await supabase.from('supplement_requests').delete().eq('id', r.id)
+    if (error) {
+      setDelReqError(`Gagal memadam: ${error.message}`)
+      setDeletingReq(false)
+      return
+    }
+    await logAction(profile!.id, 'delete_supplement_request', 'supplement_requests', r.id)
+    setDeletingReq(false)
+    setConfirmDelReq(null)
+    await fetchAll()
   }
 
   async function handleCoordinatorReview(id: string, decision: 'lulus' | 'tolak', notes?: string) {
@@ -615,6 +669,22 @@ export default function SupplementPage() {
                               </button>
                             </>
                           )}
+                          {r.status === 'pending' && can('supplement', 'update') && (
+                            <button
+                              onClick={() => openEditReq(r)}
+                              className="text-xs font-semibold text-[#F56A00] border border-[#F56A00] hover:bg-orange-50 px-2.5 py-1 rounded-md transition"
+                            >
+                              Edit
+                            </button>
+                          )}
+                          {can('supplement', 'delete') && (
+                            <button
+                              onClick={() => { setDelReqError(null); setConfirmDelReq(r) }}
+                              className="text-xs font-semibold text-[#D44040] border border-red-200 hover:bg-red-50 px-2.5 py-1 rounded-md transition"
+                            >
+                              Padam
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -759,6 +829,66 @@ export default function SupplementPage() {
               <button onClick={handleSubmitRequest} disabled={reqSaving} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
                 {reqSaving ? 'Menghantar...' : 'Hantar Permohonan'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Request Modal */}
+      {editReqModal && editingReq && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
+            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="font-bold text-[#111]">Edit Permohonan</h3>
+              <button onClick={() => setEditReqModal(false)} className="text-[#888] hover:text-[#111] text-xl leading-none">×</button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              {editReqError && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-600">{editReqError}</div>}
+              <Field label="Sukan" required>
+                <select value={editReqForm.sport} onChange={e => setEditReqForm(f => ({ ...f, sport: e.target.value }))} className={inputCls}>
+                  <option value="">— Pilih sukan —</option>
+                  {[...new Set(athletes.map(a => a.sport?.name))].filter(Boolean).sort().map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Suplemen" required>
+                <select value={editReqForm.supplement_id} onChange={e => setEditReqForm(f => ({ ...f, supplement_id: e.target.value }))} className={inputCls}>
+                  <option value="">— Pilih suplemen —</option>
+                  {supplements.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </Field>
+              <Field label="Kuantiti" required>
+                <input
+                  type="number"
+                  min={1}
+                  value={editReqForm.quantity}
+                  onChange={e => setEditReqForm(f => ({ ...f, quantity: +e.target.value }))}
+                  onFocus={e => e.target.select()}
+                  className={inputCls}
+                />
+              </Field>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+              <button onClick={() => setEditReqModal(false)} className="px-4 py-2 text-sm text-[#888] hover:text-[#111] transition">Batal</button>
+              <button onClick={handleSaveEditReq} disabled={editReqSaving} className="px-5 py-2 bg-[#F56A00] hover:bg-[#D45A00] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition">
+                {editReqSaving ? 'Menyimpan...' : 'Simpan'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Request Confirmation */}
+      {confirmDelReq && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 text-center">
+            <p className="text-sm font-semibold text-[#111] mb-1">Padam permohonan ini?</p>
+            <p className="text-[13px] text-[#888] mb-6">{confirmDelReq.sport} — {confirmDelReq.supplement?.name ?? '—'} ({confirmDelReq.quantity})</p>
+            {delReqError && <p className="text-red-600 text-xs mb-4">{delReqError}</p>}
+            <div className="flex gap-3 justify-center">
+              <button onClick={() => setConfirmDelReq(null)} disabled={deletingReq} className="px-4 py-2 text-sm text-[#888] border border-gray-200 rounded-lg hover:border-gray-400 transition disabled:opacity-50">Batal</button>
+              <button onClick={() => handleDeleteReq(confirmDelReq)} disabled={deletingReq} className="px-4 py-2 text-sm font-semibold text-white bg-[#D44040] hover:bg-red-700 rounded-lg transition disabled:opacity-60">{deletingReq ? 'Padam...' : 'Padam'}</button>
             </div>
           </div>
         </div>
