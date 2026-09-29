@@ -351,6 +351,7 @@ export default function StrengthPage() {
     slots: ScheduleSlotForm[],
     repeats: boolean,
     repeatPattern: 'weekly' | 'bi-weekly' | 'custom' | null,
+    validFrom: string,
     repeatUntil: string,
     selectedDays?: string[]
   ): ScheduleSlotForm[] {
@@ -367,9 +368,14 @@ export default function StrengthPage() {
     const increment = repeatPattern === 'weekly' ? 7 : 14
 
     for (const slot of slots) {
-      let currentDate = new Date(slot.slot_date)
+      // Anchored on validFrom (Tarikh Mula), not slot.slot_date — the
+      // weekly/bi-weekly form never lets the user edit slot.slot_date
+      // directly (it stays frozen at "today" from when the modal opened),
+      // so anchoring on it silently ignored a backdated Tarikh Mula and
+      // could skip straight past it to today.
+      let currentDate = new Date(validFrom)
       const untilDate = new Date(repeatUntil)
-      const startDate = new Date(slot.slot_date)
+      const startDate = new Date(validFrom)
 
       // Iterate through each week/bi-week period
       while (currentDate <= untilDate) {
@@ -438,6 +444,7 @@ export default function StrengthPage() {
       scheduleSlots,
       scheduleForm.repeats,
       scheduleForm.repeats ? scheduleForm.repeat_pattern : null,
+      scheduleForm.valid_from,
       scheduleForm.repeat_until,
       scheduleForm.selected_days
     )
