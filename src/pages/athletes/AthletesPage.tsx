@@ -159,6 +159,7 @@ export default function AthletesPage() {
   const [searchParams] = useSearchParams()
   const [filterStatus, setFilterStatus] = useState(() => searchParams.get('status') ?? '')
   const [filterSport, setFilterSport] = useState('')
+  const [filterCategory, setFilterCategory] = useState('')
   const [filterElite, setFilterElite] = useState(false)
 
   const [modalOpen, setModalOpen] = useState(false)
@@ -172,7 +173,7 @@ export default function AthletesPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { fetchAthletes() }, [])
-  useEffect(() => { setCurrentPage(1) }, [search, filterStatus, filterSport, filterElite])
+  useEffect(() => { setCurrentPage(1) }, [search, filterStatus, filterSport, filterCategory, filterElite])
 
   async function fetchAthletes() {
     setLoading(true)
@@ -306,8 +307,9 @@ export default function AthletesPage() {
     const matchSearch = !q || a.name.toLowerCase().includes(q) || a.ic_number.includes(q) || sportName.includes(q)
     const matchStatus = !filterStatus || a.status === filterStatus
     const matchSport = !filterSport || a.sport_id === filterSport
+    const matchCategory = !filterCategory || a.category === filterCategory
     const matchElite = !filterElite || a.is_elite
-    return matchSearch && matchStatus && matchSport && matchElite
+    return matchSearch && matchStatus && matchSport && matchCategory && matchElite
   })
 
   const totalSports = new Set(athletes.map(a => a.sport_id)).size
@@ -387,6 +389,10 @@ export default function AthletesPage() {
           <option value="rest">REHAT</option>
           <option value="injured">CEDERA</option>
           <option value="not_active">TIDAK AKTIF</option>
+        </select>
+        <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className={filterCls}>
+          <option value="">Semua Kategori</option>
+          {ATHLETE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
         <input
           type="text"
@@ -599,7 +605,14 @@ export default function AthletesPage() {
                   </select>
                 </Field>
                 <Field label="Kategori / Acara">
-                  <input value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value.toUpperCase() }))} className={inputCls} placeholder="LELAKI BAWAH 21" />
+                  <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} className={inputCls}>
+                    <option value="">— Pilih Kategori —</option>
+                    {ATHLETE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                    {/* Keep a pre-dropdown free-text value selectable so editing doesn't silently clear it */}
+                    {form.category && !ATHLETE_CATEGORIES.includes(form.category) && (
+                      <option value={form.category}>{form.category}</option>
+                    )}
+                  </select>
                 </Field>
                 <Field label="Status">
                   <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as FormState['status'] }))} className={inputCls}>
@@ -665,6 +678,8 @@ function Avatar({ name, url, size }: { name: string; url: string | null; size: n
     </div>
   )
 }
+
+const ATHLETE_CATEGORIES = ['PEMBANGUNAN', 'SUKMA', 'PARA']
 
 const filterCls = 'bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-[#444] outline-none focus:border-[#F56A00]'
 const inputCls = 'w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2.5 text-sm text-[#111] outline-none transition focus:border-[#F56A00] focus:bg-white'
