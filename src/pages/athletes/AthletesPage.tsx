@@ -159,6 +159,7 @@ export default function AthletesPage() {
   const [searchParams] = useSearchParams()
   const [filterStatus, setFilterStatus] = useState(() => searchParams.get('status') ?? '')
   const [filterSport, setFilterSport] = useState('')
+  const [filterCategory, setFilterCategory] = useState('')
   const [filterElite, setFilterElite] = useState(false)
 
   const [modalOpen, setModalOpen] = useState(false)
@@ -172,7 +173,7 @@ export default function AthletesPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { fetchAthletes() }, [])
-  useEffect(() => { setCurrentPage(1) }, [search, filterStatus, filterSport, filterElite])
+  useEffect(() => { setCurrentPage(1) }, [search, filterStatus, filterSport, filterCategory, filterElite])
 
   async function fetchAthletes() {
     setLoading(true)
@@ -306,8 +307,9 @@ export default function AthletesPage() {
     const matchSearch = !q || a.name.toLowerCase().includes(q) || a.ic_number.includes(q) || sportName.includes(q)
     const matchStatus = !filterStatus || a.status === filterStatus
     const matchSport = !filterSport || a.sport_id === filterSport
+    const matchCategory = !filterCategory || a.category === filterCategory
     const matchElite = !filterElite || a.is_elite
-    return matchSearch && matchStatus && matchSport && matchElite
+    return matchSearch && matchStatus && matchSport && matchCategory && matchElite
   })
 
   const totalSports = new Set(athletes.map(a => a.sport_id)).size
@@ -387,6 +389,10 @@ export default function AthletesPage() {
           <option value="rest">REHAT</option>
           <option value="injured">CEDERA</option>
           <option value="not_active">TIDAK AKTIF</option>
+        </select>
+        <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className={filterCls}>
+          <option value="">Semua Kategori</option>
+          {ATHLETE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
         <input
           type="text"
