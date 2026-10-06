@@ -599,7 +599,14 @@ export default function AthletesPage() {
                   </select>
                 </Field>
                 <Field label="Kategori / Acara">
-                  <input value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value.toUpperCase() }))} className={inputCls} placeholder="LELAKI BAWAH 21" />
+                  <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} className={inputCls}>
+                    <option value="">— Pilih Kategori —</option>
+                    {ATHLETE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                    {/* Keep a pre-dropdown free-text value selectable so editing doesn't silently clear it */}
+                    {form.category && !ATHLETE_CATEGORIES.includes(form.category) && (
+                      <option value={form.category}>{form.category}</option>
+                    )}
+                  </select>
                 </Field>
                 <Field label="Status">
                   <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as FormState['status'] }))} className={inputCls}>
@@ -665,6 +672,8 @@ function Avatar({ name, url, size }: { name: string; url: string | null; size: n
     </div>
   )
 }
+
+const ATHLETE_CATEGORIES = ['PEMBANGUNAN', 'SUKMA', 'PARA']
 
 const filterCls = 'bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-[#444] outline-none focus:border-[#F56A00]'
 const inputCls = 'w-full bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2.5 text-sm text-[#111] outline-none transition focus:border-[#F56A00] focus:bg-white'
