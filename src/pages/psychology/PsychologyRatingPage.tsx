@@ -240,7 +240,36 @@ export default function PsychologyRatingPage() {
       y += ROW_H
     })
     y += 8
-    checkPage(30)
+
+    // CATATAN — one entry per phase shown above, skipped when none have notes
+    const notes = comparisonData.filter(d => d.catatan?.trim())
+    if (notes.length > 0) {
+      checkPage(20)
+      pdf.setFontSize(8); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(136, 136, 136)
+      pdf.text('CATATAN', M, y); y += 6
+
+      notes.forEach(d => {
+        const noteDate = new Date(d.date).toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric' })
+        checkPage(12)
+        pdf.setFontSize(9); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(17, 17, 17)
+        pdf.text(d.phase, M, y)
+        pdf.setFont('helvetica', 'normal'); pdf.setTextColor(136, 136, 136)
+        pdf.text(noteDate, M + pdf.getTextWidth(d.phase) + 3, y)
+        y += 5
+
+        pdf.setFontSize(9); pdf.setFont('helvetica', 'normal'); pdf.setTextColor(68, 68, 68)
+        const lines: string[] = pdf.splitTextToSize(d.catatan.trim(), CW)
+        lines.forEach(line => {
+          checkPage(5)
+          pdf.text(line, M, y)
+          y += 4.5
+        })
+        y += 4
+      })
+      y += 4
+    }
+
+    checkPage(36)
 
     // PANDUAN PEMBACAAN
     pdf.setFillColor(239, 246, 255); pdf.roundedRect(M, y, CW, 32, 2, 2, 'F')
@@ -311,6 +340,7 @@ export default function PsychologyRatingPage() {
           somatic_anxiety: r.somatic_anxiety_score,
           confidence: r.self_confidence_score,
           date: r.assessment_date,
+          catatan: r.catatan,
         }
       }
     })
