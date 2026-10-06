@@ -134,7 +134,6 @@ export default function DashboardPage() {
     {
       label: 'Atlet Aktif',
       value: stats.activeAthletes,
-      sub: `${stats.totalAthletes > 0 ? Math.round((stats.activeAthletes / stats.totalAthletes) * 100) : 0}% daripada jumlah`,
       valueColor: 'text-[#3A9E6A]',
       href: '/athletes?status=active',
     },
@@ -179,7 +178,7 @@ export default function DashboardPage() {
             <p className={`text-3xl font-bold font-mono mb-1 ${card.valueColor}`}>
               {card.value}
             </p>
-            <p className="text-[11px] text-[#888]">{card.sub}</p>
+            {card.sub && <p className="text-[11px] text-[#888]">{card.sub}</p>}
           </Link>
         ))}
       </div>
