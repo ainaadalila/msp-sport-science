@@ -1,11 +1,11 @@
 import { useEffect, useState, useMemo, Fragment } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { jsPDF } from 'jspdf'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
 import { usePermissions } from '../../../hooks/usePermissions'
 import { useSports } from '../../../hooks/useSports'
 import { logAction } from '../../../lib/audit'
+import { buildSessionPdf, buildSessionsPdf, sessionPdfFileName } from './physioSessionPdf'
 
 interface Athlete {
   id: string
@@ -79,85 +79,6 @@ function fmtDate(d: string) {
   return new Date(d + 'T00:00:00').toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-function handlePrintCatatan(slot: PhysioSlot) {
-  const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-  const PW = pdf.internal.pageSize.getWidth()
-  const M = 16
-  const CW = PW - M * 2
-  let y = M
-
-  // Header
-  pdf.setFontSize(8); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(245, 106, 0)
-  pdf.text('CATATAN SESI FISIOTERAPI', M, y); y += 7
-
-  pdf.setFontSize(18); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(17, 17, 17)
-  pdf.text(slot.athlete?.name ?? 'Tiada Atlet', M, y); y += 7
-
-  pdf.setFontSize(10); pdf.setFont('helvetica', 'normal'); pdf.setTextColor(136, 136, 136)
-  const sportName = slot.athlete?.sport?.name ?? ''
-  const slotDate = fmtDate(slot.slot_date)
-  pdf.text(`${sportName}   ${slotDate}`, M, y); y += 5
-
-  pdf.setDrawColor(220, 220, 220); pdf.setLineWidth(0.4); pdf.line(M, y, PW - M, y); y += 8
-
-  // Helper: section label
-  function sectionLabel(text: string) {
-    pdf.setFontSize(7.5); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(136, 136, 136)
-    pdf.text(text, M, y); y += 5
-  }
-
-  // Helper: field row
-  function fieldRow(label: string, value: string | null | undefined, multiline = false) {
-    if (!value && value !== '0') return
-    pdf.setFontSize(7.5); pdf.setFont('helvetica', 'normal'); pdf.setTextColor(136, 136, 136)
-    pdf.text(label.toUpperCase(), M, y); y += 4
-    pdf.setFontSize(10); pdf.setFont('helvetica', 'normal'); pdf.setTextColor(34, 34, 34)
-    if (multiline) {
-      const lines = pdf.splitTextToSize(value, CW)
-      pdf.text(lines, M, y); y += lines.length * 5 + 3
-    } else {
-      pdf.text(value, M, y); y += 7
-    }
-  }
-
-  // Maklumat Sesi
-  sectionLabel('MAKLUMAT SESI')
-  fieldRow('Diagnosis', slot.diagnosis)
-  fieldRow('Tarikh Kecederaan', slot.date_of_injury ? fmtDate(slot.date_of_injury) : null)
-  fieldRow('Dirujuk Oleh', slot.referred_by)
-  y += 2
-
-  // Catatan Sesi
-  pdf.setDrawColor(240, 240, 240); pdf.setLineWidth(0.3); pdf.line(M, y, PW - M, y); y += 6
-  sectionLabel('CATATAN SESI')
-  fieldRow('Keluhan Utama (COC)', slot.chief_complaint, true)
-  fieldRow('Jenis Kecederaan', slot.injury_type, true)
-  fieldRow('Nota Penilaian / Nota Kemajuan', slot.assessment_notes, true)
-  fieldRow('Pelan Rehabilitasi / Jenis Rawatan', slot.rehab_plan, true)
-
-  // Stats row
-  const hasScale = slot.pain_scale !== null
-  const statusLabel: Record<string, string> = { scheduled: '-', arrived: 'Hadir', completed: 'Selesai', no_show: 'Tidak Hadir' }
-  const colW = (CW - 4) / 2
-  if (hasScale) {
-    pdf.setFillColor(245, 245, 247); pdf.roundedRect(M, y, colW, 14, 1.5, 1.5, 'F')
-    pdf.setFontSize(7.5); pdf.setFont('helvetica', 'normal'); pdf.setTextColor(136, 136, 136)
-    pdf.text('SKALA KESAKITAN', M + 3, y + 5.5)
-    pdf.setFontSize(12); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(17, 17, 17)
-    pdf.text(`${slot.pain_scale} / 10`, M + 3, y + 12)
-  }
-  pdf.setFillColor(245, 245, 247); pdf.roundedRect(M + colW + 4, y, colW, 14, 1.5, 1.5, 'F')
-  pdf.setFontSize(7.5); pdf.setFont('helvetica', 'normal'); pdf.setTextColor(136, 136, 136)
-  pdf.text('STATUS KEHADIRAN', M + colW + 7, y + 5.5)
-  pdf.setFontSize(12); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(17, 17, 17)
-  pdf.text(statusLabel[slot.attendance_status ?? 'scheduled'], M + colW + 7, y + 12)
-  y += 20
-
-  fieldRow('Otot Sasaran', slot.target_muscle, true)
-
-  pdf.save(`Catatan_Fisioterapi_${slot.athlete?.name ?? 'Atlet'}_${slot.slot_date}.pdf`)
-}
-
 const emptyBookingForm: BookingFormState = {
   slot_date: new Date().toLocaleDateString('en-CA'),
   athlete_id: '',
@@ -194,6 +115,8 @@ export default function PhysioPage() {
   const [search, setSearch] = useState('')
   const [filterSport, setFilterSport] = useState('')
   const [expandedAthleteId, setExpandedAthleteId] = useState<string | null>(null)
+  // Ticked sessions for bulk print; only applies while that athlete is expanded
+  const [printSelection, setPrintSelection] = useState<{ athleteId: string; ids: Set<string> } | null>(null)
 
   const [bookingModalOpen, setBookingModalOpen] = useState(false)
   const [assessmentModalOpen, setAssessmentModalOpen] = useState(false)
@@ -532,6 +455,15 @@ export default function PhysioPage() {
                       const latestSlot = athleteSlots[0] ?? null
                       const hasActiveCase = activeCaseAthletes.has(a.id)
                       const isExpanded = expandedAthleteId === a.id
+                      const selectedIds = printSelection?.athleteId === a.id ? printSelection.ids : new Set<string>()
+                      const selectedSlots = athleteSlots.filter(s => selectedIds.has(s.id))
+                      const allSelected = athleteSlots.length > 0 && selectedSlots.length === athleteSlots.length
+                      const toggleSlot = (id: string) => {
+                        const next = new Set(selectedIds)
+                        if (next.has(id)) next.delete(id); else next.add(id)
+                        setPrintSelection({ athleteId: a.id, ids: next })
+                      }
+                      const toggleAll = () => setPrintSelection({ athleteId: a.id, ids: allSelected ? new Set() : new Set(athleteSlots.map(s => s.id)) })
 
                       return (
                         <Fragment key={a.id}>
@@ -565,6 +497,16 @@ export default function PhysioPage() {
                                     <span className="text-xs font-semibold text-[#F56A00]">
                                       Sesi Fisioterapi — {a.name}
                                     </span>
+                                    <div className="flex items-center gap-2">
+                                    {athleteSlots.length > 0 && (
+                                      <button
+                                        onClick={e => { e.stopPropagation(); buildSessionsPdf(selectedSlots).save(sessionPdfFileName(selectedSlots)) }}
+                                        disabled={selectedSlots.length === 0}
+                                        className="text-xs font-semibold text-[#444] bg-white border border-gray-200 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed px-3 py-1 rounded-lg transition"
+                                      >
+                                        Cetak Dipilih ({selectedSlots.length})
+                                      </button>
+                                    )}
                                     {can('physio', 'create') && (
                                       <button
                                         onClick={e => { e.stopPropagation(); openBookingAddForAthlete(a) }}
@@ -573,6 +515,7 @@ export default function PhysioPage() {
                                         + Tambah Sesi
                                       </button>
                                     )}
+                                    </div>
                                   </div>
                                   {athleteSlots.length === 0 ? (
                                     <div className="px-4 py-6 text-center text-[#888] text-xs">
@@ -582,6 +525,15 @@ export default function PhysioPage() {
                                     <table className="w-full text-xs">
                                       <thead>
                                         <tr className="border-b border-orange-100">
+                                          <th className="w-8 px-3 py-2">
+                                            <input
+                                              type="checkbox"
+                                              checked={allSelected}
+                                              onChange={toggleAll}
+                                              aria-label="Pilih semua sesi"
+                                              className="accent-[#F56A00] cursor-pointer"
+                                            />
+                                          </th>
                                           {['Tarikh', 'Kecederaan', 'Status', ''].map(h => (
                                             <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-wider text-[#888] px-3 py-2">{h}</th>
                                           ))}
@@ -590,6 +542,15 @@ export default function PhysioPage() {
                                       <tbody>
                                         {athleteSlots.map(s => (
                                           <tr key={s.id} className="border-b border-orange-50 last:border-0 hover:bg-orange-50">
+                                            <td className="w-8 px-3 py-2">
+                                              <input
+                                                type="checkbox"
+                                                checked={selectedIds.has(s.id)}
+                                                onChange={() => toggleSlot(s.id)}
+                                                aria-label={`Pilih sesi ${fmtDate(s.slot_date)}`}
+                                                className="accent-[#F56A00] cursor-pointer"
+                                              />
+                                            </td>
                                             <td className="px-3 py-2 font-mono text-[#444]">{fmtDate(s.slot_date)}</td>
                                             <td className="px-3 py-2 text-[#888]">{s.injury_type ?? '—'}</td>
                                             <td className="px-3 py-2">
@@ -821,7 +782,7 @@ export default function PhysioPage() {
               </div>
             </div>
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 shrink-0 flex-wrap">
-              <button onClick={() => handlePrintCatatan(detailSlot)} className="px-4 py-2 text-sm font-semibold border border-gray-200 text-[#444] hover:bg-gray-50 rounded-lg transition">
+              <button onClick={() => buildSessionPdf(detailSlot).save(sessionPdfFileName([detailSlot]))} className="px-4 py-2 text-sm font-semibold border border-gray-200 text-[#444] hover:bg-gray-50 rounded-lg transition">
                 Cetak
               </button>
               {can('physio', 'update') && (
