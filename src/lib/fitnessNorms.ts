@@ -24,4 +24,7 @@ export const normDisplayValues: Record<string, Record<string, { good: string; av
   'Cross Punch Power':              { M: { good: '>9500',    average: '1500-9500',    poor: '<1500',   unit: 'average' }, F: { good: '>7500',    average: '1200-7500',    poor: '<1200',   unit: 'average' } },
   'Cross Punch Speed':              { M: { good: '<0.50',    average: '0.51-0.74',    poor: '>0.75',   unit: 'seconds' }, F: { good: '<0.65',    average: '0.66-0.84',    poor: '>0.85',   unit: 'seconds' } },
   'Roundhouse Kick Speed':          { M: { good: '<0.55',    average: '0.56-0.78',    poor: '>0.79',   unit: 'seconds' }, F: { good: '<0.68',    average: '0.69-0.86',    poor: '>0.87',   unit: 'seconds' } },
+  '1RM Squat':                      { both: { good: '≥1.0',  average: '0.5-0.99',     poor: '<0.5',    unit: 'x berat badan' } },
+  '1RM Bench Press':                { both: { good: '≥1.0',  average: '0.5-0.99',     poor: '<0.5',    unit: 'x berat badan' } },
+  '1RM Deadlift':                   { both: { good: '≥1.0',  average: '0.5-0.99',     poor: '<0.5',    unit: 'x berat badan' } },
 }

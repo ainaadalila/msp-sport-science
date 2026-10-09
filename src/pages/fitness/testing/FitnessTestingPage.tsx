@@ -9,6 +9,7 @@ import { logAction } from '../../../lib/audit'
 import { normDisplayValues } from '../../../lib/fitnessNorms'
 import jsPDF from 'jspdf'
 import type { Athlete, FitnessTestSession, SportFitnessTest, FitnessTestNorm } from '../../../types'
+import { isRelativeStrengthUnit, relativeStrengthRatio, formatLiftNote, parseLiftNote } from '../../../lib/relativeStrength'
 
 interface TestResultInput {
   test_id: string
@@ -16,6 +17,19 @@ interface TestResultInput {
   notes?: string
   test_name?: string
   unit?: string
+  // Relative-strength (1RM) tests only: what the coach typed in; result_value
+  // holds the computed ratio
+  lifted_kg?: number | ''
+  body_weight?: number | ''
+}
+
+// Loads a saved result back into the form. For 1RM tests, splits the kg lifted
+// and body weight back out of the auto-written first notes line.
+function toEditableResult(r: SessionResult): TestResultInput {
+  const base = { test_id: r.test_id, result_value: r.result_value, test_name: r.test_name, unit: r.unit }
+  if (!isRelativeStrengthUnit(r.unit)) return { ...base, notes: r.notes || undefined }
+  const { liftedKg, bodyWeightKg, otherNotes } = parseLiftNote(r.notes)
+  return { ...base, notes: otherNotes || undefined, lifted_kg: liftedKg ?? '', body_weight: bodyWeightKg ?? '' }
 }
 
 interface SessionResult {
@@ -594,7 +608,9 @@ export default function FitnessTestingPage() {
         test_id: r.test_id,
         result_value: r.result_value,
         rating: calculateRating(r.test_id, r.result_value as number),
-        notes: r.notes || null,
+        notes: typeof r.lifted_kg === 'number' && typeof r.body_weight === 'number'
+          ? formatLiftNote(r.lifted_kg, r.body_weight, r.notes)
+          : r.notes || null,
       }))
 
       if (resultsPayload.length > 0) {
@@ -652,8 +668,14 @@ export default function FitnessTestingPage() {
     }))
   }
 
-  function formatThresholdDisplay(value: number | undefined, direction: string, type: 'baik' | 'sederhana' | 'lemah'): string {
+  function formatThresholdDisplay(value: number | undefined, direction: string, type: 'baik' | 'sederhana' | 'lemah', unit?: string): string {
     if (value === undefined || value === null) return ''
+
+    // Ratio norms (e.g. 1.0 / 0.49) — the whole-number rounding below would show "> 0"
+    if (isRelativeStrengthUnit(unit)) {
+      if (type === 'baik') return `≥ ${value}`
+      if (type === 'lemah') return `< ${Math.round((value + 0.01) * 100) / 100}`
+    }
 
     if (direction === 'higher_is_better') {
       if (type === 'baik') return `> ${Math.round(value - 1)}`
@@ -1012,7 +1034,7 @@ export default function FitnessTestingPage() {
                                 <>
                                   <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200">
                                     <span className="text-sm font-semibold text-green-600">✓ Baik</span>
-                                    <span className="text-sm text-green-600">{formatThresholdDisplay(testNorm.good_min, testNorm.rating_direction, 'baik')} {currentTest?.unit}</span>
+                                    <span className="text-sm text-green-600">{formatThresholdDisplay(testNorm.good_min, testNorm.rating_direction, 'baik', currentTest?.unit)} {currentTest?.unit}</span>
                                   </div>
                                   <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg border border-yellow-200">
                                     <span className="text-sm font-semibold text-yellow-600">— Sederhana</span>
@@ -1020,7 +1042,7 @@ export default function FitnessTestingPage() {
                                   </div>
                                   <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg border border-red-200">
                                     <span className="text-sm font-semibold text-red-600">✕ Lemah</span>
-                                    <span className="text-sm text-red-600">{formatThresholdDisplay(testNorm.poor_max, testNorm.rating_direction, 'lemah')} {currentTest?.unit}</span>
+                                    <span className="text-sm text-red-600">{formatThresholdDisplay(testNorm.poor_max, testNorm.rating_direction, 'lemah', currentTest?.unit)} {currentTest?.unit}</span>
                                   </div>
                                 </>
                               ) : (
@@ -1215,6 +1237,57 @@ export default function FitnessTestingPage() {
                               </div>
 
                               <div className="grid grid-cols-2 gap-3">
+                                {isRelativeStrengthUnit(st.test?.unit) ? (() => {
+                                  // Body weight defaults to the athlete profile's Berat; editable per result
+                                  const bodyWeight = result?.body_weight !== undefined && result.body_weight !== ''
+                                    ? result.body_weight
+                                    : selectedAthlete?.weight ?? ''
+                                  const lifted = result?.lifted_kg ?? ''
+                                  const recompute = (kg: number | '', bw: number | '') => updateResult({
+                                    lifted_kg: kg,
+                                    body_weight: bw,
+                                    result_value: kg !== '' && bw !== '' && bw > 0 ? relativeStrengthRatio(kg, bw) : '',
+                                  })
+                                  return (
+                                    <div className="space-y-2">
+                                      <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                          <label className="block text-[10px] font-bold uppercase tracking-widest text-[#888] mb-1">
+                                            Beban (kg) {st.is_mandatory ? '*' : ''}
+                                          </label>
+                                          <input
+                                            type="number"
+                                            value={lifted}
+                                            onChange={e => recompute(e.target.value ? parseFloat(e.target.value) : '', bodyWeight)}
+                                            placeholder="kg"
+                                            className="w-full bg-white border border-[#E8E8E8] rounded-lg px-3 py-2 text-sm"
+                                            step="0.5"
+                                          />
+                                        </div>
+                                        <div>
+                                          <label className="block text-[10px] font-bold uppercase tracking-widest text-[#888] mb-1">
+                                            Berat Badan (kg)
+                                          </label>
+                                          <input
+                                            type="number"
+                                            value={bodyWeight}
+                                            onChange={e => recompute(lifted, e.target.value ? parseFloat(e.target.value) : '')}
+                                            placeholder="kg"
+                                            className="w-full bg-white border border-[#E8E8E8] rounded-lg px-3 py-2 text-sm"
+                                            step="0.1"
+                                          />
+                                        </div>
+                                      </div>
+                                      {bodyWeight === '' ? (
+                                        <p className="text-[11px] text-amber-600">Berat badan tiada dalam profil atlet — sila masukkan.</p>
+                                      ) : lifted !== '' && result?.result_value !== undefined && result.result_value !== '' ? (
+                                        <p className="text-[11px] text-[#444]">
+                                          {lifted} kg ÷ {bodyWeight} kg = <span className="font-semibold">{result.result_value}</span> x berat badan
+                                        </p>
+                                      ) : null}
+                                    </div>
+                                  )
+                                })() : (
                                 <div>
                                   <label className="block text-[10px] font-bold uppercase tracking-widest text-[#888] mb-1">
                                     Nilai {st.is_mandatory ? '*' : ''}
@@ -1228,6 +1301,7 @@ export default function FitnessTestingPage() {
                                     step="0.01"
                                   />
                                 </div>
+                                )}
                                 {norm && selectedAthletesGender && (
                                   <div className="text-[11px] text-[#888] bg-white rounded-lg border border-[#E8E8E8] p-2">
                                     <p className="font-semibold mb-1">Reference:</p>
@@ -1341,13 +1415,7 @@ export default function FitnessTestingPage() {
                       setIsEditing(true)
                       setViewMode('record_tests')
                       if (viewedSession?.results) {
-                        setResults(viewedSession.results.map(r => ({
-                          test_id: r.test_id,
-                          result_value: r.result_value,
-                          notes: r.notes || undefined,
-                          test_name: r.test_name,
-                          unit: r.unit,
-                        })))
+                        setResults(viewedSession.results.map(toEditableResult))
                       }
                       setSession(viewedSession!.session.session)
                       setYear(viewedSession!.session.year)
@@ -1407,13 +1475,7 @@ export default function FitnessTestingPage() {
                                 onClick={() => {
                                   setIsEditing(true)
                                   setViewMode('record_tests')
-                                  setResults(sessionResult.results.map(r => ({
-                                    test_id: r.test_id,
-                                    result_value: r.result_value,
-                                    notes: r.notes || undefined,
-                                    test_name: r.test_name,
-                                    unit: r.unit,
-                                  })))
+                                  setResults(sessionResult.results.map(toEditableResult))
                                   setSession(sessionResult.session.session)
                                   setYear(sessionResult.session.year)
                                 }}
