@@ -108,6 +108,7 @@ export default function PsychologyRatingPage() {
   const [selectedAthleteName, setSelectedAthleteName] = useState('')
   const [selectedAthleteSport, setSelectedAthleteSport] = useState('')
   const [editingCatatan, setEditingCatatan] = useState<{ id: string; text: string } | null>(null)
+  const [expandedCatatanId, setExpandedCatatanId] = useState<string | null>(null)
   const [savingCatatan, setSavingCatatan] = useState(false)
 
   const [editingRating, setEditingRating] = useState<{ id: string; athleteName: string; phase: 'persediaan' | 'pertandingan' | 'pemulihan'; cognitive: number; somatic: number; confidence: number } | null>(null)
@@ -909,8 +910,27 @@ export default function PsychologyRatingPage() {
                                               {getScoreInsight('confidence', r.self_confidence_score).label}
                                             </div>
                                           </td>
-                                          <td className="px-3 py-2">
-                                            <span className="text-[#666] max-w-xs truncate text-[10px]">{r.catatan || '—'}</span>
+                                          <td className="px-3 py-2 align-top">
+                                            {r.catatan ? (() => {
+                                              // Keep the line breaks typed in the note; long notes show 3 lines until expanded
+                                              const isLong = r.catatan.split('\n').length > 3 || r.catatan.length > 150
+                                              const isOpen = expandedCatatanId === r.id
+                                              return (
+                                                <div className="max-w-xs text-[10px] text-[#666]">
+                                                  <p className={`whitespace-pre-line break-words ${isLong && !isOpen ? 'line-clamp-3' : ''}`}>{r.catatan}</p>
+                                                  {isLong && (
+                                                    <button
+                                                      onClick={() => setExpandedCatatanId(isOpen ? null : r.id)}
+                                                      className="text-[#F56A00] hover:underline font-semibold mt-0.5"
+                                                    >
+                                                      {isOpen ? 'Tutup' : 'Lihat semua'}
+                                                    </button>
+                                                  )}
+                                                </div>
+                                              )
+                                            })() : (
+                                              <span className="text-[10px] text-[#666]">—</span>
+                                            )}
                                           </td>
                                           <td className="px-3 py-2 text-right whitespace-nowrap">
                                             {can('psychology', 'update') && (
@@ -1067,7 +1087,7 @@ export default function PsychologyRatingPage() {
       {/* Catatan Edit Modal */}
       {editingCatatan && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-lg w-full max-w-sm mx-4">
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-lg mx-4">
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <h2 className="text-lg font-bold text-[#111]">Edit Catatan</h2>
               <button onClick={() => setEditingCatatan(null)} className="text-[#888] hover:text-[#111] text-2xl leading-none">×</button>
@@ -1077,8 +1097,8 @@ export default function PsychologyRatingPage() {
                 value={editingCatatan.text}
                 onChange={(e) => setEditingCatatan({ ...editingCatatan, text: e.target.value })}
                 placeholder="Masukkan catatan..."
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#F56A00] resize-none"
-                rows={5}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#F56A00] resize-y"
+                rows={10}
               />
               <div className="flex gap-2 justify-end">
                 <button
