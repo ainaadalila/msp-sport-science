@@ -382,7 +382,7 @@ export default function PhysioPage() {
       {!loading && (
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-[#888] mb-2">Kes Aktif</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-[#888] mb-2">Atlet Cedera</p>
             <p className="text-3xl font-bold text-[#111]">{filteredActiveCaseAthleteCount}</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-5">
