@@ -114,6 +114,7 @@ export default function PhysioPage() {
   // Athlete-first filters
   const [search, setSearch] = useState('')
   const [filterSport, setFilterSport] = useState('')
+  const [filterCase, setFilterCase] = useState<'' | 'active' | 'none'>('')
   const [expandedAthleteId, setExpandedAthleteId] = useState<string | null>(null)
   // Ticked sessions for bulk print; only applies while that athlete is expanded
   const [printSelection, setPrintSelection] = useState<{ athleteId: string; ids: Set<string> } | null>(null)
@@ -149,7 +150,7 @@ export default function PhysioPage() {
   useEffect(() => {
     setCurrentPage(1)
     setExpandedAthleteId(null)
-  }, [search, filterSport])
+  }, [search, filterSport, filterCase])
 
   async function fetchAll() {
     setLoading(true)
@@ -334,9 +335,11 @@ export default function PhysioPage() {
       const sportName = a.sport?.name?.toLowerCase() || ''
       const matchSearch = !q || a.name.toLowerCase().includes(q) || (a.ic_number || '').toLowerCase().includes(q) || sportName.includes(q)
       const matchSport = !filterSport || a.sport_id === filterSport
-      return matchSearch && matchSport
+      const hasActiveCase = activeCaseAthletes.has(a.id)
+      const matchCase = !filterCase || (filterCase === 'active' ? hasActiveCase : !hasActiveCase)
+      return matchSearch && matchSport && matchCase
     })
-  }, [athletes, search, filterSport])
+  }, [athletes, search, filterSport, filterCase, activeCaseAthletes])
 
   const totalPages = Math.ceil(filteredAthletes.length / ATHLETES_PER_PAGE)
   const paginatedAthletes = filteredAthletes.slice(
@@ -421,9 +424,14 @@ export default function PhysioPage() {
               <option value="">Semua Sukan</option>
               {sports.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
-            {(search || filterSport) && (
+            <select value={filterCase} onChange={e => setFilterCase(e.target.value as '' | 'active' | 'none')} className={filterCls}>
+              <option value="">Semua Kes</option>
+              <option value="active">Kes Aktif</option>
+              <option value="none">Tiada Kes Aktif</option>
+            </select>
+            {(search || filterSport || filterCase) && (
               <button
-                onClick={() => { setSearch(''); setFilterSport('') }}
+                onClick={() => { setSearch(''); setFilterSport(''); setFilterCase('') }}
                 className="px-3 py-2 text-xs text-[#888] hover:text-[#F56A00] border border-gray-200 rounded-lg transition"
               >
                 Kosongkan Penapis
