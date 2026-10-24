@@ -1,8 +1,11 @@
-// "Ringkasan Kehadiran Bulanan" — the Kehadiran Latihan rows (one per S&C
-// session) counted per sport and athlete, like an Excel pivot of
-// Sukan / Nama Atlet against Kehadiran.
+// "Ringkasan Kehadiran Bulanan" — report rows (one per session, each with a
+// Kehadiran value) counted per sport and athlete, like an Excel pivot of
+// Sukan / Nama Atlet against Kehadiran. Used by the S&C and Fisioterapi
+// reports, each with its own set of attendance statuses (= columns).
 
-const STATUSES = ['Hadir', 'MC', 'Tidak Hadir'] as const
+export const SC_ATTENDANCE_STATUSES = ['Hadir', 'MC', 'Tidak Hadir']
+export const PHYSIO_ATTENDANCE_STATUSES = ['Hadir', 'Selesai', 'Tidak Hadir', 'Belum Direkod']
+
 const NO_STATUS = 'Tiada Rekod'
 const NO_SPORT = 'TIADA SUKAN'
 
@@ -19,9 +22,9 @@ export interface AttendanceSummary {
   columns: string[]
 }
 
-function statusOf(row: Record<string, unknown>) {
+function statusOf(row: Record<string, unknown>, statuses: string[]) {
   const v = String(row['Kehadiran'] ?? '').trim()
-  return (STATUSES as readonly string[]).includes(v) ? v : NO_STATUS
+  return statuses.includes(v) ? v : NO_STATUS
 }
 
 function sportOf(row: Record<string, unknown>) {
@@ -29,7 +32,7 @@ function sportOf(row: Record<string, unknown>) {
   return v && v !== '—' ? v : NO_SPORT
 }
 
-export function buildAttendanceSummary(rows: Record<string, unknown>[]): AttendanceSummary {
+export function buildAttendanceSummary(rows: Record<string, unknown>[], statuses: string[]): AttendanceSummary {
   const bySport = new Map<string, Map<string, Counts>>()
   for (const row of rows) {
     const sport = sportOf(row)
@@ -38,7 +41,7 @@ export function buildAttendanceSummary(rows: Record<string, unknown>[]): Attenda
     const athletes = bySport.get(sport)!
     if (!athletes.has(name)) athletes.set(name, {})
     const counts = athletes.get(name)!
-    const status = statusOf(row)
+    const status = statusOf(row, statuses)
     counts[status] = (counts[status] ?? 0) + 1
   }
 
@@ -66,7 +69,7 @@ export function buildAttendanceSummary(rows: Record<string, unknown>[]): Attenda
     sports,
     counts: grand,
     total: sum(grand),
-    columns: grand[NO_STATUS] ? [...STATUSES, NO_STATUS] : [...STATUSES],
+    columns: grand[NO_STATUS] ? [...statuses, NO_STATUS] : [...statuses],
   }
 }
 

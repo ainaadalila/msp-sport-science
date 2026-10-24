@@ -2,17 +2,27 @@ import { useState, useMemo, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { ReportSkeleton } from '../../components/Skeleton'
 import { AttendanceSummaryTable } from './AttendanceSummary'
-import { attendanceSummaryCsvRows, buildAttendanceSummary } from '../../lib/attendanceSummary'
+import { PHYSIO_ATTENDANCE_STATUSES, SC_ATTENDANCE_STATUSES, attendanceSummaryCsvRows, buildAttendanceSummary } from '../../lib/attendanceSummary'
 
 type ReportType = 'fitness' | 'inbody' | 'attendance' | 'supplement' | 'physio' | 'psychology'
 type LatihkanMode = 'jadual' | 'program' | 'kehadiran' | 'ringkasan'
 type SupplementMode = 'permohonan' | 'stok'
+type PhysioMode = 'rekod' | 'ringkasan'
 
 // 'YYYY-MM' -> first/last day, as the YYYY-MM-DD strings the Tarikh filter compares
+function currentMonth() {
+  return new Date().toLocaleDateString('en-CA').slice(0, 7)
+}
+
 function monthRange(month: string) {
   const [y, m] = month.split('-').map(Number)
   const last = new Date(y, m, 0).getDate()
   return { from: `${month}-01`, to: `${month}-${String(last).padStart(2, '0')}` }
+}
+
+// Same labels as Saringan Fisioterapi, except 'scheduled' (shown there as '-')
+const PHYSIO_ATTENDANCE_LABEL: Record<string, string> = {
+  scheduled: 'Belum Direkod', arrived: 'Hadir', completed: 'Selesai', no_show: 'Tidak Hadir',
 }
 
 const MONTH_NAMES = ['Januari', 'Februari', 'Mac', 'April', 'Mei', 'Jun', 'Julai', 'Ogos', 'September', 'Oktober', 'November', 'Disember']
@@ -239,6 +249,7 @@ export default function ReportsPage() {
   const [showColumnPicker, setShowColumnPicker] = useState(false)
   const [latihkanMode, setLatihkanMode] = useState<LatihkanMode>('kehadiran')
   const [supplementMode, setSupplementMode] = useState<SupplementMode>('permohonan')
+  const [physioMode, setPhysioMode] = useState<PhysioMode>('rekod')
   const [dateColumnFilters, setDateColumnFilters] = useState<Record<string, { from: string; to: string }>>({})
   const [columnFilters, setColumnFilters] = useState<Record<string, string | string[]>>({})
   const [openDropdowns, setOpenDropdowns] = useState<Record<string, boolean>>({})
@@ -474,7 +485,7 @@ export default function ReportsPage() {
         } else if (active === 'physio') {
           let pq = supabase
             .from('physio_slots')
-            .select('slot_date, diagnosis, chief_complaint, injury_type, session_type, target_muscle, pain_scale, duration_minutes, assessment_notes, rehab_plan, referred_by, date_of_injury, athlete_id, athlete:athletes(name, sport_id, sport:sport_id(name)), physio_case:physio_cases(status)')
+            .select('slot_date, attendance_status, diagnosis, chief_complaint, injury_type, session_type, target_muscle, pain_scale, duration_minutes, assessment_notes, rehab_plan, referred_by, date_of_injury, athlete_id, athlete:athletes(name, sport_id, sport:sport_id(name)), physio_case:physio_cases(status)')
             .not('athlete_id', 'is', null)
             .order('slot_date', { ascending: false }).limit(5000) as any
           if (filterFrom) pq = pq.gte('slot_date', filterFrom)
@@ -486,6 +497,7 @@ export default function ReportsPage() {
               'Nama Atlet': (Array.isArray(s.athlete) ? s.athlete[0]?.name : s.athlete?.name) ?? '—',
               'Sukan': (Array.isArray(s.athlete) ? s.athlete[0]?.sport?.name : s.athlete?.sport?.name) ?? '—',
               'Tarikh Sesi': s.slot_date,
+              'Kehadiran': PHYSIO_ATTENDANCE_LABEL[s.attendance_status] ?? PHYSIO_ATTENDANCE_LABEL.scheduled,
               'Diagnosis': s.diagnosis ?? '—',
               'Aduan Utama': s.chief_complaint ?? '—',
               'Jenis Kecederaan': s.injury_type ?? '—',
@@ -559,6 +571,7 @@ export default function ReportsPage() {
     setShowColumnPicker(false)
     setLatihkanMode('kehadiran')
     setSupplementMode('permohonan')
+    setPhysioMode('rekod')
     setDateColumnFilters({})
     setColumnFilters({})
     setOpenDropdowns({})
@@ -620,13 +633,20 @@ export default function ReportsPage() {
     return d
   }, [data, previewSearch, sortCol, sortDir, columnFilters, dateColumnFilters])
 
-  const isAttendanceSummary = active === 'attendance' && latihkanMode === 'ringkasan'
+  const isScSummary = active === 'attendance' && latihkanMode === 'ringkasan'
+  const isPhysioSummary = active === 'physio' && physioMode === 'ringkasan'
+  const isAttendanceSummary = isScSummary || isPhysioSummary
   const attendanceSummary = useMemo(
-    () => (isAttendanceSummary ? buildAttendanceSummary(displayData) : null),
-    [isAttendanceSummary, displayData]
+    () => (isAttendanceSummary
+      ? buildAttendanceSummary(displayData, isPhysioSummary ? PHYSIO_ATTENDANCE_STATUSES : SC_ATTENDANCE_STATUSES)
+      : null),
+    [isAttendanceSummary, isPhysioSummary, displayData]
   )
-  // Bulan picker value: set only while the Tarikh filter covers exactly one whole month
-  const tarikhFilter = dateColumnFilters['Tarikh']
+  // The date column the Bulan picker drives differs per report
+  const summaryDateCol = active === 'physio' ? 'Tarikh Sesi' : 'Tarikh'
+  const summaryTitle = active === 'physio' ? 'Ringkasan Kehadiran Bulanan Fisioterapi' : 'Ringkasan Kehadiran Bulanan'
+  // Bulan picker value: set only while the date filter covers exactly one whole month
+  const tarikhFilter = dateColumnFilters[summaryDateCol]
   const summaryMonth = tarikhFilter?.from && tarikhFilter.from.endsWith('-01')
     && monthRange(tarikhFilter.from.slice(0, 7)).to === tarikhFilter.to
     ? tarikhFilter.from.slice(0, 7) : ''
@@ -635,6 +655,21 @@ export default function ReportsPage() {
     : tarikhFilter?.from || tarikhFilter?.to
       ? `${tarikhFilter.from || '…'} hingga ${tarikhFilter.to || tarikhFilter.from}`
       : 'Semua tarikh'
+
+  function setSummaryMonth(dateCol: string, month: string) {
+    setDateColumnFilters(prev => ({ ...prev, [dateCol]: month ? monthRange(month) : { from: '', to: '' } }))
+  }
+  const monthPicker = (
+    <div className="mt-3">
+      <label className="block text-[10px] font-bold uppercase tracking-widest text-[#888] mb-1">Bulan</label>
+      <input
+        type="month"
+        value={summaryMonth}
+        onChange={e => setSummaryMonth(summaryDateCol, e.target.value)}
+        className={inputCls}
+      />
+    </div>
+  )
 
   const config = REPORTS.find(r => r.key === active)!
   const columns = useMemo(() => {
@@ -696,9 +731,7 @@ export default function ReportsPage() {
                     const mode = e.target.value as LatihkanMode
                     setLatihkanMode(mode)
                     // Monthly summary starts on the current month
-                    if (mode === 'ringkasan') {
-                      setDateColumnFilters(prev => ({ ...prev, Tarikh: monthRange(new Date().toLocaleDateString('en-CA').slice(0, 7)) }))
-                    }
+                    if (mode === 'ringkasan') setSummaryMonth('Tarikh', currentMonth())
                   }}
                   className={inputCls}
                 >
@@ -707,17 +740,7 @@ export default function ReportsPage() {
                   <option value="jadual">Jadual Latihan</option>
                   <option value="program">Program Latihan</option>
                 </select>
-                {latihkanMode === 'ringkasan' && (
-                  <div className="mt-3">
-                    <label className="block text-[10px] font-bold uppercase tracking-widest text-[#888] mb-1">Bulan</label>
-                    <input
-                      type="month"
-                      value={summaryMonth}
-                      onChange={e => setDateColumnFilters(prev => ({ ...prev, Tarikh: e.target.value ? monthRange(e.target.value) : { from: '', to: '' } }))}
-                      className={inputCls}
-                    />
-                  </div>
-                )}
+                {latihkanMode === 'ringkasan' && monthPicker}
               </div>
             )}
 
@@ -730,12 +753,31 @@ export default function ReportsPage() {
               </div>
             )}
 
+            {active === 'physio' && (
+              <div>
+                <select
+                  value={physioMode}
+                  onChange={e => {
+                    const mode = e.target.value as PhysioMode
+                    setPhysioMode(mode)
+                    // Monthly summary starts on the current month
+                    if (mode === 'ringkasan') setSummaryMonth('Tarikh Sesi', currentMonth())
+                  }}
+                  className={inputCls}
+                >
+                  <option value="rekod">Rekod Sesi</option>
+                  <option value="ringkasan">Ringkasan Kehadiran Bulanan</option>
+                </select>
+                {physioMode === 'ringkasan' && monthPicker}
+              </div>
+            )}
+
             <div className="flex gap-3 flex-wrap">
               {data.length > 0 && (
                 <>
                   <button
                     onClick={() => attendanceSummary
-                      ? downloadCSV(`Ringkasan Kehadiran Bulanan_${summaryPeriod}.csv`, attendanceSummaryCsvRows(attendanceSummary))
+                      ? downloadCSV(`${summaryTitle}_${summaryPeriod}.csv`, attendanceSummaryCsvRows(attendanceSummary))
                       : downloadCSV(`${config.label}_${new Date().toISOString().slice(0, 10)}.csv`, displayData.map(row => Object.fromEntries(Object.entries(row).filter(([k]) => visibleColumns[k] !== false))))}
                     className="px-5 py-2 border border-gray-200 hover:border-[#F56A00] hover:text-[#F56A00] text-[#444] text-sm font-semibold rounded-lg transition flex items-center gap-2"
                   >
