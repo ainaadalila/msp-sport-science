@@ -1,10 +1,21 @@
 import { useState, useMemo, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { ReportSkeleton } from '../../components/Skeleton'
+import { AttendanceSummaryTable } from './AttendanceSummary'
+import { attendanceSummaryCsvRows, buildAttendanceSummary } from '../../lib/attendanceSummary'
 
 type ReportType = 'fitness' | 'inbody' | 'attendance' | 'supplement' | 'physio' | 'psychology'
-type LatihkanMode = 'jadual' | 'program' | 'kehadiran'
+type LatihkanMode = 'jadual' | 'program' | 'kehadiran' | 'ringkasan'
 type SupplementMode = 'permohonan' | 'stok'
+
+// 'YYYY-MM' -> first/last day, as the YYYY-MM-DD strings the Tarikh filter compares
+function monthRange(month: string) {
+  const [y, m] = month.split('-').map(Number)
+  const last = new Date(y, m, 0).getDate()
+  return { from: `${month}-01`, to: `${month}-${String(last).padStart(2, '0')}` }
+}
+
+const MONTH_NAMES = ['Januari', 'Februari', 'Mac', 'April', 'Mei', 'Jun', 'Julai', 'Ogos', 'September', 'Oktober', 'November', 'Disember']
 
 interface ReportConfig {
   key: ReportType
@@ -311,7 +322,7 @@ export default function ReportsPage() {
             }))
           )
         } else if (active === 'attendance') {
-          if (latihkanMode === 'kehadiran') {
+          if (latihkanMode === 'kehadiran' || latihkanMode === 'ringkasan') {
             let q = supabase.from('strength_conditioning').select('session_date, attendance, athlete:athletes(name, sport_id, sport:sport_id(name))').order('session_date', { ascending: false }).limit(5000) as any
             if (filterFrom) q = q.gte('session_date', filterFrom)
             if (filterTo) q = q.lte('session_date', filterTo)
@@ -609,6 +620,22 @@ export default function ReportsPage() {
     return d
   }, [data, previewSearch, sortCol, sortDir, columnFilters, dateColumnFilters])
 
+  const isAttendanceSummary = active === 'attendance' && latihkanMode === 'ringkasan'
+  const attendanceSummary = useMemo(
+    () => (isAttendanceSummary ? buildAttendanceSummary(displayData) : null),
+    [isAttendanceSummary, displayData]
+  )
+  // Bulan picker value: set only while the Tarikh filter covers exactly one whole month
+  const tarikhFilter = dateColumnFilters['Tarikh']
+  const summaryMonth = tarikhFilter?.from && tarikhFilter.from.endsWith('-01')
+    && monthRange(tarikhFilter.from.slice(0, 7)).to === tarikhFilter.to
+    ? tarikhFilter.from.slice(0, 7) : ''
+  const summaryPeriod = summaryMonth
+    ? `${MONTH_NAMES[Number(summaryMonth.slice(5, 7)) - 1]} ${summaryMonth.slice(0, 4)}`
+    : tarikhFilter?.from || tarikhFilter?.to
+      ? `${tarikhFilter.from || '…'} hingga ${tarikhFilter.to || tarikhFilter.from}`
+      : 'Semua tarikh'
+
   const config = REPORTS.find(r => r.key === active)!
   const columns = useMemo(() => {
     if (data.length === 0) return []
@@ -663,11 +690,34 @@ export default function ReportsPage() {
 
             {active === 'attendance' && (
               <div>
-                <select value={latihkanMode} onChange={e => setLatihkanMode(e.target.value as LatihkanMode)} className={inputCls}>
+                <select
+                  value={latihkanMode}
+                  onChange={e => {
+                    const mode = e.target.value as LatihkanMode
+                    setLatihkanMode(mode)
+                    // Monthly summary starts on the current month
+                    if (mode === 'ringkasan') {
+                      setDateColumnFilters(prev => ({ ...prev, Tarikh: monthRange(new Date().toLocaleDateString('en-CA').slice(0, 7)) }))
+                    }
+                  }}
+                  className={inputCls}
+                >
                   <option value="kehadiran">Kehadiran Latihan</option>
+                  <option value="ringkasan">Ringkasan Kehadiran Bulanan</option>
                   <option value="jadual">Jadual Latihan</option>
                   <option value="program">Program Latihan</option>
                 </select>
+                {latihkanMode === 'ringkasan' && (
+                  <div className="mt-3">
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-[#888] mb-1">Bulan</label>
+                    <input
+                      type="month"
+                      value={summaryMonth}
+                      onChange={e => setDateColumnFilters(prev => ({ ...prev, Tarikh: e.target.value ? monthRange(e.target.value) : { from: '', to: '' } }))}
+                      className={inputCls}
+                    />
+                  </div>
+                )}
               </div>
             )}
 
@@ -684,7 +734,9 @@ export default function ReportsPage() {
               {data.length > 0 && (
                 <>
                   <button
-                    onClick={() => downloadCSV(`${config.label}_${new Date().toISOString().slice(0, 10)}.csv`, displayData.map(row => Object.fromEntries(Object.entries(row).filter(([k]) => visibleColumns[k] !== false))))}
+                    onClick={() => attendanceSummary
+                      ? downloadCSV(`Ringkasan Kehadiran Bulanan_${summaryPeriod}.csv`, attendanceSummaryCsvRows(attendanceSummary))
+                      : downloadCSV(`${config.label}_${new Date().toISOString().slice(0, 10)}.csv`, displayData.map(row => Object.fromEntries(Object.entries(row).filter(([k]) => visibleColumns[k] !== false))))}
                     className="px-5 py-2 border border-gray-200 hover:border-[#F56A00] hover:text-[#F56A00] text-[#444] text-sm font-semibold rounded-lg transition flex items-center gap-2"
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -698,15 +750,17 @@ export default function ReportsPage() {
               <div className="p-4 bg-white rounded-lg border border-gray-200 space-y-4">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-semibold text-[#111]">Penapis & Lajur</p>
+                  {!isAttendanceSummary && (
                   <button
                     onClick={() => setShowColumnPicker(!showColumnPicker)}
                     className="text-xs text-[#F56A00] hover:underline font-semibold"
                   >
                     {showColumnPicker ? '▲ Tutup Pilih Lajur' : '▾ Buka Pilih Lajur'}
                   </button>
+                  )}
                 </div>
 
-                {showColumnPicker && (
+                {showColumnPicker && !isAttendanceSummary && (
                   <div className="p-3 bg-gray-50 rounded-lg border border-gray-200 space-y-3">
                     <p className="text-sm font-semibold text-[#111]">Pilih lajur untuk papar dan eksport</p>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -887,9 +941,14 @@ export default function ReportsPage() {
                         className="w-56 bg-[#F5F5F7] border border-[#E8E8E8] rounded-lg px-3 py-2 text-sm text-[#111] outline-none focus:border-[#F56A00] focus:bg-white placeholder-[#bbb]"
                       />
                       <span className="text-[11px] text-[#888]">
-                        {displayData.length} / {data.length} rekod
+                        {attendanceSummary
+                          ? `${summaryPeriod} · ${attendanceSummary.total} sesi · ${attendanceSummary.sports.reduce((n, s) => n + s.athletes.length, 0)} atlet`
+                          : `${displayData.length} / ${data.length} rekod`}
                       </span>
                     </div>
+                    {attendanceSummary ? (
+                      <AttendanceSummaryTable summary={attendanceSummary} />
+                    ) : (
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
@@ -953,6 +1012,7 @@ export default function ReportsPage() {
                         </p>
                       )}
                     </div>
+                    )}
                   </>
                 )}
               </div>
