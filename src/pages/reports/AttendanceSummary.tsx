@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { hadirPct, type AttendanceSummary } from '../../lib/attendanceSummary'
+import type { AttendanceSummary } from '../../lib/attendanceSummary'
 
 export function AttendanceSummaryTable({ summary }: { summary: AttendanceSummary }) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
@@ -37,7 +37,6 @@ export function AttendanceSummaryTable({ summary }: { summary: AttendanceSummary
               <th key={c} className="text-right text-[10px] font-semibold uppercase tracking-wider text-[#888] px-4 py-3 whitespace-nowrap">{c}</th>
             ))}
             <th className="text-right text-[10px] font-semibold uppercase tracking-wider text-[#888] px-4 py-3">Jumlah</th>
-            <th className="text-right text-[10px] font-semibold uppercase tracking-wider text-[#888] px-4 py-3 whitespace-nowrap">% Hadir</th>
           </tr>
         </thead>
         <tbody>
@@ -55,14 +54,12 @@ export function AttendanceSummaryTable({ summary }: { summary: AttendanceSummary
                 </td>
                 {summary.columns.map(c => <td key={c} className={numCls}>{cell(s.counts[c])}</td>)}
                 <td className={numCls}>{s.total}</td>
-                <td className={numCls}>{hadirPct(s.counts, s.total)}%</td>
               </tr>,
               ...(isCollapsed ? [] : s.athletes.map(a => (
                 <tr key={`${s.sport}|${a.name}`} className="border-b border-gray-50 text-[#444] hover:bg-gray-50">
                   <td className="pl-12 pr-4 py-2">{a.name}</td>
                   {summary.columns.map(c => <td key={c} className={numCls}>{cell(a.counts[c])}</td>)}
                   <td className={numCls}>{a.total}</td>
-                  <td className={`${numCls} text-[#888]`}>{hadirPct(a.counts, a.total)}%</td>
                 </tr>
               ))),
             ]
@@ -71,7 +68,6 @@ export function AttendanceSummaryTable({ summary }: { summary: AttendanceSummary
             <td className="px-4 py-3">JUMLAH KESELURUHAN</td>
             {summary.columns.map(c => <td key={c} className={numCls}>{cell(summary.counts[c])}</td>)}
             <td className={numCls}>{summary.total}</td>
-            <td className={numCls}>{hadirPct(summary.counts, summary.total)}%</td>
           </tr>
         </tbody>
       </table>

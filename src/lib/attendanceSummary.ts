@@ -70,18 +70,12 @@ export function buildAttendanceSummary(rows: Record<string, unknown>[]): Attenda
   }
 }
 
-// Hadir as a share of all sessions in the row (MC and Tidak Hadir count against it)
-export function hadirPct(counts: Counts, total: number) {
-  return total > 0 ? Math.round(((counts['Hadir'] ?? 0) / total) * 100) : 0
-}
-
 export function attendanceSummaryCsvRows(summary: AttendanceSummary): Record<string, unknown>[] {
   const line = (sport: string, name: string, counts: Counts, total: number) => ({
     'Sukan': sport,
     'Nama Atlet': name,
     ...Object.fromEntries(summary.columns.map(c => [c, counts[c] ?? 0])),
     'Jumlah': total,
-    '% Hadir': `${hadirPct(counts, total)}%`,
   })
   const out: Record<string, unknown>[] = []
   for (const s of summary.sports) {
