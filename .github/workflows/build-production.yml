@@ -1,0 +1,64 @@
+# Builds the production version of the app every time something is merged
+# into main, and keeps the result as a downloadable zip (the contents of
+# dist/) on the run's page under Actions → "Build production" → Artifacts.
+#
+# The production Supabase settings come from repository secrets, set once in
+# Settings → Secrets and variables → Actions:
+#   VITE_SUPABASE_URL       (required) e.g. https://xxxxxxxx.supabase.co
+#   VITE_SUPABASE_ANON_KEY  (required) the anon / public key — never the service role key
+#   VITE_APP_URL            (optional) the production site's address, used for password-reset links
+#
+# This only builds; it does not upload anything to the production server.
+
+name: Build production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: build-production
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+      VITE_APP_URL: ${{ secrets.VITE_APP_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Without these the build still succeeds but the site opens to a blank page
+      - name: Check production settings are set
+        run: |
+          missing=""
+          [ -n "$VITE_SUPABASE_URL" ] || missing="$missing VITE_SUPABASE_URL"
+          [ -n "$VITE_SUPABASE_ANON_KEY" ] || missing="$missing VITE_SUPABASE_ANON_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secret(s):$missing. Add them in Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - name: Upload dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: msp-sport-science-production-${{ github.sha }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30
